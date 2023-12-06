@@ -28,7 +28,14 @@ classifiers = [
     "Typing :: Typed",
 ]
 dynamic = ["version"]
-dependencies = []
+dependencies = [
+    "pydantic<2",
+    "numpy",
+    "itk-elastix",
+    "opencv-python",
+    "SimpleITK",
+    "scikit-image",
+]
 
 # extras
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
@@ -123,9 +130,9 @@ show_error_codes = true
 pretty = true
 
 # # module specific overrides
-# [[tool.mypy.overrides]]
-# module = ["numpy.*",]
-# ignore_errors = true
+[[tool.mypy.overrides]]
+module = ["SimpleITK.*",]
+ignore_errors = true
 
 
 # https://coverage.readthedocs.io/en/6.4/config.html
