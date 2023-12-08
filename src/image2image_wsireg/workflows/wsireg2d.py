@@ -29,13 +29,6 @@ CONFIG.init_pyramid = False
 CONFIG.only_last_pyramid = False
 
 
-class RegistrationPair(ty.TypedDict):
-    """Registration pair."""
-
-    source: str
-    target: str | None
-
-
 class TransformPair(ty.TypedDict):
     """Transformation pair."""
 
@@ -43,10 +36,17 @@ class TransformPair(ty.TypedDict):
     initial: TransformSequence | None
 
 
+class SourceTargetPair(ty.TypedDict):
+    """Registration pair."""
+
+    source: str
+    target: str | None
+
+
 class RegistrationNode(ty.TypedDict):
     """Registration node."""
 
-    modalities: RegistrationPair
+    modalities: SourceTargetPair
     params: list[str]
     registered: bool
     transforms: TransformPair | None
@@ -69,7 +69,7 @@ class SerializedRegistrationNode(ty.TypedDict):
 class SerializedRegisteredRegistrationNode(ty.TypedDict):
     """Serialized registered registration node."""
 
-    modalities: RegistrationPair
+    modalities: SourceTargetPair
     params: list[str]
     registered: bool
     transform_tag: str
@@ -82,9 +82,9 @@ class Config(ty.TypedDict):
 
     schema_version: str
     name: str
-    output_dir: str
+    # output_dir: str
     cache_images: bool
-    cache_dir: str
+    # cache_dir: str
     pairwise: bool
     registration_paths: dict[str, SerializedRegistrationNode]
     registration_graph_edges: list[SerializedRegisteredRegistrationNode]
@@ -101,6 +101,8 @@ class WsiReg2d:
     CONFIG_NAME = "project.config.json"
     REGISTERED_CONFIG_NAME = "registered-project.config.json"
 
+    log_file: Path | None = None
+
     def __init__(
         self,
         name: str | None = None,
@@ -113,14 +115,16 @@ class WsiReg2d:
     ):
         # setup project directory
         if project_dir:
-            self.project_dir = Path(project_dir).with_suffix(".wsireg")
+            self.project_dir = Path(project_dir).with_suffix(".wsireg").resolve()
             name = self.project_dir.stem
         else:
             if name is None:
                 raise ValueError("Name must be provided.")
             if output_dir is None:
                 raise ValueError("Output directory must be provided.")
-            self.project_dir = (Path(output_dir) / name).with_suffix(".wsireg")
+            self.project_dir = (Path(output_dir) / name).with_suffix(".wsireg").resolve()
+        if ".wsireg" in name:
+            name = name.replace(".wsireg", "")
         self.name = name
         self.project_dir.mkdir(exist_ok=True, parents=True)
         self.cache_images = cache
@@ -137,7 +141,7 @@ class WsiReg2d:
         # setup registration paths
         self.registration_paths: dict[str, list[str]] = {}
         self.registration_nodes: list[RegistrationNode] = []
-        self.transform_path_map: dict[str, list[RegistrationPair]] = {}
+        self.transform_path_map: dict[str, list[SourceTargetPair]] = {}
         self.original_size_transforms: dict[str, list[dict]] = {}
         self.transformations: dict[str, dict] = {}
 
@@ -154,6 +158,31 @@ class WsiReg2d:
         if self.cache_images:
             self.cache_dir.mkdir(exist_ok=True, parents=True)
             logger.trace(f"Caching images to '{self.cache_dir}' directory.")
+
+    def set_logger(self) -> None:
+        """Setup logger."""
+        import sys
+
+        from koyo.logging import get_loguru_env, set_loguru_log
+
+        if self.log_file is None:
+            n = len(list(self.log_dir.glob("*_log.txt")))
+            ts = time.strftime("%Y%m%d-%H%M%S")
+            self.log_file = self.log_dir / f"{str(n).zfill(3)}_{ts}_log.txt"
+            _, level, enqueue, _ = get_loguru_env()
+            set_loguru_log(
+                self.log_file,
+                level=level,
+                enqueue=enqueue,
+                colorize=False,
+                no_color=True,
+                catch=True,
+                diagnose=True,
+                logger=logger,
+                remove=False,
+            )
+            logger.info(f"Setup logging to file - '{self.log_file!s}'")
+            logger.trace(f"Executed command: {sys.argv}")
 
     @property
     def progress_dir(self) -> Path:
@@ -355,35 +384,39 @@ class WsiReg2d:
             config: Config = read_json_data(self.project_dir / self.REGISTERED_CONFIG_NAME)
             # load transformation data from file
             for edge in config["registration_graph_edges"]:
-                self._load_registered_transform(edge)
+                source = edge["modalities"]["source"]
+                target = self.registration_paths[source][-1]
+                self._load_registered_transform(edge, target)
             self.transformations = self._collate_transformations()
 
-    def _load_registered_transform(self, edge: SerializedRegisteredRegistrationNode):
+    def _load_registered_transform(self, edge: SerializedRegisteredRegistrationNode, target: str):
         """Load registered transform and make sure all attributes are correctly set-up."""
+        from image2image_wsireg.wrapper import ImageWrapper
+
         edge_ = self._find_edge_by_edge(edge)
         if not edge_:
             logger.warning("Could not find appropriate registration node.")
             return
-        transform_tag = edge["transform_tag"]
+        source = edge["modalities"]["source"]
+        transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
+        # transform_tag = edge["transform_tag"]
         if transform_tag and not (self.transformations_dir / transform_tag).exists():
-            logger.warning("Could not find cached registration data.")
+            logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
             return
 
-        target = edge["modalities"]["target"]
         target_modality = self.modalities[target]
-        target_wrapper = self._preprocess_image(target_modality, edge["target_preprocessing"])
+        target_wrapper = ImageWrapper(target_modality, edge["target_preprocessing"])
 
-        source = edge["modalities"]["source"]
         source_modality = self.modalities[source]
-        source_wrapper = self._preprocess_image(source_modality, edge["source_preprocessing"])
+        source_wrapper = ImageWrapper(source_modality, edge["source_preprocessing"])
         initial_transforms = source_wrapper.initial_transforms
+
         initial_transforms_seq = None
         if initial_transforms:
             initial_transforms_ = [Transform(t) for t in initial_transforms]
             initial_transforms_index = [idx for idx, _ in enumerate(initial_transforms_)]
             initial_transforms_seq = TransformSequence(initial_transforms_, initial_transforms_index)
 
-        transform_tag = edge["transform_tag"]
         transforms_seq = TransformSequence(self.transformations_dir / transform_tag)
         self.original_size_transforms.update({target_wrapper.name: target_wrapper.original_size_transform})
 
@@ -484,9 +517,9 @@ class WsiReg2d:
         channel_names: list[str] | None = None,
         channel_colors: list[str] | None = None,
     ) -> None:
-        """
-        Images which are unregistered between modalities, but are transformed following the path of one of the graph's
-        modalities.
+        """Images which are unregistered between modalities.
+
+        These are transformed following the path of one of the graph's modalities.
 
         Parameters
         ----------
@@ -543,7 +576,7 @@ class WsiReg2d:
                 f"The specified modality '{attach_to_modality}' does not exist. Please add it before adding attachment"
                 f" images."
             )
-        paths_ = []
+        paths_: list[Path] = []
         for path in paths:
             path = Path(path)
             if not path.exists():
@@ -551,13 +584,13 @@ class WsiReg2d:
             paths_.append(path.resolve())
 
         pixel_size = self.modalities[attach_to_modality].pixel_size
-        self.add_geojson_set(attach_to_modality, name, paths_, pixel_size)
+        self._add_geojson_set(attach_to_modality, name, paths_, pixel_size)
 
-    def add_geojson_set(
+    def _add_geojson_set(
         self,
         attach_to_modality: str,
         name: str,
-        paths: list[PathLike],
+        paths: list[Path],
         pixel_size: float,
     ) -> None:
         """
@@ -678,14 +711,14 @@ class WsiReg2d:
 
     def _create_transformation_paths(self, registration_paths: dict[str, list[str]]) -> None:
         """Create the path for each registration."""
-        transform_path_map: dict[str, list[RegistrationPair]] = {}
+        transform_path_map: dict[str, list[SourceTargetPair]] = {}
         for key, value in registration_paths.items():
             transform_path_modalities = self.find_registration_path(key, value[-1])
             if not transform_path_modalities:
                 raise ValueError(f"Could not find registration path from {key} to {value[-1]}.")
             if self.pairwise:
                 transform_path_modalities = transform_path_modalities[:1]
-            transform_edges: list[RegistrationPair] = []
+            transform_edges: list[SourceTargetPair] = []
             for modality in transform_path_modalities:
                 for edge in self.registration_nodes:
                     edge_modality = edge["modalities"]["source"]
@@ -803,7 +836,9 @@ class WsiReg2d:
                 registered_edge_transform: TransformPair = self.registration_nodes[edge_modality_pairs.index(edge)][
                     "transforms"
                 ]
-
+                if not registered_edge_transform:
+                    logger.warning(f"No registration data for {edge} (not in 'registered_edge_transform'}}.")
+                    continue
                 if index == 0:
                     transforms[modality] = {
                         f"initial-{edges[index]['source']}": registered_edge_transform["initial"],
@@ -823,6 +858,7 @@ class WsiReg2d:
     def preprocess(self, n_parallel: int = 1) -> None:
         """Pre-process all images."""
         # TODO: add multi-core support
+        self.set_logger()
         if not self.registration_nodes:
             raise ValueError("No registration paths have been defined.")
 
@@ -833,7 +869,7 @@ class WsiReg2d:
     def register(self, n_parallel: int = 1) -> None:
         """Co-register images."""
         # TODO: add multi-core support
-
+        self.set_logger()
         if not self.registration_nodes:
             raise ValueError("No registration paths have been defined.")
 
@@ -897,6 +933,12 @@ class WsiReg2d:
                 tform_txt.update({key: [rt.elastix_transform for rt in transform.transforms]})
         return tform_txt
 
+    def _find_merge_modalities(self) -> list[str]:
+        merge_modalities = []
+        for _k, v in self.merge_modalities.items():
+            merge_modalities.extend(v)
+        return merge_modalities
+
     def _find_not_registered_modalities(self) -> list[str]:
         registered_modalities = [edge["modalities"]["source"] for edge in self.registration_nodes]
         non_reg_modalities = list(set(self.modalities.keys()).difference(registered_modalities))
@@ -922,22 +964,32 @@ class WsiReg2d:
             return None
 
         out = []
-        for modality in self.registration_paths:
-            final_modality = self.registration_paths[modality][-1]
-            output_path = self.transformations_dir / f"{self.name}-{modality}_to_{final_modality}_transformations.json"
-            tform_txt = self._transforms_to_txt(self.transformations[modality])
+        for source_modality in self.registration_paths:
+            target_modalities = self.registration_paths[source_modality]
+            target_modality = target_modalities[-1]
+            output_path = (
+                self.transformations_dir / f"{self.name}-{source_modality}_to_{target_modality}_transformations.json"
+            )
+            tform_txt = self._transforms_to_txt(self.transformations[source_modality])
             write_json_data(output_path, tform_txt)
             out.append(output_path)
-            logger.trace(f"Saved transformations to {output_path} for {modality}.")
+            logger.trace(
+                f"Saved transformations to '{output_path}'. source={source_modality}; target={target_modalities}."
+            )
 
-        for modality, attachment_modality in self.attachment_images.items():
+        for source_modality, attachment_modality in self.attachment_images.items():
             if attachment_modality not in self._find_not_registered_modalities():
-                final_modality = self.registration_paths[attachment_modality][-1]
+                target_modalities = self.registration_paths[attachment_modality]
+                target_modality = target_modalities[-1]
                 output_path = (
-                    self.transformations_dir / f"{self.name}-{modality}_to_{final_modality}_transformations.json"
+                    self.transformations_dir
+                    / f"{self.name}-{source_modality}_to_{target_modality}_transformations.json"
                 )
-                tform_txt = self._transforms_to_txt(self.transformations[modality])
+                tform_txt = self._transforms_to_txt(self.transformations[source_modality])
                 write_json_data(output_path, tform_txt)
+                logger.trace(
+                    f"Saved transformations to '{output_path}'. source={source_modality}; target={target_modalities}."
+                )
         return out
 
     def write_images(
@@ -947,35 +999,43 @@ class WsiReg2d:
         write_not_registered: bool = True,
         remove_merged: bool = True,
         to_original_size: bool = True,
+        preview: bool = False,
         override: bool = False,
     ) -> list | None:
         """Export images after applying transformation."""
+        # TODO add multi-core support
+        self.set_logger()
         if not self._check_if_all_registered():
             return None
 
         def _get_with_suffix(p: Path) -> Path:
             if writer in ["ome-tiff", "ome-tiff-by-plane", "ome-tiff-by-tile"]:
-                return p.with_suffix(".ome.tiff")
+                return p.parent / (p.name + ".ome.tiff")
             raise ValueError(f"Writer {writer} is not supported.")
 
         paths = []
-        # prepare merge modalities metadata
-        merge_modalities = []
-        if len(self.merge_modalities.keys()) > 0:
-            for _k, v in self.merge_modalities.items():
-                merge_modalities.extend(v)
 
+        # prepare merge modalities metadata
+        merge_modalities = self._find_merge_modalities()
+        if merge_modalities:
+            logger.trace(f"Merge modalities: {merge_modalities}")
         modalities = list(self.registration_paths.keys())
-        non_registered_modalities = self._find_not_registered_modalities()
+        if modalities:
+            logger.trace(f"Registered modalities: {modalities}")
+        not_registered_modalities = self._find_not_registered_modalities()
+        if not_registered_modalities:
+            logger.trace(f"Not registered modalities: {not_registered_modalities}")
 
         if remove_merged:
             for merge_modality in merge_modalities:
                 with suppress(ValueError):
                     index = modalities.index(merge_modality)
                     modalities.pop(index)
+                    logger.trace(f"Removed {merge_modality} from registered modalities as it will be merged.")
                 with suppress(ValueError):
-                    index = non_registered_modalities.index(merge_modality)
-                    non_registered_modalities.pop(index)
+                    index = not_registered_modalities.index(merge_modality)
+                    not_registered_modalities.pop(index)
+                    logger.trace(f"Removed {merge_modality} from not registered modalities as it will be merged.")
 
         # export modalities
         for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
@@ -983,8 +1043,9 @@ class WsiReg2d:
                 modality, attachment=False, to_original_size=to_original_size
             )
             if _get_with_suffix(output_path).exists() and not override:
-                logger.trace(f"Skipping {modality} as it already exists.")
+                logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
                 continue
+            logger.trace(f"Exporting {modality} to {output_path}...")
             path = self._transform_write_image(im_data, transformations, output_path, writer=writer)
             paths.append(path)
 
@@ -1010,8 +1071,9 @@ class WsiReg2d:
                     to_original_size=to_original_size,
                 )
             if _get_with_suffix(output_path).exists() and not override:
-                logger.trace(f"Skipping {attach_to_modality} as it already exists.")
+                logger.trace(f"Skipping {attach_to_modality} as it already exists ({output_path}).")
                 continue
+            logger.trace(f"Exporting {attach_modality} to {output_path}...")
             path = self._transform_write_image(im_data, transformations, output_path, writer=writer)
             paths.append(path)
 
@@ -1023,7 +1085,7 @@ class WsiReg2d:
         # export non-registered nodes
         if write_not_registered:
             # preprocess and save unregistered nodes
-            for modality in tqdm(non_registered_modalities, desc="Exporting not-registered images..."):
+            for modality in tqdm(not_registered_modalities, desc="Exporting not-registered images..."):
                 if modality in merge_modalities and remove_merged:
                     continue
                 try:
@@ -1032,8 +1094,9 @@ class WsiReg2d:
                         to_original_size=to_original_size,
                     )
                     if _get_with_suffix(output_path).exists() and not override:
-                        logger.trace(f"Skipping {modality} as it already exists.")
+                        logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
                         continue
+                    logger.trace(f"Exporting {modality} to {output_path}...")
                     path = self._transform_write_image(im_data, transformations, output_path, writer=writer)
                     paths.append(path)
                 except KeyError:
@@ -1055,12 +1118,12 @@ class WsiReg2d:
             transformations = copy(self.transformations[edge_key]["full-transform-seq"])
 
         output_path = self.image_dir / f"{self.name}-{edge_key}_to_{final_modality}_registered"
-        im_data_key = None
+        modality_key = None
         if attachment and attachment_modality:
-            im_data_key = copy(edge_key)
+            modality_key = copy(edge_key)
             edge_key = attachment_modality.name
 
-        im_data = self.modalities[edge_key]
+        modality = self.modalities[edge_key]
         if self.original_size_transforms.get(final_modality) and to_original_size:
             logger.trace("Adding transform to original size...")
             original_size_transform = self.original_size_transforms[final_modality]
@@ -1069,17 +1132,17 @@ class WsiReg2d:
             orig_size_rt = TransformSequence(Transform(original_size_transform), transform_sequence_index=[0])
             transformations.append(orig_size_rt)
 
-        if im_data.preprocessing and im_data.preprocessing.downsample > 1:
-            if not im_data.output_pixel_size:
+        if modality.preprocessing and modality.preprocessing.downsample > 1:
+            if not modality.output_pixel_size:
                 output_spacing_target = self.modalities[final_modality].output_pixel_size
                 transformations.set_output_spacing((output_spacing_target, output_spacing_target))
             else:
-                transformations.set_output_spacing(im_data.output_pixel_size)
-        elif im_data.output_pixel_size:
-            transformations.set_output_spacing(im_data.output_pixel_size)
-        if attachment and im_data_key:
-            im_data = self.modalities[im_data_key]
-        return im_data, transformations, output_path
+                transformations.set_output_spacing(modality.output_pixel_size)
+        elif modality.output_pixel_size:
+            transformations.set_output_spacing(modality.output_pixel_size)
+        if attachment and modality_key:
+            modality = self.modalities[modality_key]
+        return modality, transformations, output_path
 
     def _prepare_not_registered_image_transform(
         self,
@@ -1201,26 +1264,31 @@ class WsiReg2d:
             output_path = self.image_dir / f"{self.name}-{merge_name}_merged-registered"
             merge = MergeImages(paths, pixel_sizes, channel_names=channel_names)
             writer = MergeOmeTiffWriter(merge, transformers=transformations)
-            path = writer.merge_write_image_by_plane(output_path.stem, sub_images, output_dir=self.image_dir)
+            path = writer.merge_write_image_by_plane(output_path.name, sub_images, output_dir=self.image_dir)
             merged_paths.append(path)
         return merged_paths
 
     def _transform_write_image(
-        self, modality, transformations: TransformSequence | None, filename: Path, writer: WriterMode = "ome-tiff"
+        self,
+        modality,
+        transformations: TransformSequence | None,
+        filename: Path,
+        writer: WriterMode = "ome-tiff",
+        preview: bool = False,
     ):
         """Transform and write image."""
         from image2image_io.writers import OmeTiffWriter
 
         from image2image_wsireg.wrapper import ImageWrapper
 
-        wrapper = ImageWrapper(modality)
+        wrapper = ImageWrapper(modality, preview=preview)
 
         if writer in ["ome-tiff", "ome-tiff-by-plane"]:
             writer = OmeTiffWriter(wrapper.reader, transformer=transformations)
         else:
             raise ValueError("Other writers are nto yet supported")
-
-        path = writer.write(filename.stem, output_dir=self.image_dir)
+        name = filename.name if not preview else filename.name + "_preview"
+        path = writer.write(name, output_dir=self.image_dir)
         return path
 
     def save(self, registered: bool = False, auto: bool = False) -> Path:
@@ -1270,12 +1338,12 @@ class WsiReg2d:
             modalities_out[modality.name] = modality.to_dict()
 
         # write config
-        config = {
+        config: Config = {
             "schema_version": "1.0",
             "name": self.name,
-            "output_dir": str(self.project_dir),
+            # "output_dir": str(self.project_dir),
             "cache_images": self.cache_images,
-            "cache_dir": str(self.cache_dir),
+            # "cache_dir": str(self.cache_dir),
             "pairwise": self.pairwise,
             "modalities": modalities_out,
             "registration_paths": registration_paths,

@@ -492,6 +492,7 @@ def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
 
     for path in paths:
         obj = WsiReg2d.from_path(path)
+        obj.set_logger()
         obj.preprocess(n_parallel=n_parallel)
 
 
@@ -579,6 +580,7 @@ def register_runner(
 
     for path in paths:
         obj = WsiReg2d.from_path(path)
+        obj.set_logger()
         obj.register(n_parallel=n_parallel)
         if write_images:
             obj.write_images(
@@ -590,6 +592,13 @@ def register_runner(
             )
 
 
+# @click.option(
+#     "--preview/--no_preview",
+#     help="Preview transformation before generating final images.",
+#     is_flag=True,
+#     default=False,
+#     show_default=True,
+# )
 @click.option(
     "--original_size/--no_original_size",
     help="Write images in their original size after applying transformations.",
@@ -633,7 +642,6 @@ def register_runner(
     "--project_dir",
     help="Path to the project directory. It usually ends in .annotine extension.",
     type=click.UNPROCESSED,
-    # type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
     show_default=True,
     required=True,
     multiple=True,
@@ -659,12 +667,14 @@ def export_runner(
     remove_merged: bool = True,
     write_not_registered: bool = True,
     original_size: bool = False,
+    preview: bool = False,
 ) -> None:
     """Register images."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
     for path in paths:
         obj = WsiReg2d.from_path(path)
+        obj.set_logger()
         if not obj.is_registered:
             warning_msg(f"Project {obj.name} is not registered.")
             continue
@@ -674,6 +684,7 @@ def export_runner(
             write_not_registered=write_not_registered,
             remove_merged=remove_merged,
             to_original_size=original_size,
+            preview=preview,
         )
 
 

@@ -24,9 +24,11 @@ def filename_with_suffix(filename: Path, extra: str, suffix: str) -> Path:
 class ImageWrapper:
     """Wrapper around the image class to add additional functionality."""
 
-    def __init__(self, modality: Modality, preprocessing: Preprocessing | None = None):
+    def __init__(self, modality: Modality, preprocessing: Preprocessing | None = None, preview: bool = False):
         self.modality = modality
         self.preprocessing = preprocessing
+        self.preview = preview
+
         # TODO: this won't work with arrays
         self.reader: BaseReader = get_simple_reader(modality.path, init_pyramid=False)
         if modality.channel_names:
@@ -153,7 +155,7 @@ class ImageWrapper:
             logger.trace(f"Pre-processed image in {timer()}")
             # convert and cast
             image = convert_and_cast(image, preprocessing)
-            logger.trace(f"Converted and cast image in {timer.elapsed_since_last()}")
+            logger.trace(f"Converted and cast image in {timer(since_last=True)}")
 
             mask = None
             # set image
@@ -163,4 +165,4 @@ class ImageWrapper:
                 )
             else:
                 self.image, self.mask, self.original_size_transform = image, mask, None
-            logger.trace(f"Pre-processed image in {timer.elapsed_since_last()}")
+            logger.trace(f"Pre-processed image in {timer(since_last=True)}")
