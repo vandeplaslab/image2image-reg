@@ -4,6 +4,7 @@ from __future__ import annotations
 import typing as ty
 
 import click
+from click_groups import GroupedGroup
 from koyo.click import cli_parse_paths, info_msg, warning_msg
 from koyo.utilities import running_as_pyinstaller_app
 from loguru import logger
@@ -15,7 +16,7 @@ if ty.TYPE_CHECKING:
     from image2image_wsireg.models import Preprocessing
 
 
-def set_logger(verbosity: int, no_color: bool) -> None:
+def set_logger(verbosity: float, no_color: bool) -> None:
     """Setup logger."""
     from koyo.logging import get_loguru_config, set_loguru_env, set_loguru_log
 
@@ -45,6 +46,7 @@ def get_preprocessing(preprocessing: str) -> Preprocessing | None:
 
 @click.group(
     context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 120, "ignore_unknown_options": True},
+    cls=GroupedGroup,
 )
 @click.version_option(__version__, prog_name="wsireg")
 @click.option(
@@ -62,7 +64,7 @@ def get_preprocessing(preprocessing: str) -> Preprocessing | None:
     show_default=True,
 )
 @click.option("--quiet", "-q", "verbosity", flag_value=0, help="Minimal output")
-@click.option("--debug", "verbosity", flag_value=5, help="Maximum output")
+@click.option("--debug", "verbosity", flag_value=0.5, help="Maximum output")
 @click.option(
     "--verbose",
     "-v",
@@ -76,7 +78,7 @@ def cli(
     verbosity: float = 1,
     no_color: bool = False,
     dev: bool = False,
-) -> click.Group:
+) -> None:
     r"""Launch registration app."""
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
 
@@ -86,7 +88,7 @@ def cli(
             dev = False
         else:
             verbosity = 0.5
-    verbosity = min(0.5, verbosity) * 10
+    verbosity = min(0.2, verbosity) * 10
 
     if dev:
         install_debugger_hook()
@@ -123,7 +125,7 @@ def cli(
     show_default=True,
     required=True,
 )
-@cli.command("new")
+@cli.command("new", help_group="Project")
 def new(output_dir: str, name: str, cache: bool, merge: bool) -> None:
     """Create a new project."""
     new_runner(output_dir, name, cache, merge)
@@ -145,7 +147,7 @@ def new_runner(output_dir: str, name: str, cache: bool, merge: bool) -> None:
     show_default=True,
     required=True,
 )
-@cli.command("about")
+@cli.command("about", help_group="Project")
 def about(project_dir: str) -> None:
     """Add images to the project."""
     about_runner(project_dir)
@@ -167,7 +169,7 @@ def about_runner(project_dir: str) -> None:
     show_default=True,
     required=True,
 )
-@cli.command("validate")
+@cli.command("validate", help_group="Project")
 def validate(project_dir: str) -> None:
     """Add images to the project."""
     validate_runner(project_dir)
@@ -218,7 +220,7 @@ def validate_runner(project_dir: str) -> None:
     show_default=True,
     required=True,
 )
-@cli.command("add-modality")
+@cli.command("add-image", help_group="Project")
 def add_modality(
     project_dir: str,
     name: ty.Sequence[str],
@@ -232,7 +234,7 @@ def add_modality(
 def add_modality_runner(
     project_dir: str,
     names: ty.Sequence[str],
-    path: ty.Sequence[str],
+    paths: ty.Sequence[str],
     preprocessings: ty.Sequence[str | None] | None = None,
 ) -> None:
     """Add images to the project."""
@@ -240,20 +242,20 @@ def add_modality_runner(
 
     if not isinstance(names, (list, tuple)):
         names = [names]
-    if not isinstance(path, (list, tuple)):
-        path = [path]
+    if not isinstance(paths, (list, tuple)):
+        paths = [paths]
     if not isinstance(preprocessings, (list, tuple)):
         preprocessings = [preprocessings]
 
-    if len(preprocessings) == 1 and len(path) > 1:
-        preprocessings = preprocessings * len(path)
+    if len(preprocessings) == 1 and len(paths) > 1:
+        preprocessings = preprocessings * len(paths)
         info_msg(f"Using same pre-processing for all images: {preprocessings[0]}")
 
-    if len(names) != len(path) != len(preprocessings):
+    if len(names) != len(paths) != len(preprocessings):
         raise ValueError("Number of names, paths and pre-processing must match.")
 
     obj = WsiReg2d.from_path(project_dir)
-    for name, path, preprocessing in zip(names, path, preprocessings):
+    for name, path, preprocessing in zip(names, paths, preprocessings):
         obj.auto_add_modality(name, path, get_preprocessing(preprocessing))
     obj.save()
 
@@ -295,7 +297,7 @@ def add_modality_runner(
     ),
     default=None,
     show_default=True,
-    required=False,
+    required=True,
     multiple=True,
 )
 @click.option(
@@ -330,7 +332,7 @@ def add_modality_runner(
     show_default=True,
     required=True,
 )
-@cli.command("add-path")
+@cli.command("add-path", help_group="Project")
 def add_path(
     project_dir: str,
     source: str,
@@ -339,7 +341,7 @@ def add_path(
     registration: ty.Sequence[str],
     preprocessing: str | None,
 ) -> None:
-    """Add images to the project."""
+    """Specify registration path between source and target (and maybe through) modalities."""
     add_path_runner(project_dir, source, target, through, registration, preprocessing)
 
 
@@ -355,19 +357,106 @@ def add_path_runner(
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
     obj = WsiReg2d.from_path(project_dir)
-    obj.add_registration_path(source, target, through, registration, get_preprocessing(preprocessing))
+    obj.add_registration_path(source, target, through, list(registration), get_preprocessing(preprocessing))
     obj.save()
 
 
-def add_attachment():
+@click.option(
+    "-i",
+    "--image",
+    help="Path to the image(s) that should be co-registered.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths,
+)
+@click.option(
+    "-n",
+    "--name",
+    help="Name to be given to the specified image (modality).",
+    type=click.STRING,
+    show_default=True,
+    multiple=True,
+    required=True,
+)
+@click.option(
+    "-a",
+    "--attach_to",
+    help="Name of the modality to which the attachment should be added.",
+    type=click.STRING,
+    show_default=True,
+    multiple=True,
+    required=True,
+)
+@click.option(
+    "-p",
+    "--project_dir",
+    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=True,
+)
+@cli.command("add-attachment", help_group="Project")
+def add_attachment(project_dir: str, attach_to: str, name: str, image: str) -> None:
     """Add attachment modality."""
+    add_attachment_runner(project_dir, attach_to, name, image)
 
 
-def add_geojson():
-    """Add geojson modality."""
+def add_attachment_runner(project_dir: str, attach_to: str, name: str, image: str) -> None:
+    """Add attachment modality."""
+    from image2image_wsireg.workflows.wsireg2d import WsiReg2d
+
+    obj = WsiReg2d.from_path(project_dir)
+    obj.auto_add_attachment_images(attach_to, name, image)
+    obj.save()
 
 
-def from_template(project_dir: str, template: ty.Literal["mxif", "3d", "he-preaf-postaf"]):
+@click.option(
+    "-m",
+    "--modality",
+    help="Name of the modality that should be merged.",
+    type=click.STRING,
+    show_default=True,
+    multiple=True,
+    required=True,
+)
+@click.option(
+    "-n",
+    "--name",
+    help="Name to be given to the specified image (modality).",
+    type=click.STRING,
+    show_default=True,
+    required=True,
+)
+@click.option(
+    "-p",
+    "--project_dir",
+    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=True,
+)
+@cli.command("add-merge", help_group="Project")
+def add_merge(project_dir: str, attach_to: str, modality: ty.Sequence[str]) -> None:
+    """Specify how (if) images should be merged."""
+    add_merge_runner(project_dir, attach_to, modality)
+
+
+def add_merge_runner(project_dir: str, name: str, modalities: ty.Sequence[str]) -> None:
+    """Add attachment modality."""
+    from image2image_wsireg.workflows.wsireg2d import WsiReg2d
+
+    obj = WsiReg2d.from_path(project_dir)
+    obj.add_merge_modalities(name, list(modalities))
+    obj.save()
+
+
+# def add_geojson():
+#     """Add geojson modality."""
+
+
+def from_template(project_dir: str, template: ty.Literal["mxif", "3d", "he-preaf-postaf"]) -> None:
     """Create a new project from a template."""
     # from_template_runner(project_dir, template)
 
@@ -391,7 +480,7 @@ def from_template(project_dir: str, template: ty.Literal["mxif", "3d", "he-preaf
     multiple=True,
     callback=cli_parse_paths,
 )
-@cli.command("preprocess")
+@cli.command("preprocess", help_group="Execute")
 def preprocess(project_dir: ty.Sequence[str], n_parallel: int) -> None:
     """Preprocess images."""
     preprocess_runner(project_dir, n_parallel)
@@ -462,7 +551,7 @@ def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
     multiple=True,
     callback=cli_parse_paths,
 )
-@cli.command("register")
+@cli.command("register", help_group="Execute")
 def register(
     project_dir: ty.Sequence[str],
     n_parallel: int,
@@ -550,7 +639,7 @@ def register_runner(
     multiple=True,
     callback=cli_parse_paths,
 )
-@cli.command("export")
+@cli.command("export", help_group="Execute")
 def export(
     project_dir: ty.Sequence[str],
     n_parallel: int,
@@ -558,7 +647,7 @@ def export(
     remove_merged: bool,
     write_not_registered: bool,
     original_size: bool,
-):
+) -> None:
     """Export images."""
     export_runner(project_dir, n_parallel, fmt, remove_merged, write_not_registered, original_size)
 

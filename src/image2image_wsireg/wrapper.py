@@ -69,9 +69,9 @@ class ImageWrapper:
         """Get the cache path."""
         cache_dir = Path(cache_dir)
         preprocessing_hash = ImageWrapper.preprocessing_hash(modality, preprocessing)
-        filename = f"{modality.name}_hash={preprocessing_hash}.ome.tiff"
+        filename = f"{modality.name}_hash={preprocessing_hash}.tiff"
         if extra:
-            filename = f"{modality.name}-{extra}_hash={preprocessing_hash}.ome.tiff"
+            filename = f"{modality.name}-{extra}_hash={preprocessing_hash}.tiff"
         return cache_dir / filename
 
     def check_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None) -> bool:
@@ -129,6 +129,7 @@ class ImageWrapper:
                 )
             if filename_with_suffix(filename, "mask", ".ome.tiff").exists():
                 self.mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".ome.tiff")))
+            logger.trace(f"Loaded image from cache: {filename} for {self.modality.name}")
 
     @classmethod
     def load_original_size_transform(cls, modality: Modality, cache_dir: PathLike) -> dict | None:
@@ -142,19 +143,24 @@ class ImageWrapper:
         """Pre-process image."""
         from image2image_wsireg.utils.preprocessing import convert_and_cast, preprocess, preprocess_dask_array
 
+        preprocessing = self.preprocessing or self.modality.preprocessing
+
         # retrieve first array in the pyramid i.e. the highest resolution
         image = self.reader.pyramid[0]
         # pre-process image
-        image = preprocess_dask_array(image, self.preprocessing)
-        # convert and cast
-        image = convert_and_cast(image, self.preprocessing)
+        with MeasureTimer() as timer:
+            image = preprocess_dask_array(image, preprocessing)
+            logger.trace(f"Pre-processed image in {timer()}")
+            # convert and cast
+            image = convert_and_cast(image, preprocessing)
+            logger.trace(f"Converted and cast image in {timer.elapsed_since_last()}")
 
-        mask = None
-        preprocessing = self.preprocessing or self.modality.preprocessing
-        # set image
-        if preprocessing:
-            self.image, self.mask, self.initial_transforms, self.original_size_transform = preprocess(
-                image, mask, preprocessing, self.reader.resolution, self.reader.is_rgb, self.initial_transforms
-            )
-        else:
-            self.image, self.mask, self.original_size_transform = image, mask, None
+            mask = None
+            # set image
+            if preprocessing:
+                self.image, self.mask, self.initial_transforms, self.original_size_transform = preprocess(
+                    image, mask, preprocessing, self.reader.resolution, self.reader.is_rgb, self.initial_transforms
+                )
+            else:
+                self.image, self.mask, self.original_size_transform = image, mask, None
+            logger.trace(f"Pre-processed image in {timer.elapsed_since_last()}")

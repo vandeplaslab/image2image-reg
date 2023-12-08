@@ -35,6 +35,7 @@ dependencies = [
     "opencv-python",
     "SimpleITK",
     "scikit-image",
+    "click-groups",
 ]
 
 # extras
