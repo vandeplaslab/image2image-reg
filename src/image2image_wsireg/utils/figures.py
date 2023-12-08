@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -202,7 +201,7 @@ def write_iteration_plots(
     """
     for model_idx, model_data in all_iteration_data.items():
         for res_idx, res_data in model_data.items():
-            plot_title = f"Registration info for {data_key}- transform idx {model_idx} - resolution {res_idx}"
+            plot_title = f"Registration info for {data_key}\ntransform index {model_idx}\nresolution {res_idx}"
             output_filepath = Path(output_dir) / f"IterationPlot.{model_idx}.R{res_idx}.png"
             out_fig = create_iteration_plot(res_data, plot_title)
             out_fig.savefig(str(output_filepath))

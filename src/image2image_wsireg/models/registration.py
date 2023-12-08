@@ -1,7 +1,6 @@
 """Registration model."""
 from __future__ import annotations
 
-import typing as ty
 from enum import Enum, EnumMeta
 from pathlib import Path
 

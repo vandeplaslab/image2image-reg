@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
+from koyo.typing import PathLike
 
 from image2image_wsireg.enums import ELX_TO_ITK_INTERPOLATORS
 from image2image_wsireg.models.transform import Transform
@@ -26,7 +27,7 @@ class TransformSequence:
 
     def __init__(
         self,
-        transforms: str | (Path | dict[str, list[str]] | Transform | list[Transform]) | None = None,
+        transforms: str | (Path | list[dict[str, list[str]]] | Transform | list[Transform]) | None = None,
         transform_sequence_index: list[int] | None = None,
     ) -> None:
         self._transform_sequence_index: list[int] = []
@@ -74,7 +75,6 @@ class TransformSequence:
                 transforms = [transforms]
             self.transforms = self.transforms + transforms
             self.transform_sequence_index = transform_sequence_index
-
         self._update_transform_properties()
 
     @property
@@ -241,6 +241,12 @@ class TransformSequence:
         """
         self.add_transforms(other.transforms, other.transform_sequence_index)
 
+    @classmethod
+    def from_path(cls, path: PathLike) -> TransformSequence:
+        """Load transform sequence from path."""
+        transforms, transform_sequence_index = _read_wsireg_transform(path)
+        return cls(transforms, transform_sequence_index)
+
 
 def _read_wsireg_transform(
     parameter_data: str | (Path | dict[ty.Any, ty.Any])
@@ -252,29 +258,28 @@ def _read_wsireg_transform(
         parameter_data_in = parameter_data
 
     transform_list = []
-    transform_list_seq_id = []
+    transform_sequence_index = []
 
-    seq_idx = 0
-    for k, v in parameter_data_in.items():
-        if k == "initial":
-            if isinstance(v, dict):
-                transform_list.append(v)
-                transform_list_seq_id.append(seq_idx)
-                seq_idx += 1
-            elif isinstance(v, list):
-                for init_tform in v:
+    index = 0
+    for key, value in parameter_data_in.items():
+        if key == "initial":
+            if isinstance(value, dict):
+                transform_list.append(value)
+                transform_sequence_index.append(index)
+                index += 1
+            elif isinstance(value, list):
+                for init_tform in value:
                     transform_list.append(init_tform)
-                    transform_list_seq_id.append(seq_idx)
-                    seq_idx += 1
+                    transform_sequence_index.append(index)
+                    index += 1
         else:
-            if isinstance(v, dict):
-                transform_list.append(v)
-                transform_list_seq_id.append(seq_idx)
-                seq_idx += 1
-            elif isinstance(v, list):
-                for tform in v:
+            if isinstance(value, dict):
+                transform_list.append(value)
+                transform_sequence_index.append(index)
+                index += 1
+            elif isinstance(value, list):
+                for tform in value:
                     transform_list.append(tform)
-                    transform_list_seq_id.append(seq_idx)
-                seq_idx += 1
-
-    return transform_list, transform_list_seq_id
+                    transform_sequence_index.append(index)
+                index += 1
+    return transform_list, transform_sequence_index

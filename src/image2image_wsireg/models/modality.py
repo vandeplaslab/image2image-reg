@@ -7,6 +7,7 @@ import zarr
 from koyo.typing import PathLike
 from pydantic import BaseModel
 
+from image2image_wsireg.enums import ArrayLike
 from image2image_wsireg.models.preprocessing import Preprocessing
 
 
@@ -26,3 +27,20 @@ class Modality(BaseModel):
     pixel_size: float = 1.0
     mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None
     output_pixel_size: ty.Optional[tuple[float, float]] = None
+
+    def to_dict(self, as_wsireg: bool = False) -> dict:
+        """Convert to dict."""
+        data = self.dict(exclude_none=True, exclude_defaults=True)
+        if data.get("preprocessing"):
+            if isinstance(data["preprocessing"], Preprocessing):
+                data["preprocessing"] = data["preprocessing"].to_dict()
+        if isinstance(data["path"], ArrayLike):
+            data["path"] = "ArrayLike"
+        if as_wsireg:
+            if data.get("path"):
+                data["image_filepath"] = data.pop("path")
+            if data.get("pixel_size"):
+                data["image_res"] = data.pop("pixel_size")
+            if data.get("output_pixel_size"):
+                data["output_res"] = data.pop("output_pixel_size")
+        return data

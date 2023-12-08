@@ -39,8 +39,8 @@ def preprocess_dask_array(
         array_out = sitk.GetImageFromArray(np.asarray(array))
     else:
         if preprocessing:
-            if preprocessing.ch_indices and len(array.shape) > 2:
-                chs = list(preprocessing.ch_indices)
+            if preprocessing.channel_indices and len(array.shape) > 2:
+                chs = list(preprocessing.channel_indices)
                 array = array[chs, :, :]
         array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))
     return array_out
@@ -76,8 +76,8 @@ def read_preprocess_array(
 
     else:
         if preprocessing:
-            if preprocessing.ch_indices and len(array.shape) > 2:
-                chs = list(preprocessing.ch_indices)
+            if preprocessing.channel_indices and len(array.shape) > 2:
+                chs = list(preprocessing.channel_indices)
                 array = array[chs, :, :]
         image_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))
     return image_out

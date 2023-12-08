@@ -39,7 +39,7 @@ class Transform:
     """
 
     def __init__(self, elastix_transform: dict):
-        self.elastix_transform: dict[str, str] = elastix_transform
+        self.elastix_transform: dict[str, list[str]] = elastix_transform
         self.itk_transform: sitk.Transform = convert_to_itk(self.elastix_transform)
 
         self.output_spacing = [float(p) for p in self.elastix_transform.get("Spacing")]

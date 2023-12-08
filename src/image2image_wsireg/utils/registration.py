@@ -91,7 +91,7 @@ def json_to_pmap_dict(json_file: str) -> dict[str, ty.Any]:
     return pmap_dict
 
 
-def _prepare_reg_models(reg_params: list[Registration | dict[str, list[str]]]) -> list[dict[str, list[str]]]:
+def _prepare_reg_models(reg_params: list[str | Registration | dict[str, list[str]]]) -> list[dict[str, list[str]]]:
     prepared_params = []
     for rp in reg_params:
         if isinstance(rp, Registration):
@@ -177,38 +177,40 @@ def register_2d_images(
     with MeasureTimer() as timer:
         source.sitk_to_itk(True)
         target.sitk_to_itk(True)
-    logger.info(f"Converting to ITK took {timer()}")
+    logger.info(f"Converting images to ITK took {timer()}")
 
     output_dir = Path(output_dir)
     output_dir.mkdir(exist_ok=True, parents=True)
 
     # Create registration object
-    selx = itk.ElastixRegistrationMethod.New(source.image, target.image)
-    selx.SetLogToConsole(True)
-    selx.SetOutputDirectory(str(output_dir))
-    if source.mask is not None:
-        selx.SetMovingMask(source.mask)
-    if target.mask is not None:
-        selx.SetFixedMask(target.mask)
-    selx.SetMovingImage(source.image)
-    selx.SetFixedImage(target.image)
+    with MeasureTimer() as timer:
+        selx = itk.ElastixRegistrationMethod.New(source.image, target.image)
+        selx.SetLogToConsole(True)
+        selx.SetOutputDirectory(str(output_dir))
+        if source.mask is not None:
+            selx.SetMovingMask(source.mask)
+        if target.mask is not None:
+            selx.SetFixedMask(target.mask)
+        selx.SetMovingImage(source.image)
+        selx.SetFixedImage(target.image)
 
-    # Set registration parameters
-    parameter_object_registration = itk.ParameterObject.New()
-    for idx, pmap in enumerate(reg_params):
-        if idx == 0:
-            pmap["WriteResultImage"] = ["true"] if return_image else ["false"]
-            if target.mask is not None:
-                pmap["AutomaticTransformInitialization"] = ["false"]
+        # Set registration parameters
+        parameter_object_registration = itk.ParameterObject.New()
+        for idx, pmap in enumerate(reg_params):
+            if idx == 0:
+                pmap["WriteResultImage"] = ["true"] if return_image else ["false"]
+                if target.mask is not None:
+                    pmap["AutomaticTransformInitialization"] = ["false"]
+                else:
+                    pmap["AutomaticTransformInitialization"] = ["true"]
+
+                parameter_object_registration.AddParameterMap(pmap)
             else:
-                pmap["AutomaticTransformInitialization"] = ["true"]
-
-            parameter_object_registration.AddParameterMap(pmap)
-        else:
-            pmap["WriteResultImage"] = ["true"] if return_image else ["false"]
-            pmap["AutomaticTransformInitialization"] = ["false"]
-            parameter_object_registration.AddParameterMap(pmap)
-    selx.SetParameterObject(parameter_object_registration)
+                pmap["WriteResultImage"] = ["true"] if return_image else ["false"]
+                pmap["AutomaticTransformInitialization"] = ["false"]
+                parameter_object_registration.AddParameterMap(pmap)
+        selx.SetParameterObject(parameter_object_registration)
+    logger.info(f"Setting up registration took {timer()}")
 
     # Update filter object (required)
     with MeasureTimer() as timer:

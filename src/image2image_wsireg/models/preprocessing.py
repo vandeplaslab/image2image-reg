@@ -3,7 +3,7 @@ import typing as ty
 from enum import Enum
 
 import numpy as np
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, validator
 
 from image2image_wsireg.enums import CoordinateFlip, ImageType
 
@@ -48,7 +48,7 @@ class Preprocessing(BaseModel):
         Perform max intensity projection number of channels > 1.
     contrast_enhance: bool
         Enhance contrast of image
-    ch_indices: list of int or int
+    channel_indices: list of int or int
         Channel indicies to use for registration, 0-index, so ch_indices = 0, pulls the first channel
     as_uint8: bool
         Whether to byte scale registration image data for memory saving
@@ -81,7 +81,7 @@ class Preprocessing(BaseModel):
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK
     max_int_proj: bool = True
-    ch_indices: ty.Optional[list[int]] = None
+    channel_indices: ty.Optional[list[int]] = Field(None, alias="ch_indices")
     as_uint8: bool = True
     contrast_enhance: bool = False
     invert_intensity: bool = False
@@ -89,18 +89,29 @@ class Preprocessing(BaseModel):
 
     # spatial preprocessing
     affine: ty.Optional[np.ndarray] = None
-    rotate_counter_clockwise: float = 0
+    rotate_counter_clockwise: float = Field(0, ge=-360, le=360, alias="rotate_cc")
     flip: ty.Optional[CoordinateFlip] = None
     crop_to_mask_bbox: bool = False
     mask_bbox: ty.Optional[BoundingBox] = None
-    downsample: int = 1
+    downsample: int = Field(1, ge=1, alias="downsampling")
     use_mask: bool = True
+
+    def to_dict(self) -> dict:
+        """Return dict."""
+        data = self.dict(exclude_none=True, exclude_defaults=True)
+        if data.get("affine"):
+            data["affine"] = data["affine"].tolist()
+        if data.get("mask_bbox"):
+            data["mask_bbox"] = data["mask_bbox"]._asdict()
+        return data
 
     @validator("mask_bbox", pre=True)
     def _make_bbox(cls, v):
+        if v is None:
+            return None
         return _transform_to_bbox(v)
 
-    @validator("ch_indices", pre=True)
+    @validator("channel_indices", pre=True)
     def _make_ch_list(cls, v):
         return _index_to_list(v)
 

@@ -1,0 +1,163 @@
+{
+    "000-to-slide=12-cycle=1-scene=0": [
+        {
+            "CenterOfRotationPoint": [
+                "7214.025000000001",
+                "7809.425"
+            ],
+            "CompressResultImage": [
+                "true"
+            ],
+            "DefaultPixelValue": [
+                "0"
+            ],
+            "Direction": [
+                "1",
+                "0",
+                "0",
+                "1"
+            ],
+            "FixedImageDimension": [
+                "2"
+            ],
+            "FixedInternalImagePixelType": [
+                "float"
+            ],
+            "HowToCombineTransforms": [
+                "Compose"
+            ],
+            "Index": [
+                "0",
+                "0"
+            ],
+            "InitialTransformParameterFileName": [
+                "NoInitialTransform"
+            ],
+            "MovingImageDimension": [
+                "2"
+            ],
+            "MovingInternalImagePixelType": [
+                "float"
+            ],
+            "NumberOfParameters": [
+                "3"
+            ],
+            "Origin": [
+                "0",
+                "0"
+            ],
+            "ResampleInterpolator": [
+                "FinalNearestNeighborInterpolator"
+            ],
+            "Resampler": [
+                "DefaultResampler"
+            ],
+            "ResultImageFormat": [
+                "mha"
+            ],
+            "ResultImagePixelType": [
+                "unsigned char"
+            ],
+            "Size": [
+                "22198",
+                "24030"
+            ],
+            "Spacing": [
+                "0.65",
+                "0.65"
+            ],
+            "Transform": [
+                "EulerTransform"
+            ],
+            "TransformParameters": [
+                "-0.0029255639721777692",
+                "58.75215500750902",
+                "58.70669818367873"
+            ],
+            "UseDirectionCosines": [
+                "true"
+            ]
+        },
+        {
+            "CenterOfRotationPoint": [
+                "7272.7771550075095",
+                "7868.131698183679"
+            ],
+            "CompressResultImage": [
+                "true"
+            ],
+            "DefaultPixelValue": [
+                "0"
+            ],
+            "Direction": [
+                "1",
+                "0",
+                "0",
+                "1"
+            ],
+            "FixedImageDimension": [
+                "2"
+            ],
+            "FixedInternalImagePixelType": [
+                "float"
+            ],
+            "HowToCombineTransforms": [
+                "Compose"
+            ],
+            "Index": [
+                "0",
+                "0"
+            ],
+            "InitialTransformParameterFileName": [
+                "test.wsireg/Results/slide=12-cycle=2-scene=0-slide=12-cycle=1-scene=0_reg_output/TransformParameters.0.txt"
+            ],
+            "MovingImageDimension": [
+                "2"
+            ],
+            "MovingInternalImagePixelType": [
+                "float"
+            ],
+            "NumberOfParameters": [
+                "6"
+            ],
+            "Origin": [
+                "0",
+                "0"
+            ],
+            "ResampleInterpolator": [
+                "FinalNearestNeighborInterpolator"
+            ],
+            "Resampler": [
+                "DefaultResampler"
+            ],
+            "ResultImageFormat": [
+                "mha"
+            ],
+            "ResultImagePixelType": [
+                "unsigned char"
+            ],
+            "Size": [
+                "22198",
+                "24030"
+            ],
+            "Spacing": [
+                "0.65",
+                "0.65"
+            ],
+            "Transform": [
+                "AffineTransform"
+            ],
+            "TransformParameters": [
+                "1.0029642731816457",
+                "-0.0025940604073805863",
+                "0.002679061312690892",
+                "1.0045761613273534",
+                "-24.13091947750519",
+                "-29.678404540102854"
+            ],
+            "UseDirectionCosines": [
+                "true"
+            ]
+        }
+    ]
+}
