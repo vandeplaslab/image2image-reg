@@ -8,37 +8,36 @@ from pathlib import Path
 import itk
 import numpy as np
 import SimpleITK as sitk
-from wsireg.utils.reg_utils import json_to_pmap_dict
 
 from image2image_wsireg.enums import ELX_TO_ITK_INTERPOLATORS
 from image2image_wsireg.models import Transform
 from image2image_wsireg.parameters.transformations import BASE_AFFINE_TRANSFORM, BASE_RIGID_TRANSFORM
 from image2image_wsireg.utils.convert import itk_image_to_sitk_image, sitk_image_to_itk_image
+from image2image_wsireg.utils.registration import json_to_pmap_dict
 
 
-def prepare_tform_dict(tform_dict, shape_tform=False) -> dict:
+def prepare_tform_dict(tform_dict: dict, shape_tform: bool = False) -> dict:
     """Prepare the transformation dictionary for use in SimpleElastix."""
-    tform_dict_out = {}
+    transforms_out_dict = {}
     for k, v in tform_dict.items():
         if k == "initial":
-            tform_dict_out["initial"] = v
+            transforms_out_dict["initial"] = v
         else:
-            tforms = []
+            transforms = []
             for tform in v:
                 if "invert" in list(tform.keys()):
                     if shape_tform is False:
-                        tforms.append(tform["image"])
+                        transforms.append(tform["image"])
                     else:
-                        tforms.append(tform["invert"])
+                        transforms.append(tform["invert"])
                 else:
-                    tforms.append(tform)
-            tform_dict_out[k] = tforms
-
-    return tform_dict_out
+                    transforms.append(tform)
+            transforms_out_dict[k] = transforms
+    return transforms_out_dict
 
 
 def transform_2d_image_itkelx(
-    image: sitk.Image, transformation_maps: list, writer: str = "sitk", **zarr_kwargs: ty.Any
+    image: sitk.Image, transformation_maps: list, writer: str = "sitk", **_zarr_kwargs: ty.Any
 ):
     """
     Transform 2D images with multiple models and return the transformed image
@@ -115,27 +114,27 @@ def transform_image_to_sitk(image, tfx):
         if pixel_id in list(range(1, 13)) and image.GetDepth() == 0:
             tfx.SetMovingImage(image)
             image = tfx.Execute()
-            image = sitk.Cast(image, pixel_id)
+            image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
 
         elif pixel_id in list(range(1, 13)) and image.GetDepth() > 0:
             images = []
             for chan in range(image.GetDepth()):
                 tfx.SetMovingImage(image[:, :, chan])
-                images.append(sitk.Cast(tfx.Execute(), pixel_id))
-            image = sitk.JoinSeries(images)
-            image = sitk.Cast(image, pixel_id)
+                images.append(sitk.Cast(tfx.Execute(), pixel_id))  # type: ignore[no-untyped-call]
+            image = sitk.JoinSeries(images)  # type: ignore[no-untyped-call]
+            image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
 
         elif pixel_id > 12:
             images = []
             for idx in range(image.GetNumberOfComponentsPerPixel()):
-                im = sitk.VectorIndexSelectionCast(image, idx)
+                im = sitk.VectorIndexSelectionCast(image, idx)  # type: ignore[no-untyped-call]
                 pixel_id_nonvec = im.GetPixelID()
                 tfx.SetMovingImage(im)
-                images.append(sitk.Cast(tfx.Execute(), pixel_id_nonvec))
+                images.append(sitk.Cast(tfx.Execute(), pixel_id_nonvec))  # type: ignore[no-untyped-call]
                 del im
 
-            image = sitk.Compose(images)
-            image = sitk.Cast(image, pixel_id)
+            image = sitk.Compose(images)  # type: ignore[no-untyped-call]
+            image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
 
     return image
 
@@ -152,7 +151,7 @@ def transform_image_itkelx_to_sitk(image, tfx):
             tfx.UpdateLargestPossibleRegion()
             image = tfx.GetOutput()
             image = itk_image_to_sitk_image(image)
-            image = sitk.Cast(image, pixel_id)
+            image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
 
         elif pixel_id in list(range(1, 13)) and image.GetDepth() > 0:
             images = []
@@ -162,130 +161,32 @@ def transform_image_itkelx_to_sitk(image, tfx):
                 tfx.UpdateLargestPossibleRegion()
                 image = tfx.GetOutput()
                 image = itk_image_to_sitk_image(image)
-                image = sitk.Cast(image, pixel_id)
+                image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
                 images.append(image)
-            image = sitk.JoinSeries(images)
-            image = sitk.Cast(image, pixel_id)
+            image = sitk.JoinSeries(images)  # type: ignore[no-untyped-call]
+            image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
 
         elif pixel_id > 12:
             images = []
             for idx in range(image.GetNumberOfComponentsPerPixel()):
-                im = sitk.VectorIndexSelectionCast(image, idx)
+                im = sitk.VectorIndexSelectionCast(image, idx)  # type: ignore[no-untyped-call]
                 pixel_id_nonvec = im.GetPixelID()
                 im = sitk_image_to_itk_image(im, cast_to_float32=True)
                 tfx.SetMovingImage(im)
                 tfx.UpdateLargestPossibleRegion()
                 im = tfx.GetOutput()
                 im = itk_image_to_sitk_image(im)
-                im = sitk.Cast(im, pixel_id_nonvec)
+                im = sitk.Cast(im, pixel_id_nonvec)  # type: ignore[no-untyped-call]
                 images.append(im)
                 del im
 
-            image = sitk.Compose(images)
-            image = sitk.Cast(image, pixel_id)
+            image = sitk.Compose(images)  # type: ignore[no-untyped-call]
+            image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
 
     return image
 
 
-def apply_transform_dict_itkelx(
-    image_fp,
-    image_res,
-    tform_dict_in,
-    prepro_dict=None,
-    is_shape_mask=False,
-    writer="sitk",
-    **im_tform_kwargs,
-):
-    """
-    Apply a complex series of transformations in a python dictionary to an image.
-
-    Parameters
-    ----------
-    image_fp : str
-        file path to the image to be transformed, it will be read in it's entirety
-    image_res : float
-        pixel resolution of image to be transformed
-    tform_dict : dict of lists
-        dict of SimpleElastix transformations stored in lists, may contain an "initial" transforms (preprocessing transforms)
-        these will be applied first, then the key order of the dict will determine the rest of the transformations
-    is_shape_mask : bool
-        whether the image being transformed is a shape mask (determines import)
-
-    Returns
-    -------
-    image: itk.Image
-        image that has been transformed
-
-    """
-    if is_shape_mask is False:
-        if isinstance(image_fp, sitk.Image):
-            image = image_fp
-        # else:
-        #     image = RegImage(
-        #         image_fp, image_res, prepro_dict=prepro_dict
-        #     ).image
-    else:
-        image = sitk.GetImageFromArray(image_fp)
-        del image_fp
-        image.SetSpacing((image_res, image_res))
-
-    if tform_dict_in is None:
-        if writer == "zarr":
-            image = transform_2d_image_itkelx(
-                image,
-                None,
-                writer="zarr",
-                zarr_store_dir=im_tform_kwargs["zarr_store_dir"],
-                channel_names=im_tform_kwargs["channel_names"],
-                channel_colors=im_tform_kwargs["channel_colors"],
-            )
-        else:
-            image = transform_2d_image_itkelx(image, None)
-
-    else:
-        tform_dict = tform_dict_in.copy()
-
-        if tform_dict.get("registered") is None and tform_dict.get(0) is None:
-            tform_dict["registered"] = tform_dict["initial"]
-            tform_dict.pop("initial", None)
-
-            if isinstance(tform_dict.get("registered"), list) is False:
-                tform_dict["registered"] = [tform_dict["registered"]]
-
-            for idx in range(len(tform_dict["registered"])):
-                tform_dict[idx] = [tform_dict["registered"][idx]]
-
-            tform_dict.pop("registered", None)
-        else:
-            tform_dict = prepare_tform_dict(tform_dict, shape_tform=False)
-
-        if "initial" in tform_dict:
-            for initial_tform in tform_dict["initial"]:
-                if isinstance(initial_tform, list) is False:
-                    initial_tform = [initial_tform]
-
-                for tform in initial_tform:
-                    image = transform_2d_image_itkelx(image, [tform])
-
-            tform_dict.pop("initial", None)
-
-        for k, v in tform_dict.items():
-            if writer == "zarr" and k == list(tform_dict.keys())[-1]:
-                image = transform_2d_image_itkelx(
-                    image,
-                    v,
-                    writer="zarr",
-                    zarr_store_dir=im_tform_kwargs["zarr_store_dir"],
-                    channel_names=im_tform_kwargs["channel_names"],
-                    channel_colors=im_tform_kwargs["channel_colors"],
-                )
-            else:
-                image = transform_2d_image_itkelx(image, v)
-
-    return image
-
-
-def compute_rot_bound(image: sitk.Image, angle: float = 30) -> tuple[float, float]:
+def compute_rotation_bounds_for_image(image: sitk.Image, angle: float = 30) -> tuple[float, float]:
     """Compute the bounds of an image after by an angle.
 
     Parameters
@@ -300,7 +201,7 @@ def compute_rot_bound(image: sitk.Image, angle: float = 30) -> tuple[float, floa
     tuple of the rotated image's size in x and y
 
     """
-    w, h = image.GetSize()[0], image.GetSize()[1]
+    w, h = image.GetSize()[0:2]  # type: ignore[no-untyped-call]
     return compute_rotation_bounds((h, w), angle=angle)
 
 
@@ -314,7 +215,7 @@ def compute_rotation_bounds(shape: tuple[int, int], angle: float = 0) -> tuple[f
     return bound_w, bound_h
 
 
-def gen_rigid_tform_rot(image: sitk.Image, spacing: float, angle: float) -> dict:
+def generate_rigid_rotation_transform(image: sitk.Image, spacing: float, angle: float) -> dict:
     """Generate a SimpleElastix transformation parameter Map to rotate image by angle.
 
     Parameters
@@ -331,13 +232,15 @@ def gen_rigid_tform_rot(image: sitk.Image, spacing: float, angle: float) -> dict
     SimpleITK.ParameterMap of rotation transformation (EulerTransform)
     """
     tform = BASE_RIGID_TRANSFORM.copy()
-    image.SetSpacing((spacing, spacing))
-    bound_w, bound_h = compute_rot_bound(image, angle=angle)
+    image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
+    bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=angle)
+    # calculate rotation center point
+    rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(
+        ((bound_w - 1) / 2, (bound_h - 1) / 2),
+    )  # type: ignore[no-untyped-call]
 
-    rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(((bound_w - 1) / 2, (bound_h - 1) / 2))
-
-    c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
-    c_x_phy, c_y_phy = image.TransformContinuousIndexToPhysicalPoint((c_x, c_y))
+    c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2  # type: ignore[no-untyped-call]
+    c_x_phy, c_y_phy = image.TransformContinuousIndexToPhysicalPoint((c_x, c_y))  # type: ignore[no-untyped-call]
     t_x = rot_cent_pt[0] - c_x_phy
     t_y = rot_cent_pt[1] - c_y_phy
 
@@ -353,7 +256,7 @@ def gen_rigid_tform_rot(image: sitk.Image, spacing: float, angle: float) -> dict
     return tform
 
 
-def gen_rigid_translation(
+def generate_rigid_translation_transform(
     image: sitk.Image, spacing: float, translation_x: float, translation_y: float, size_x: int, size_y: int
 ) -> dict:
     """Generate a SimpleElastix transformation parameter Map to rotate image by angle.
@@ -363,14 +266,18 @@ def gen_rigid_translation(
     SimpleITK.ParameterMap of rotation transformation (EulerTransform)
     """
     tform = BASE_RIGID_TRANSFORM.copy()
-    image.SetSpacing((spacing, spacing))
-    bound_w, bound_h = compute_rot_bound(image, angle=0)
+    image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
+    bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
 
-    rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(((bound_w - 1) / 2, (bound_h - 1) / 2))
+    rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(
+        ((bound_w - 1) / 2, (bound_h - 1) / 2),
+    )  # type: ignore[no-untyped-call]
     (
         translation_x,
         translation_y,
-    ) = image.TransformContinuousIndexToPhysicalPoint((float(translation_x), float(translation_y)))
+    ) = image.TransformContinuousIndexToPhysicalPoint(
+        (float(translation_x), float(translation_y)),
+    )  # type: ignore[no-untyped-call]
     # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
 
     tform["Spacing"] = [str(spacing), str(spacing)]
@@ -384,7 +291,7 @@ def gen_rigid_translation(
     return tform
 
 
-def gen_rig_to_original(original_size: tuple[int, int], crop_transform: dict) -> dict:
+def generate_rigid_original_transform(original_size: tuple[int, int], crop_transform: dict) -> dict:
     """Generate a SimpleElastix transformation to return a cropped image to its original size."""
     crop_transform["Size"] = [str(original_size[0]), str(original_size[1])]
     tform_params = [float(t) for t in crop_transform["TransformParameters"]]
@@ -392,7 +299,7 @@ def gen_rig_to_original(original_size: tuple[int, int], crop_transform: dict) ->
     return crop_transform
 
 
-def gen_affine_transform_flip(image: sitk.Image, spacing: float, flip: str = "h") -> dict:
+def generate_affine_flip_transform(image: sitk.Image, spacing: float, flip: str = "h") -> dict:
     """Generate a SimpleElastix transformation parameter Map to horizontally or vertically flip image.
 
     Parameters
@@ -411,7 +318,7 @@ def gen_affine_transform_flip(image: sitk.Image, spacing: float, flip: str = "h"
     """
     tform = BASE_AFFINE_TRANSFORM.copy()
     image.SetSpacing((spacing, spacing))
-    bound_w, bound_h = compute_rot_bound(image, angle=0)
+    bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
     rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(((bound_w - 1) / 2, (bound_h - 1) / 2))
 
     tform["Spacing"] = [str(spacing), str(spacing)]
@@ -428,21 +335,12 @@ def gen_affine_transform_flip(image: sitk.Image, spacing: float, flip: str = "h"
     return tform
 
 
-def make_composite_itk(itk_tforms):
-    itk_composite = sitk.CompositeTransform(2)
-    for t in itk_tforms:
-        itk_composite.AddTransform(t.itk_transform)
+def make_composite_itk(itk_transforms: list[Transform]) -> sitk.CompositeTransform:
+    """Make composite transform."""
+    itk_composite = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
+    for t in itk_transforms:
+        itk_composite.AddTransform(t.itk_transform)  # type: ignore[no-untyped-call]
     return itk_composite
-
-
-def get_final_tform(parameter_data):
-    if isinstance(parameter_data, str) and Path(parameter_data).suffix == ".json":
-        parameter_data = json.load(open(parameter_data))
-
-    final_key = list(parameter_data.keys())[-1]
-
-    final_tform = parameter_data[final_key][-1]
-    return final_tform
 
 
 def collate_wsireg_transforms(parameter_data):

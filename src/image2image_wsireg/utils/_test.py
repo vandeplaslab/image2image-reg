@@ -17,6 +17,13 @@ def get_test_files(pattern: str = "*.json") -> list[Path]:
     return list(TEST_DATA_DIR.glob(pattern))
 
 
+def get_test_file(filename: str) -> Path:
+    """Get config file."""
+    path = TEST_DATA_DIR / filename
+    assert path.exists(), f"File {path} does not exist."
+    return path
+
+
 class CleanupMixin:
     """Mixin class."""
 

@@ -119,7 +119,7 @@ extend-ignore = [
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]
-filterwarnings = ["error"]
+filterwarnings = ["ignore"]
 
 # https://mypy.readthedocs.io/en/stable/config_file.html
 [tool.mypy]

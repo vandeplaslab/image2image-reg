@@ -30,7 +30,7 @@ class Modality(BaseModel):
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Convert to dict."""
-        data = self.dict(exclude_none=True, exclude_defaults=True)
+        data = self.dict(exclude_none=True, exclude_defaults=False)
         if data.get("preprocessing"):
             if isinstance(data["preprocessing"], Preprocessing):
                 data["preprocessing"] = data["preprocessing"].to_dict()

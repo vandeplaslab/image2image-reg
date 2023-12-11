@@ -105,6 +105,31 @@ class Preprocessing(BaseModel):
             data["mask_bbox"] = data["mask_bbox"]._asdict()
         return data
 
+    @classmethod
+    def basic(cls) -> "Preprocessing":
+        """Basic image preprocessing."""
+        return cls(image_type=ImageType.DARK, as_uint8=True, max_int_proj=True)  # type: ignore[call-arg]
+
+    @classmethod
+    def fluorescence(cls) -> "Preprocessing":
+        """Basic image preprocessing."""
+        return cls(  # type: ignore[call-arg]
+            image_type=ImageType.DARK,
+            as_uint8=True,
+            max_int_proj=True,
+            contrast_enhance=True,
+        )
+
+    @classmethod
+    def brightfield(cls) -> "Preprocessing":
+        """Basic image preprocessing."""
+        return cls(  # type: ignore[call-arg]
+            image_type=ImageType.LIGHT,
+            as_uint8=True,
+            max_int_proj=False,
+            invert_intensity=True,
+        )
+
     @validator("mask_bbox", pre=True)
     def _make_bbox(cls, v):
         if v is None:

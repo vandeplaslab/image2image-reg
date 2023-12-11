@@ -1,12 +1,12 @@
 """Transformation sequence."""
 from __future__ import annotations
 
-import json
 import typing as ty
 from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
+from koyo.json import read_json_data
 from koyo.typing import PathLike
 
 from image2image_wsireg.models.transform import Transform, TransformMixin
@@ -62,12 +62,20 @@ class TransformSequence(TransformMixin):
             of elastix transforms would to make the composite ITK transform
 
         """
-        if isinstance(transforms, (str, Path, dict)):
+        if isinstance(transforms, (str, Path)):
             tform_list, tform_idx = _read_wsireg_transform(transforms)
             self.transform_sequence_index = tform_idx
             reg_transforms = [Transform(t) for t in tform_list]
             self.transforms = self.transforms + reg_transforms
-
+        elif isinstance(transforms, list):
+            if isinstance(transforms[0], dict):
+                reg_transforms = [Transform(t) for t in transforms]
+                self.transforms = self.transforms + reg_transforms
+            elif isinstance(transforms[0], Transform):
+                self.transforms = self.transforms + transforms
+            else:
+                raise ValueError("Transforms must be a list of Transform objects or a list of dicts")
+            self.transform_sequence_index = transform_sequence_index
         elif isinstance(transforms, (list, Transform)):
             if isinstance(transforms, Transform):
                 transforms = [transforms]
@@ -148,19 +156,17 @@ class TransformSequence(TransformMixin):
 
 
 def _read_wsireg_transform(
-    parameter_data: str | (Path | dict[ty.Any, ty.Any])
+    parameter_data: str | (Path | dict[str, list[str]])
 ) -> tuple[list[dict[str, list[str]]], list[int]]:
     """Convert wsireg transform dict or from file to List of Transforms."""
+    transforms = parameter_data
     if isinstance(parameter_data, (str, Path)):
-        parameter_data_in = json.load(open(parameter_data))
-    else:
-        parameter_data_in = parameter_data
-
-    transform_list = []
-    transform_sequence_index = []
+        transforms: dict[str, list[str]] = read_json_data(parameter_data)
 
     index = 0
-    for key, value in parameter_data_in.items():
+    transform_list = []
+    transform_sequence_index = []
+    for key, value in transforms.items():
         if key == "initial":
             if isinstance(value, dict):
                 transform_list.append(value)

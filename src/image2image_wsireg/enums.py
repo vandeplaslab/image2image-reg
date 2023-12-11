@@ -74,11 +74,7 @@ NUMERIC_ELX_PARAMETERS = {
     "Spacing": np.float64,
     "TransformParameters": np.float64,
 }
-ELX_LINEAR_TRANSFORMS = [
-    "AffineTransform",
-    "EulerTransform",
-    "SimilarityTransform",
-]
+ELX_LINEAR_TRANSFORMS = ["AffineTransform", "EulerTransform", "SimilarityTransform"]
 ELX_TO_ITK_INTERPOLATORS = {
     "FinalNearestNeighborInterpolator": sitk.sitkNearestNeighbor,
     "FinalLinearInterpolator": sitk.sitkLinear,

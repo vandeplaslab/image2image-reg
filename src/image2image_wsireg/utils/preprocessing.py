@@ -12,10 +12,10 @@ from image2image_wsireg.enums import ImageType
 from image2image_wsireg.models import Preprocessing
 from image2image_wsireg.models.preprocessing import BoundingBox
 from image2image_wsireg.utils.transformation import (
-    gen_affine_transform_flip,
-    gen_rig_to_original,
-    gen_rigid_tform_rot,
-    gen_rigid_translation,
+    generate_affine_flip_transform,
+    generate_rigid_original_transform,
+    generate_rigid_rotation_transform,
+    generate_rigid_translation_transform,
     prepare_wsireg_transform_data,
     transform_plane,
 )
@@ -271,7 +271,7 @@ def preprocess_reg_image_spatial(
     # rotate counter-clockwise
     if float(preprocessing.rotate_counter_clockwise) != 0.0:
         logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
-        rot_tform = gen_rigid_tform_rot(image, pixel_size, preprocessing.rotate_counter_clockwise)
+        rot_tform = generate_rigid_rotation_transform(image, pixel_size, preprocessing.rotate_counter_clockwise)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [rot_tform]})
         image = transform_plane(image, final_tform, composite_transform)
 
@@ -283,7 +283,7 @@ def preprocess_reg_image_spatial(
     # flip image
     if preprocessing.flip:
         logger.trace(f"Flipping image {preprocessing.flip.value}")
-        flip_tform = gen_affine_transform_flip(image, pixel_size, preprocessing.flip.value)
+        flip_tform = generate_affine_flip_transform(image, pixel_size, preprocessing.flip.value)
 
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [flip_tform]})
         image = transform_plane(image, final_tform, composite_transform)
@@ -303,7 +303,7 @@ def preprocess_reg_image_spatial(
     original_size_transform = None
     if preprocessing.mask_bbox:
         logger.trace("cropping to mask")
-        translation_transform = gen_rigid_translation(
+        translation_transform = generate_rigid_translation_transform(
             image,
             pixel_size,
             preprocessing.mask_bbox.X,
@@ -319,7 +319,7 @@ def preprocess_reg_image_spatial(
         ) = prepare_wsireg_transform_data({"initial": [translation_transform]})
 
         image = transform_plane(image, final_tform, composite_transform)
-        original_size_transform = gen_rig_to_original(original_size, deepcopy(translation_transform))
+        original_size_transform = generate_rigid_original_transform(original_size, deepcopy(translation_transform))
 
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))

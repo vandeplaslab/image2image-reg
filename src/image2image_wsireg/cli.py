@@ -5,7 +5,7 @@ import typing as ty
 
 import click
 from click_groups import GroupedGroup
-from koyo.click import cli_parse_paths, info_msg, warning_msg
+from koyo.click import Parameter, cli_parse_paths, info_msg, print_parameters, warning_msg
 from koyo.utilities import running_as_pyinstaller_app
 from loguru import logger
 
@@ -38,9 +38,11 @@ def get_preprocessing(preprocessing: str) -> Preprocessing | None:
     if preprocessing is None:
         return None
     elif preprocessing in ["dark", "fluorescence"]:
-        return Preprocessing(image_type=ImageType.DARK, as_uint8=True, max_int_proj=True, contrast_enhance=True)
+        return Preprocessing.fluorescence()
     elif preprocessing in ["light", "brightfield"]:
-        return Preprocessing(image_type=ImageType.LIGHT, as_uint8=True, max_int_proj=False, invert_intensity=True)
+        return Preprocessing.brightfield()
+    elif preprocessing in ["basic"]:
+        return Preprocessing.basic()
     return None
 
 
@@ -135,6 +137,12 @@ def new_runner(output_dir: str, name: str, cache: bool, merge: bool) -> None:
     """Create a new project."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
+    print_parameters(
+        Parameter("Output directory", "-o/--output_dir", output_dir),
+        Parameter("Name", "-n/--name", name),
+        Parameter("Cache", "--cache/--no_cache", cache),
+        Parameter("Merge", "--merge/--no_merge", merge),
+    )
     obj = WsiReg2d(name=name, output_dir=output_dir, cache=cache, merge=merge)
     obj.save()
 
@@ -187,8 +195,8 @@ def validate_runner(project_dir: str) -> None:
     "-P",
     "--preprocessing",
     help="Kind of pre-processing that will be applied to the specified modality.",
-    type=click.Choice(["none", "light", "dark"], case_sensitive=False),
-    default=["none"],
+    type=click.Choice(["basic", "light", "dark"], case_sensitive=False),
+    default=["basic"],
     show_default=True,
     required=False,
     multiple=True,
@@ -246,7 +254,7 @@ def add_modality_runner(
     project_dir: str,
     names: ty.Sequence[str],
     paths: ty.Sequence[str],
-    masks: ty.Sequence[str],
+    masks: ty.Sequence[str] | None = None,
     preprocessings: ty.Sequence[str | None] | None = None,
 ) -> None:
     """Add images to the project."""
@@ -256,6 +264,8 @@ def add_modality_runner(
         names = [names]
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
+    if not masks:
+        masks = [None] * len(paths)
     if not isinstance(masks, (list, tuple)):
         masks = [masks]
     if len(masks) != len(paths) and len(masks) > 0:
@@ -267,9 +277,16 @@ def add_modality_runner(
         preprocessings = preprocessings * len(paths)
         info_msg(f"Using same pre-processing for all images: {preprocessings[0]}")
 
-    if len(names) != len(paths) != len(preprocessings):
+    if len(names) != len(paths) != len(preprocessings) != len(masks):
         raise ValueError("Number of names, paths and pre-processing must match.")
 
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", project_dir),
+        Parameter("Names", "-n/--name", names),
+        Parameter("Paths", "-i/--image", paths),
+        Parameter("Masks", "-m/--mask", masks),
+        Parameter("Pre-processing", "-P/--preprocessing", preprocessings),
+    )
     obj = WsiReg2d.from_path(project_dir)
     for name, path, mask, preprocessing in zip(names, paths, masks, preprocessings):
         obj.auto_add_modality(name, path, mask, get_preprocessing(preprocessing))
@@ -281,8 +298,8 @@ def add_modality_runner(
     "--preprocessing",
     help="Kind of pre-processing that will be applied to the specified modality - this will override modality-specific"
     " pre-processing.",
-    type=click.Choice(["none", "light", "dark"], case_sensitive=False),
-    default="none",
+    type=click.Choice(["basic", "light", "dark"], case_sensitive=False),
+    default="basic",
     show_default=True,
     required=False,
 )
@@ -372,6 +389,14 @@ def add_path_runner(
     """Add images to the project."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", project_dir),
+        Parameter("Source", "-s/--source", source),
+        Parameter("Target", "-t/--target", target),
+        Parameter("Through", "-T/--through", through),
+        Parameter("Registration", "-R/--registration", registration),
+        Parameter("Pre-processing", "-P/--preprocessing", preprocessing),
+    )
     obj = WsiReg2d.from_path(project_dir)
     obj.add_registration_path(source, target, through, list(registration), get_preprocessing(preprocessing))
     obj.save()
@@ -380,7 +405,7 @@ def add_path_runner(
 @click.option(
     "-i",
     "--image",
-    help="Path to the image(s) that should be co-registered.",
+    help="Path to image file that should be attached to the <attach_to> modality.",
     type=click.UNPROCESSED,
     show_default=True,
     multiple=True,
@@ -402,7 +427,7 @@ def add_path_runner(
     help="Name of the modality to which the attachment should be added.",
     type=click.STRING,
     show_default=True,
-    multiple=True,
+    multiple=False,
     required=True,
 )
 @click.option(
@@ -414,17 +439,91 @@ def add_path_runner(
     required=True,
 )
 @cli.command("add-attachment", help_group="Project")
-def add_attachment(project_dir: str, attach_to: str, name: str, image: str) -> None:
-    """Add attachment modality."""
+def add_attachment(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
+    """Add attachment image."""
     add_attachment_runner(project_dir, attach_to, name, image)
 
 
-def add_attachment_runner(project_dir: str, attach_to: str, name: str, image: str) -> None:
+def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], paths: list[str]) -> None:
     """Add attachment modality."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
+    if not isinstance(paths, (list, tuple)):
+        names = [names]
+    if not isinstance(paths, (list, tuple)):
+        paths = [paths]
+    if len(names) != len(paths):
+        raise ValueError("Number of names and paths must match.")
+
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", project_dir),
+        Parameter("Attach to", "-a/--attach_to", attach_to),
+        Parameter("Name", "-n/--name", names),
+        Parameter("Image", "-i/--image", paths),
+    )
     obj = WsiReg2d.from_path(project_dir)
-    obj.auto_add_attachment_images(attach_to, name, image)
+    for name, path in zip(names, paths):
+        obj.auto_add_attachment_images(attach_to, name, path)
+    obj.save()
+
+
+@click.option(
+    "-s",
+    "--shape",
+    help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths,
+)
+@click.option(
+    "-n",
+    "--name",
+    help="Name to be given to the specified image (modality).",
+    type=click.STRING,
+    show_default=True,
+    multiple=False,
+    required=True,
+)
+@click.option(
+    "-a",
+    "--attach_to",
+    help="Name of the modality to which the attachment should be added.",
+    type=click.STRING,
+    show_default=True,
+    multiple=False,
+    required=True,
+)
+@click.option(
+    "-p",
+    "--project_dir",
+    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=True,
+)
+@cli.command("add-shape", help_group="Project")
+def add_shape(project_dir: str, attach_to: str, name: str, shape: list[str]) -> None:
+    """Add attachment shape (GeoJSON)."""
+    add_shape_runner(project_dir, attach_to, name, shape)
+
+
+def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[str]) -> None:
+    """Add attachment modality."""
+    from image2image_wsireg.workflows.wsireg2d import WsiReg2d
+
+    if not isinstance(paths, (list, tuple)):
+        paths = [paths]
+
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", project_dir),
+        Parameter("Attach to", "-a/--attach_to", attach_to),
+        Parameter("Name", "-n/--name", name),
+        Parameter("Shape", "-s/--shape", paths),
+    )
+    obj = WsiReg2d.from_path(project_dir)
+    obj.add_attachment_geojson(attach_to, name, paths)
     obj.save()
 
 
@@ -463,13 +562,14 @@ def add_merge_runner(project_dir: str, name: str, modalities: ty.Sequence[str]) 
     """Add attachment modality."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", project_dir),
+        Parameter("Name", "-n/--name", name),
+        Parameter("Modalities", "-m/--modality", modalities),
+    )
     obj = WsiReg2d.from_path(project_dir)
     obj.add_merge_modalities(name, list(modalities))
     obj.save()
-
-
-# def add_geojson():
-#     """Add geojson modality."""
 
 
 def from_template(project_dir: str, template: ty.Literal["mxif", "3d", "he-preaf-postaf"]) -> None:
@@ -506,6 +606,10 @@ def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
     """Register images."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
+    )
     for path in paths:
         obj = WsiReg2d.from_path(path)
         obj.set_logger()
@@ -594,6 +698,17 @@ def register_runner(
     """Register images."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
+        Parameter("Output format", "-f/--fmt", fmt),
+        Parameter("Write images", "--write/--no_write", write_images),
+        Parameter(
+            "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
+        ),
+        Parameter("Remove merged images", "--clear_merged/--no_clear_merged", remove_merged),
+        Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
+    )
     for path in paths:
         obj = WsiReg2d.from_path(path)
         obj.set_logger()
@@ -601,7 +716,7 @@ def register_runner(
         if write_images:
             obj.write_images(
                 n_parallel=n_parallel,
-                writer=fmt,
+                fmt=fmt,
                 write_not_registered=write_not_registered,
                 remove_merged=remove_merged,
                 to_original_size=original_size,
@@ -688,6 +803,16 @@ def export_runner(
     """Register images."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
 
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
+        Parameter("Output format", "-f/--fmt", fmt),
+        Parameter(
+            "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
+        ),
+        Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
+        Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
+    )
     for path in paths:
         obj = WsiReg2d.from_path(path)
         obj.set_logger()
@@ -696,7 +821,7 @@ def export_runner(
             continue
         obj.write_images(
             n_parallel=n_parallel,
-            writer=fmt,
+            fmt=fmt,
             write_not_registered=write_not_registered,
             remove_merged=remove_merged,
             to_original_size=original_size,

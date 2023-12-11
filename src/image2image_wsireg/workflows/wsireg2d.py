@@ -111,6 +111,7 @@ class WsiReg2d:
         cache: bool = True,
         merge: bool = False,
         pairwise: bool = False,
+        log: bool = False,
         **_kwargs: ty.Any,
     ):
         # setup project directory
@@ -158,6 +159,8 @@ class WsiReg2d:
         if self.cache_images:
             self.cache_dir.mkdir(exist_ok=True, parents=True)
             logger.trace(f"Caching images to '{self.cache_dir}' directory.")
+        if log:
+            self.set_logger()
 
     def set_logger(self) -> None:
         """Setup logger."""
@@ -451,7 +454,12 @@ class WsiReg2d:
             raise ValueError("Modality name already exists.")
         reader: BaseReader = get_simple_reader(path, init_pyramid=False)
         return self.add_modality(
-            name, path, reader.resolution, reader.channel_names, mask=mask, preprocessing=preprocessing
+            name,
+            path,
+            pixel_size=reader.resolution or 1.0,
+            channel_names=reader.channel_names,
+            mask=mask,
+            preprocessing=preprocessing,
         )
 
     def add_modality(
@@ -481,6 +489,8 @@ class WsiReg2d:
             mask = Path(mask)
             if not mask.exists():
                 raise ValueError("Mask path does not exist.")
+        if pixel_size <= 0:
+            raise ValueError("Pixel size must be greater than 0.")
         if isinstance(output_pixel_size, (int, float)):
             output_pixel_size = (float(output_pixel_size), float(output_pixel_size))
 
@@ -629,7 +639,7 @@ class WsiReg2d:
         for modality in modalities:
             if modality not in self.modalities:
                 raise ValueError(f"Modality '{modality}' does not exist. Please add it first.")
-        self.merge_modalities.update({name: modalities})
+        self.merge_modalities[name] = modalities
         logger.trace(f"Added merge modality '{name}'. Going to merge: {self.merge_modalities[name]}")
 
     @property
@@ -641,8 +651,8 @@ class WsiReg2d:
         self,
         source: str,
         target: str,
-        through: str | None,
         transform: str | list[str],
+        through: str | None = None,
         preprocessing: dict | None = None,
     ) -> None:
         """Add a registration path between modalities.
@@ -677,7 +687,7 @@ class WsiReg2d:
     ) -> None:
         """Add registration node."""
         # create the registration path
-        self.registration_paths.update({source: [target] if not through else [through, target]})
+        self.registration_paths[source] = [target] if not through else [through, target]
 
         # setup override pre-processing
         source_preprocessing, target_preprocessing = None, None
@@ -730,7 +740,7 @@ class WsiReg2d:
                     edge_modality = edge["modalities"]["source"]
                     if modality == edge_modality:
                         transform_edges.append(edge["modalities"])
-                    transform_path_map.update({key: transform_edges})
+                    transform_path_map[key] = transform_edges
         self.transform_path_map = transform_path_map
 
     def find_registration_path(self, start: str, end: str, path: list[str] | None = None) -> list[str] | None:
@@ -764,12 +774,10 @@ class WsiReg2d:
             raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
 
         # update caches
-        self.preprocessed_cache["image_spacing"].update(
-            {modality.name: wrapper.image.GetSpacing()},  # type:ignore[no-untyped-call]
-        )
-        self.preprocessed_cache["image_sizes"].update(
-            {modality.name: wrapper.image.GetSize()},  # type:ignore[no-untyped-call]
-        )
+        self.preprocessed_cache["image_spacing"][
+            modality.name
+        ] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
+        self.preprocessed_cache["image_sizes"][modality.name] = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
         return wrapper
 
     @staticmethod
@@ -833,8 +841,8 @@ class WsiReg2d:
             iteration_data = read_elastix_iteration_dir(output_dir)
 
             write_iteration_plots(iteration_data, key, output_dir)
-            self.preprocessed_cache["iterations"].update({key: iteration_data})
-            self.preprocessed_cache["transformations"].update({key: transform_data})
+            self.preprocessed_cache["iterations"][key] = iteration_data
+            self.preprocessed_cache["transformations"][key] = transform_data
         logger.info(f"Generated figures for {key} in {timer}.")
 
     def _collate_transformations(self) -> dict[str, dict]:
@@ -873,13 +881,17 @@ class WsiReg2d:
             raise ValueError("No registration paths have been defined.")
 
         # compute transformation information
-        for modality in tqdm(self.modalities.values(), desc="Pre-processing images"):
-            self._preprocess_image(modality, None)
+        with MeasureTimer() as timer:
+            for modality in tqdm(self.modalities.values(), desc="Pre-processing images"):
+                logger.trace(f"Pre-processing {modality.name}.")
+                self._preprocess_image(modality, None)
+                logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
 
     def register(self, n_parallel: int = 1) -> None:
         """Co-register images."""
         # TODO: add multi-core support
         self.set_logger()
+        self.save(registered=False)
         if not self.registration_nodes:
             raise ValueError("No registration paths have been defined.")
 
@@ -925,6 +937,7 @@ class WsiReg2d:
 
     def run(self) -> None:
         """Execute workflow."""
+        self.set_logger()
         self.register()
         # write images
         self.write_images()
@@ -1312,18 +1325,14 @@ class WsiReg2d:
             through = None if len(self.registration_paths[source]) == 1 else self.registration_paths[source][0]
             source_preprocessing = edge["source_preprocessing"].to_dict() if edge["source_preprocessing"] else None
             target_preprocessing = edge["target_preprocessing"].to_dict() if edge["target_preprocessing"] else None
-            registration_paths.update(
-                {
-                    f"reg_path_{index}": {
-                        "source": source,
-                        "target": target,
-                        "through": through,
-                        "reg_params": edge.get("params"),
-                        "source_preprocessing": source_preprocessing,
-                        "target_preprocessing": target_preprocessing,
-                    }
-                }
-            )
+            registration_paths[f"reg_path_{index}"] = {
+                "source": source,
+                "target": target,
+                "through": through,
+                "reg_params": edge.get("params"),
+                "source_preprocessing": source_preprocessing,
+                "target_preprocessing": target_preprocessing,
+            }
 
         # clean-up edges
         reg_graph_edges = []
@@ -1391,16 +1400,12 @@ class WsiReg2d:
             else:
                 through = None
             target = self.registration_paths[source][-1]
-            registration_paths.update(
-                {
-                    f"reg_path_{index}": {
-                        "src_modality_name": source,
-                        "tgt_modality_name": target,
-                        "thru_modality": through,
-                        "reg_params": edge.get("params"),
-                    }
-                }
-            )
+            registration_paths[f"reg_path_{index}"] = {
+                "src_modality_name": source,
+                "tgt_modality_name": target,
+                "thru_modality": through,
+                "reg_params": edge.get("params"),
+            }
 
         # clean-up edges
         reg_graph_edges = deepcopy(self.registration_nodes)

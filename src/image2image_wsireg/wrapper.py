@@ -110,9 +110,7 @@ class ImageWrapper:
                 )
             # write mask
             if self.mask:
-                sitk.WriteImage(
-                    self.mask, str(filename_with_suffix(filename, "mask", ".ome.tiff")), useCompression=True
-                )
+                sitk.WriteImage(self.mask, str(filename_with_suffix(filename, "mask", ".tiff")), useCompression=True)
         logger.trace(f"Saved image to cache: {filename} for {self.modality.name} in {timer()}")
 
     def load_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None):
@@ -132,8 +130,8 @@ class ImageWrapper:
                 self.original_size_transform = read_json_data(
                     filename_with_suffix(filename, "original_size_transform", ".json")
                 )
-            if filename_with_suffix(filename, "mask", ".ome.tiff").exists():
-                self.mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".ome.tiff")))
+            if filename_with_suffix(filename, "mask", ".tiff").exists():
+                self.mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
             logger.trace(f"Loaded image from cache: {filename} for {self.modality.name}")
 
     @classmethod
@@ -160,7 +158,7 @@ class ImageWrapper:
             image = convert_and_cast(image, preprocessing)
             logger.trace(f"Converted and cast image in {timer(since_last=True)}")
 
-            mask = None
+            mask = self.mask
             # set image
             if preprocessing:
                 self.image, self.mask, self.initial_transforms, self.original_size_transform = preprocess(
@@ -187,16 +185,20 @@ class ImageWrapper:
         """
         if isinstance(mask, np.ndarray):
             mask = sitk.GetImageFromArray(mask)
+            logger.trace(f"Loaded mask from array for {self.modality.name}")
         elif isinstance(mask, (str, Path)):
             if Path(mask).suffix.lower() == ".geojson":
                 image_shape = self.reader.image_shape
                 mask_shapes = GeoJSONReader(mask)
                 mask = mask_shapes.to_mask_alt(image_shape[::-1], with_index=False)
                 mask = sitk.GetImageFromArray(mask)
+                logger.trace(f"Loaded mask from GeoJSON for {self.modality.name}")
             else:
                 mask = sitk.ReadImage(mask)
+                logger.trace(f"Loaded mask from image for {self.modality.name}")
         elif isinstance(mask, sitk.Image):
             mask = mask
+            logger.trace(f"Loaded mask from image for {self.modality.name}")
         else:
             raise ValueError(f"Unknown mask type: {type(mask)}")
         mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
