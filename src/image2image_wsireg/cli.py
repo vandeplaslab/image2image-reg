@@ -194,13 +194,23 @@ def validate_runner(project_dir: str) -> None:
     multiple=True,
 )
 @click.option(
+    "-m",
+    "--mask",
+    help="Path to the mask(s) that should be associated with the image.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=False,
+    callback=cli_parse_paths,
+)
+@click.option(
     "-i",
     "--image",
     help="Path to the image(s) that should be co-registered.",
     type=click.UNPROCESSED,
     show_default=True,
     multiple=True,
-    required=False,
+    required=True,
     callback=cli_parse_paths,
 )
 @click.option(
@@ -210,7 +220,7 @@ def validate_runner(project_dir: str) -> None:
     type=click.STRING,
     show_default=True,
     multiple=True,
-    required=False,
+    required=True,
 )
 @click.option(
     "-p",
@@ -225,16 +235,18 @@ def add_modality(
     project_dir: str,
     name: ty.Sequence[str],
     image: ty.Sequence[str],
+    mask: ty.Sequence[str] | None,
     preprocessing: ty.Sequence[str],
 ) -> None:
     """Add images to the project."""
-    add_modality_runner(project_dir, name, image, preprocessing)
+    add_modality_runner(project_dir, name, image, mask, preprocessing)
 
 
 def add_modality_runner(
     project_dir: str,
     names: ty.Sequence[str],
     paths: ty.Sequence[str],
+    masks: ty.Sequence[str],
     preprocessings: ty.Sequence[str | None] | None = None,
 ) -> None:
     """Add images to the project."""
@@ -244,6 +256,10 @@ def add_modality_runner(
         names = [names]
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
+    if not isinstance(masks, (list, tuple)):
+        masks = [masks]
+    if len(masks) != len(paths) and len(masks) > 0:
+        masks = [None] * len(paths)
     if not isinstance(preprocessings, (list, tuple)):
         preprocessings = [preprocessings]
 
@@ -255,8 +271,8 @@ def add_modality_runner(
         raise ValueError("Number of names, paths and pre-processing must match.")
 
     obj = WsiReg2d.from_path(project_dir)
-    for name, path, preprocessing in zip(names, paths, preprocessings):
-        obj.auto_add_modality(name, path, get_preprocessing(preprocessing))
+    for name, path, mask, preprocessing in zip(names, paths, masks, preprocessings):
+        obj.auto_add_modality(name, path, mask, get_preprocessing(preprocessing))
     obj.save()
 
 

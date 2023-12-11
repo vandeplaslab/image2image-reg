@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import SimpleITK as sitk
 from image2image_io._reader import get_simple_reader
-from image2image_io.readers import BaseReader
+from image2image_io.readers import BaseReader, GeoJSONReader
 from koyo.json import read_json_data, write_json_data
 from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
@@ -38,6 +39,8 @@ class ImageWrapper:
 
         self.image: sitk.Image | None = None
         self.mask: sitk.Image | None = None
+        if self.modality.mask is not None:
+            self.mask = self.read_mask(self.modality.mask)
         self.initial_transforms: list[dict] = []
         self.original_size_transform: dict | None = None
 
@@ -166,3 +169,35 @@ class ImageWrapper:
             else:
                 self.image, self.mask, self.original_size_transform = image, mask, None
             logger.trace(f"Pre-processed image in {timer(since_last=True)}")
+
+    def read_mask(self, mask: str | Path | sitk.Image | np.ndarray) -> sitk.Image:
+        """
+        Read a mask from geoJSON or a binary image.
+
+        Parameters
+        ----------
+        mask: path to image/geoJSON or image
+            Data to be used to make the mask, can be a path to a geoJSON
+            or an image file, or a if an np.ndarray, used directly.
+
+        Returns
+        -------
+        mask: sitk.Image
+            Mask image with spacing/size of `reg_image`
+        """
+        if isinstance(mask, np.ndarray):
+            mask = sitk.GetImageFromArray(mask)
+        elif isinstance(mask, (str, Path)):
+            if Path(mask).suffix.lower() == ".geojson":
+                image_shape = self.reader.image_shape
+                mask_shapes = GeoJSONReader(mask)
+                mask = mask_shapes.to_mask_alt(image_shape[::-1], with_index=False)
+                mask = sitk.GetImageFromArray(mask)
+            else:
+                mask = sitk.ReadImage(mask)
+        elif isinstance(mask, sitk.Image):
+            mask = mask
+        else:
+            raise ValueError(f"Unknown mask type: {type(mask)}")
+        mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
+        return mask

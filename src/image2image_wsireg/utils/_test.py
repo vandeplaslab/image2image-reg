@@ -1,4 +1,6 @@
 """Utilities."""
+from __future__ import annotations
+
 import typing as ty
 from contextlib import suppress
 from pathlib import Path
@@ -6,13 +8,13 @@ from tempfile import tempdir
 
 from koyo.typing import PathLike
 
-TEST_DATA_DIR = Path(__file__).parent.parent.parent / "tests" / "_test_data"
+TEST_DATA_DIR = Path(__file__).parent.parent.parent.parent / "tests" / "_test_data"
 
 
 # noinspection PyMissingOrEmptyDocstring
-def get_test_files(pattern: str = "*.json") -> ty.Iterable[Path]:
+def get_test_files(pattern: str = "*.json") -> list[Path]:
     """Get config files."""
-    return TEST_DATA_DIR.glob(pattern)
+    return list(TEST_DATA_DIR.glob(pattern))
 
 
 class CleanupMixin:

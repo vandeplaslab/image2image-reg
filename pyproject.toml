@@ -144,8 +144,13 @@ exclude = [
     "src/image2image_wsireg/_version.py",
 ]
 
-# # module specific overrides
-[[tool.mypy.SimpleITK]]
+# module specific overrides
+[[tool.mypy.overrides]]
+module = [
+    "SimpleITK",
+    "sitk",
+    "itk"
+]
 ignore_errors = true
 
 

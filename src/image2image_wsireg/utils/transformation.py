@@ -301,12 +301,16 @@ def compute_rot_bound(image: sitk.Image, angle: float = 30) -> tuple[float, floa
 
     """
     w, h = image.GetSize()[0], image.GetSize()[1]
+    return compute_rotation_bounds((h, w), angle=angle)
 
+
+def compute_rotation_bounds(shape: tuple[int, int], angle: float = 0) -> tuple[float, float]:
+    """Compute rotation bounds."""
+    h, w = shape
     theta = np.radians(angle)
     c, s = np.abs(np.cos(theta)), np.abs(np.sin(theta))
     bound_w = (h * s) + (w * c)
     bound_h = (h * c) + (w * s)
-
     return bound_w, bound_h
 
 
@@ -377,7 +381,6 @@ def gen_rigid_translation(
         str(translation_x),
         str(translation_y),
     ]
-
     return tform
 
 
