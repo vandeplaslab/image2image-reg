@@ -148,3 +148,23 @@ def test_cli_add_images_path_mask_bbox(tmp_path):
     assert modality.mask_bbox.y == 0
     assert modality.mask_bbox.width == 1000
     assert modality.mask_bbox.height == 1000
+
+
+def test_cli_merge(tmp_path):
+    source = get_test_file("ellipse_moving.tiff")
+    target = get_test_file("ellipse_target.tiff")
+
+    tmp = tmp_path
+    exit_status = os.system(f"iwsireg merge -n test -o '{tmp!s}' -p '{source!s}' -p '{target!s}'")
+    assert list(tmp.glob("*.ome.tiff")), "No merged images found."
+    assert exit_status == 0
+
+
+def test_cli_merge_with_crop(tmp_path):
+    source = get_test_file("ellipse_moving.tiff")
+    target = get_test_file("ellipse_target.tiff")
+
+    tmp = tmp_path
+    exit_status = os.system(f"iwsireg merge -n test -o '{tmp!s}' -p '{source!s}' -p '{target!s}' -b 512,512,512,512")
+    assert list(tmp.glob("*.ome.tiff")), "No merged images found."
+    assert exit_status == 0

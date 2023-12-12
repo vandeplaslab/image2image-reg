@@ -1,8 +1,11 @@
 """Bounding box module."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import SimpleITK as sitk
+from koyo.typing import PathLike
 from loguru import logger
 
 
@@ -44,6 +47,21 @@ class BoundingBox:
         image = sitk.GetImageFromArray(mask, isVector=False)
         image.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
         return image
+
+    def to_file(self, name: str, output_dir: PathLike, image_shape: tuple[int, int]) -> Path:
+        """Save bounding box to file."""
+        from tifffile import imwrite
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        mask = self.to_mask(image_shape, dtype=np.uint8, value=255)
+        imwrite(
+            output_dir / f"{name}_bbox.tiff",
+            mask,
+            compression="deflate",
+        )
+        return output_dir / f"{name}_bbox.tiff"
 
 
 def _transform_to_bbox(mask_bbox: tuple[int, int, int, int] | list[int]) -> BoundingBox:

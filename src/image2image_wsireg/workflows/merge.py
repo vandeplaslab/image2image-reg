@@ -7,10 +7,16 @@ from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
 
-from image2image_wsireg.models import Modality
+from image2image_wsireg.models import BoundingBox, Modality
 
 
-def merge(name: str, paths: list[PathLike], output_dir: PathLike, fmt: str) -> Path:
+def merge(
+    name: str,
+    paths: list[PathLike],
+    output_dir: PathLike,
+    crop_bbox: tuple[int, int, int, int] | None,
+    fmt: str = "ome-tiff",
+) -> Path:
     """Merge multiple images."""
     from image2image_io.readers.merge import MergeImages
     from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
@@ -20,23 +26,30 @@ def merge(name: str, paths: list[PathLike], output_dir: PathLike, fmt: str) -> P
     paths = [Path(path) for path in paths]
     output_dir = Path(output_dir)
 
+    crop_bbox = BoundingBox(*crop_bbox) if crop_bbox else None  # type: ignore[assignment]
+
+    reader_names = []
+    pixel_sizes = []
+    channel_names = []
+    image_shapes = []
     with MeasureTimer() as timer:
-        sub_images = []
-        pixel_sizes = []
-        channel_names = []
         for path_ in paths:
             path = Path(path_)
             modality = Modality(name=path.name, path=path)
-            sub_images.append(modality.name)
+            reader_names.append(modality.name)
             wrapper = ImageWrapper(modality)
             pixel_sizes.append(wrapper.reader.resolution)
             channel_names.append(wrapper.reader.channel_names)
-    logger.info(f"Loaded {len(sub_images)} images in {timer()}.")
-
+            image_shapes.append(wrapper.reader.image_shape)
+    logger.info(f"Loaded {len(reader_names)} images in {timer()}.")
+    image_shape = image_shapes[0]
+    crop_mask = crop_bbox.to_mask(image_shape) if crop_bbox else None  # type: ignore[attr-defined]
+    if crop_bbox:
+        crop_bbox.to_file(name, output_dir, image_shape)  # type: ignore[attr-defined]
     output_path = output_dir / f"{name}_merged-registered"
     merge_obj = MergeImages(paths, pixel_sizes, channel_names=channel_names)
-    writer = MergeOmeTiffWriter(merge_obj)
+    writer = MergeOmeTiffWriter(merge_obj, crop_mask=crop_mask)
     with MeasureTimer() as timer:
-        writer.merge_write_image_by_plane(output_path.name, sub_images, output_dir=output_dir)
+        writer.merge_write_image_by_plane(output_path.name, reader_names, output_dir=output_dir)
     logger.info(f"Merged images in {timer()}.")
     return path

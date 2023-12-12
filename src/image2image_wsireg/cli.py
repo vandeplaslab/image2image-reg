@@ -231,8 +231,8 @@ def validate_runner(project_dir: str) -> None:
 @click.option(
     "-b",
     "--mask_bbox",
-    help="Bound box to be used for the mask. It must be supplied in the format: x,y,width,height. It will throw an"
-    " error if fewer or more than 4 values are supplied.",
+    help="Bound box to be used for the mask. It must be supplied in the format: x,y,width,height and be in PIXEL units."
+    " It will throw an error if fewer or more than 4 values are supplied.",
     type=click.UNPROCESSED,
     show_default=True,
     required=False,
@@ -660,7 +660,6 @@ def add_merge_runner(project_dir: str, name: str, modalities: ty.Sequence[str]) 
     "--project_dir",
     help="Path to the project directory. It usually ends in .annotine extension.",
     type=click.UNPROCESSED,
-    # type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
     show_default=True,
     required=True,
     multiple=True,
@@ -902,6 +901,16 @@ def export_runner(
     required=False,
 )
 @click.option(
+    "-b",
+    "--crop_bbox",
+    help="Bound box to be used for cropping of the image(s). It must be supplied in the format: x,y,width,height and"
+    " be in PIXEL units. It will throw an error if fewer or more than 4 values are supplied.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    required=False,
+    callback=arg_split_bbox,
+)
+@click.option(
     "-o",
     "--output_dir",
     help="Path to images to be merged.",
@@ -928,22 +937,32 @@ def export_runner(
     required=True,
 )
 @cli.command("merge", help_group="Execute")
-def merge_cmd(name: str, path: ty.Sequence[str], output_dir: str, fmt: WriterMode) -> None:
+def merge_cmd(
+    name: str, path: ty.Sequence[str], output_dir: str, crop_bbox: tuple[int, int, int, int] | None, fmt: WriterMode
+) -> None:
     """Export images."""
-    merge_runner(name, path, output_dir, fmt)
+    merge_runner(name, path, output_dir, crop_bbox, fmt)
 
 
-def merge_runner(name: str, paths: ty.Sequence[str], output_dir: str, fmt: WriterMode = "ome-tiff") -> None:
+def merge_runner(
+    name: str,
+    paths: ty.Sequence[str],
+    output_dir: str,
+    crop_bbox: tuple[int, int, int, int] | None,
+    fmt: WriterMode = "ome-tiff",
+) -> None:
     """Register images."""
     from image2image_wsireg.workflows.merge import merge as merge_images
 
     print_parameters(
+        Parameter("Name", "-n/--name", name),
         Parameter("Image paths", "-p/--path", paths),
         Parameter("Output directory", "-o/--output_dir", output_dir),
+        Parameter("Crop bounding box", "-b/--crop_bbox", crop_bbox),
         Parameter("Output format", "-f/--fmt", fmt),
     )
 
-    merge_images(name, list(paths), output_dir, fmt)
+    merge_images(name, list(paths), output_dir, crop_bbox, fmt)
 
 
 def main():
