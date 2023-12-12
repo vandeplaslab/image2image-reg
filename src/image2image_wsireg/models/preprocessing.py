@@ -8,20 +8,7 @@ from koyo.json import read_json_data
 from pydantic import BaseModel, Field, validator
 
 from image2image_wsireg.enums import CoordinateFlip, ImageType
-
-
-class BoundingBox(ty.NamedTuple):
-    """Bounding box named tuple."""
-
-    X: int
-    Y: int
-    WIDTH: int
-    HEIGHT: int
-
-
-def _transform_to_bbox(mask_bbox: ty.Union[tuple[int, int, int, int], list[int]]) -> BoundingBox:
-    """Transform to bounding box."""
-    return BoundingBox(*mask_bbox)
+from image2image_wsireg.models.bbox import BoundingBox, _transform_to_bbox
 
 
 def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:
@@ -46,7 +33,7 @@ class Preprocessing(BaseModel):
     image_type: ImageType
         Whether image is dark or light background. Light background images are intensity inverted
         by default
-    max_int_proj: bool
+    nax_intensity_projection: bool
         Perform max intensity projection number of channels > 1.
     contrast_enhance: bool
         Enhance contrast of image
@@ -60,9 +47,9 @@ class Preprocessing(BaseModel):
         Rotate image counter-clockwise by degrees, can be positive or negative (cw rot)
     flip: CoordinateFlip, default: None
         flip coordinates, "v" = vertical flip, "h" = horizontal flip
-    crop_to_mask_bbox: bool
+    crop_to_bbox: bool
         Convert a binary mask to a bounding box and crop to this area
-    mask_bbox: tuple or list of 4 ints
+    crop_bbox: tuple or list of 4 ints
         supply a pre-computed list of bbox info of form x,y,width,height
     downsample: int
         Downsampling by integer factor, i.e., downsampling = 3, downsamples image 3x
@@ -82,7 +69,7 @@ class Preprocessing(BaseModel):
 
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK
-    max_int_proj: bool = True
+    nax_intensity_projection: bool = Field(True, alias="max_int_proj")
     channel_indices: ty.Optional[list[int]] = Field(None, alias="ch_indices")
     as_uint8: bool = True
     contrast_enhance: bool = False
@@ -93,18 +80,29 @@ class Preprocessing(BaseModel):
     affine: ty.Optional[np.ndarray] = None
     rotate_counter_clockwise: float = Field(0, ge=-360, le=360, alias="rotate_cc")
     flip: ty.Optional[CoordinateFlip] = None
-    crop_to_mask_bbox: bool = False
-    mask_bbox: ty.Optional[BoundingBox] = None
+    crop_to_bbox: bool = Field(False, alias="crop_to_mask_bbox")
+    crop_bbox: ty.Optional[BoundingBox] = Field(None, alias="mask_bbox")
     downsample: int = Field(1, ge=1, alias="downsampling")
     use_mask: bool = True
 
-    def to_dict(self) -> dict:
+    def to_dict(self, as_wsireg: bool = False) -> dict:
         """Return dict."""
         data = self.dict(exclude_none=True, exclude_defaults=True)
         if data.get("affine"):
             data["affine"] = data["affine"].tolist()
-        if data.get("mask_bbox"):
-            data["mask_bbox"] = data["mask_bbox"]._asdict()
+        if data.get("crop_bbox"):
+            data["crop_bbox"] = data["crop_bbox"].to_dict(as_wsireg)
+        if as_wsireg:
+            if data.get("channel_indices"):
+                data["ch_indices"] = data.pop("channel_indices")
+            if data.get("crop_bbox"):
+                data["mask_bbox"] = data.pop("crop_bbox")
+            if data.get("downsample"):
+                data["downsampling"] = data.pop("downsample")
+            if data.get("rotate_counter_clockwise"):
+                data["rotate_cc"] = data.pop("rotate_counter_clockwise")
+            if data.get("max_intensity_projection"):
+                data["max_int_proj"] = data.pop("max_intensity_projection")
         return data
 
     @classmethod
@@ -132,7 +130,7 @@ class Preprocessing(BaseModel):
             invert_intensity=True,
         )
 
-    @validator("mask_bbox", pre=True)
+    @validator("crop_bbox", pre=True)
     def _make_bbox(cls, v):
         if v is None:
             return None

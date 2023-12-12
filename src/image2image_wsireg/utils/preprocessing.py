@@ -12,7 +12,7 @@ from loguru import logger
 
 from image2image_wsireg.enums import ImageType
 from image2image_wsireg.models import Preprocessing
-from image2image_wsireg.models.preprocessing import BoundingBox
+from image2image_wsireg.models.bbox import BoundingBox
 from image2image_wsireg.utils.transformation import (
     affine_to_itk_affine,
     generate_affine_flip_transform,
@@ -152,12 +152,12 @@ def preprocess_intensity(
     if preprocessing.image_type == ImageType.DARK:
         preprocessing.invert_intensity = False
     elif preprocessing.image_type == ImageType.LIGHT:
-        preprocessing.max_int_proj = False
+        preprocessing.nax_intensity_projection = False
         preprocessing.contrast_enhance = False
         if is_rgb:
             preprocessing.invert_intensity = True
 
-    if preprocessing.max_int_proj:
+    if preprocessing.nax_intensity_projection:
         image = sitk_max_int_proj(image)
 
     if preprocessing.contrast_enhance:
@@ -300,22 +300,22 @@ def preprocess_reg_image_spatial(
 
         transforms.append(flip_tform)
 
-    if mask and preprocessing.crop_to_mask_bbox:
+    if mask and preprocessing.crop_to_bbox:
         logger.trace("computing mask bounding box")
-        if preprocessing.mask_bbox is None:
+        if preprocessing.crop_bbox is None:
             mask_bbox = compute_mask_to_bbox(mask)
-            preprocessing.mask_bbox = mask_bbox
+            preprocessing.crop_bbox = mask_bbox
 
     original_size_transform = None
-    if preprocessing.mask_bbox:
+    if preprocessing.crop_bbox:
         logger.trace("cropping to mask")
         translation_transform = generate_rigid_translation_transform(
             image,
             pixel_size,
-            preprocessing.mask_bbox.X,
-            preprocessing.mask_bbox.Y,
-            preprocessing.mask_bbox.WIDTH,
-            preprocessing.mask_bbox.HEIGHT,
+            preprocessing.crop_bbox.x,
+            preprocessing.crop_bbox.y,
+            preprocessing.crop_bbox.width,
+            preprocessing.crop_bbox.height,
         )
 
         (

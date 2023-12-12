@@ -249,7 +249,7 @@ class WsiReg2d:
             obj.load_from_wsireg()
         return obj
 
-    def print_summary(self):
+    def print_summary(self) -> None:
         """Print summary about the project."""
         elbow = "└──"
         pipe = "│  "
@@ -368,6 +368,7 @@ class WsiReg2d:
                 channel_names=modality.get("channel_names", None),
                 channel_colors=modality.get("channel_colors", None),
                 mask=modality.get("mask", None),
+                mask_bbox=modality.get("mask_bbox", None),
                 output_pixel_size=modality.get("output_pixel_size", None),
                 pixel_size=modality.get("pixel_size", None),
             )
@@ -440,7 +441,12 @@ class WsiReg2d:
         """Load data from WsiReg YAML project file."""
 
     def auto_add_modality(
-        self, name: str, path: PathLike, mask: PathLike | None, preprocessing: Preprocessing | None = None
+        self,
+        name: str,
+        path: PathLike,
+        preprocessing: Preprocessing | None = None,
+        mask: PathLike | None = None,
+        mask_bbox: tuple[int, int, int, int] | None = None,
     ) -> Modality:
         """Add modality."""
         from image2image_io._reader import get_simple_reader, is_supported
@@ -459,6 +465,7 @@ class WsiReg2d:
             pixel_size=reader.resolution or 1.0,
             channel_names=reader.channel_names,
             mask=mask,
+            mask_bbox=mask_bbox,
             preprocessing=preprocessing,
         )
 
@@ -471,6 +478,7 @@ class WsiReg2d:
         channel_colors: list[str] | None = None,
         preprocessing: Preprocessing | dict[str, ty.Any] | None = None,
         mask: PathLike | np.ndarray | None = None,
+        mask_bbox: tuple[int, int, int, int] | None = None,
         output_pixel_size: tuple[float, float] | None = None,
     ) -> Modality:
         """Add modality."""
@@ -503,6 +511,7 @@ class WsiReg2d:
             preprocessing=preprocessing,
             mask=mask,
             output_pixel_size=output_pixel_size,
+            mask_bbox=mask_bbox,
         )
         logger.trace(f"Added modality '{name}'.")
         return self.modalities[name]
@@ -1192,8 +1201,8 @@ class WsiReg2d:
         if im_data.preprocessing and (
             im_data.preprocessing.rotate_counter_clockwise != 0
             or im_data.preprocessing.flip
-            or im_data.preprocessing.crop_to_mask_bbox
-            or im_data.preprocessing.mask_bbox
+            or im_data.preprocessing.crop_to_bbox
+            or im_data.preprocessing.crop_bbox
         ):
             im_initial_transforms = ImageWrapper.load_original_size_transform(im_data, self.cache_dir)
 

@@ -13,7 +13,7 @@ from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
 
-from image2image_wsireg.models import Modality, Preprocessing
+from image2image_wsireg.models import BoundingBox, Modality, Preprocessing
 from image2image_wsireg.utils.convert import sitk_image_to_itk_image
 
 
@@ -41,6 +41,8 @@ class ImageWrapper:
         self.mask: sitk.Image | None = None
         if self.modality.mask is not None:
             self.mask = self.read_mask(self.modality.mask)
+        if self.modality.mask_bbox is not None:
+            self.mask = self.make_bbox_mask(self.modality.mask_bbox)
         self.initial_transforms: list[dict] = []
         self.original_size_transform: dict | None = None
 
@@ -88,6 +90,7 @@ class ImageWrapper:
 
     def save_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None) -> None:
         """Save the image to the cache."""
+        # TODO: this should do partial saves (e.g. image, mask, pre-processing and initial)
         if not use_cache or not self.image:
             return
         with MeasureTimer() as timer:
@@ -113,12 +116,12 @@ class ImageWrapper:
                 sitk.WriteImage(self.mask, str(filename_with_suffix(filename, "mask", ".tiff")), useCompression=True)
         logger.trace(f"Saved image to cache: {filename} for {self.modality.name} in {timer()}")
 
-    def load_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None):
+    def load_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None) -> None:
         """Load data from cache."""
+        # TODO: this should do partial checks (e.g. image, mask, pre-processing and initial)
         if not use_cache:
             return
         filename = self.get_cache_path(self.modality, cache_dir, extra=extra, preprocessing=self.preprocessing)
-
         if filename.exists():
             self.image = sitk.ReadImage(str(filename))
             self.initial_transforms = read_json_data(filename_with_suffix(filename, "initial", ".json"))
@@ -202,4 +205,11 @@ class ImageWrapper:
         else:
             raise ValueError(f"Unknown mask type: {type(mask)}")
         mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
+        return mask
+
+    def make_bbox_mask(self, bbox: BoundingBox) -> sitk.Image:
+        """Make mask from bounding box."""
+        mask = bbox.to_sitk_image(self.reader.image_shape, self.modality.pixel_size)
+        mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
+        logger.trace(f"Loaded mask from bbox for {self.modality.name}")
         return mask

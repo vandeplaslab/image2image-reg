@@ -2,6 +2,7 @@
 import os
 
 from image2image_wsireg.utils._test import get_test_file
+from image2image_wsireg.workflows import WsiReg2d
 
 
 def test_cli_entrypoint():
@@ -49,6 +50,28 @@ def test_cli_add_images_path_attachment(tmp_path):
     assert exit_status == 0
 
 
+def test_cli_add_images_override_preprocessing(tmp_path):
+    """Test CLI init."""
+    source = get_test_file("ellipse_moving.tiff")
+    target = get_test_file("ellipse_target.tiff")
+
+    tmp = tmp_path
+    exit_status = os.system(f"iwsireg new -n test.wsireg -o '{tmp!s}' --cache --merge")
+    path = tmp / "test.wsireg"
+    assert path.exists(), "No config file created."
+    assert exit_status == 0
+
+    # add images
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n source -i '{source!s}' -P basic")
+    assert exit_status == 0
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n target -i '{target!s}' -P basic")
+    assert exit_status == 0
+
+    # add paths
+    exit_status = os.system(f"iwsireg --debug add-path -p '{path!s}' -s source -t target -R rigid -S light -P dark")
+    assert exit_status == 0
+
+
 def test_cli_add_images_with_affine(tmp_path):
     """Test CLI init."""
     source = get_test_file("ellipse_moving.tiff")
@@ -93,3 +116,35 @@ def test_cli_add_images_path_mask(tmp_path):
     # add paths
     exit_status = os.system(f"iwsireg --debug add-path -p '{path!s}' -s source -t target -R rigid")
     assert exit_status == 0
+
+
+def test_cli_add_images_path_mask_bbox(tmp_path):
+    """Test CLI init."""
+    source = get_test_file("ellipse_moving.tiff")
+    target = get_test_file("ellipse_target.tiff")
+
+    tmp = tmp_path
+    exit_status = os.system(f"iwsireg new -n test.wsireg -o '{tmp!s}' --cache --merge")
+    path = tmp / "test.wsireg"
+    assert path.exists(), "No config file created."
+    assert exit_status == 0
+
+    # add images
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n source -i '{source!s}' -P basic")
+    assert exit_status == 0
+    exit_status = os.system(
+        f"iwsireg --debug add-image -p '{path!s}' -n target -i '{target!s}' -P basic -b 0,0,1000,1000"
+    )
+    assert exit_status == 0
+
+    # add paths
+    exit_status = os.system(f"iwsireg --debug add-path -p '{path!s}' -s source -t target -R rigid")
+    assert exit_status == 0
+
+    obj = WsiReg2d.from_path(path)
+    modality = obj.modalities["target"]
+    assert modality.mask_bbox is not None, "No mask bbox found."
+    assert modality.mask_bbox.x == 0
+    assert modality.mask_bbox.y == 0
+    assert modality.mask_bbox.width == 1000
+    assert modality.mask_bbox.height == 1000
