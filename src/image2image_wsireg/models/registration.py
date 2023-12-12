@@ -19,7 +19,7 @@ def _elx_lineparser(
         if " " in v:
             v = v.split(" ")
             v = list(filter(lambda a: a != "", v))
-        if isinstance(v, list) is False:
+        if not isinstance(v, list):
             v = [v]
         return k, v
     else:

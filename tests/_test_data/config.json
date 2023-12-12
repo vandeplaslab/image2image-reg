@@ -1,0 +1,332 @@
+{
+    "schema_version": "1.3",
+    "autoims_version": "0.1.9.dev3+ge06c80d",
+    "config": {
+        "user": [
+            {
+                "task_id": "df4c239a-8e7b-4634-b2d1-ec08d481495b",
+                "name": "VMP102",
+                "slack_id": "U04UTRM9TLK",
+                "email": "ali.zahraei@vanderbilt.edu"
+            }
+        ],
+        "pre_convert": [
+            {
+                "task_id": "849b7a14-d39c-4c80-ac05-5b46321b334f",
+                "split_roi": true,
+                "roi": [],
+                "mz_min": -1.0,
+                "mz_max": -1.0
+            }
+        ],
+        "pre_rename": [
+            {
+                "task_id": "3d17f888-ae8c-44d6-9ffa-ff030910e090",
+                "grid": "tags.csv"
+            }
+        ],
+        "pre_mz_align": [
+            {
+                "task_id": "9d50a6ca-27a2-44e6-9c9b-fa61cd0ea953",
+                "mzs": [],
+                "n_mzs": 6,
+                "method": "lockmass"
+            }
+        ],
+        "pre_merge_datasets": [
+            {
+                "task_id": "df92b834-be2c-4754-9ee2-9361eae1a84b",
+                "project_name": "202300950F_231025.vdata",
+                "n_rows": 10,
+                "x_pad": 5,
+                "y_pad": 5,
+                "between": 10,
+                "group_by_tag": "None",
+                "merge": "horizontal"
+            }
+        ],
+        "pre_normalization_single": [
+            {
+                "task_id": "34cf4491-d16c-46bf-aff4-63567a8893c1",
+                "mzs": []
+            }
+        ],
+        "pre_normalization_multi": [
+            {
+                "task_id": "fb49c6ff-1e28-4a43-bf45-4d60962fe0f7",
+                "tag": "multi"
+            }
+        ],
+        "pre_average_heatmap": [
+            {
+                "task_id": "1bff6719-8f17-4448-acb8-5a5aed5ce78b",
+                "proportion": 1.0,
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "filename": "prop=1.00_n_tag=raw_norm=TIC"
+            }
+        ],
+        "pre_average_spectrum": [
+            {
+                "task_id": "6788d727-6612-4695-bbce-b174c6af5c1e",
+                "proportion": 1.0,
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "filename": "prop=1.00_n_tag=raw_norm=TIC",
+                "fmt": [
+                    "csv"
+                ]
+            }
+        ],
+        "pre_mz_calibrate": [
+            {
+                "task_id": "752ce7e3-078b-4d4c-b5a5-ca8b667dacdc",
+                "mzs": [
+                    327.233,
+                    426.022,
+                    306.077,
+                    281.248,
+                    346.056,
+                    124.007
+                ],
+                "method": "regression"
+            }
+        ],
+        "wf_mz_annotate": [
+            {
+                "task_id": "0e7013a7-1050-407c-9734-291c14ce980c",
+                "molecule_type": "lipid",
+                "database": [
+                    "HMDB5",
+                    "CoreMetabolome3",
+                    "MSDIAL_V69_NEG"
+                ],
+                "adducts": [
+                    "[M-H]-",
+                    "[M+Cl]-"
+                ],
+                "ppm_limit": 5.0,
+                "snr": 0.01,
+                "deisotope": true,
+                "mz_min": -1.0,
+                "mz_max": -1.0,
+                "fdr_n_decoys": 20,
+                "fdr_mode": "spectrum",
+                "polarity": "negative",
+                "resolution": 50000,
+                "filename": "peaks_annotate_ppm=5.0_fdr=spectrum_db=CoreMetabolome3,HMDB5,MSDIAL_V69_NEG.csv",
+                "style": [
+                    "seaborn-ticks"
+                ]
+            }
+        ],
+        "wf_mz_detect_single": [
+            {
+                "task_id": "b35faaf7-1e0a-4e4d-b22e-d411871c6d56",
+                "method": "ms-peak-picker",
+                "snr": 50.0,
+                "threshold": 0.001,
+                "max_peaks": 0,
+                "deisotope": false,
+                "filename": "peaks_single_method=ms-peak-picker_snr=50.0_thr=0.001_deisotope=False.json"
+            }
+        ],
+        "wf_mz_detect_multi": [
+            {
+                "task_id": "c46821b9-7913-4020-8255-a33c9b9d18b5",
+                "method": "ms-peak-picker",
+                "snr": 50.0,
+                "threshold": 0.001,
+                "max_peaks": 0,
+                "deisotope": true,
+                "filename": "peaks_multi_method=ms-peak-picker_snr=50.0_thr=0.001_deisotope=True.json"
+            }
+        ],
+        "wf_mz_extract_centroids": [
+            {
+                "task_id": "0e01b046-c26f-4580-9012-cd0a54fce6fb",
+                "mzs": [],
+                "config_path": "{annotine}:peaks_annotate_ppm=5.0_fdr=spectrum_db=CoreMetabolome3,HMDB5,MSDIAL_V69_NEG.csv",
+                "ppm": 5.0,
+                "tag": "centroids",
+                "fmt": [
+                    "ome.tiff",
+                    "imzML"
+                ],
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "padding": 3
+            }
+        ],
+        "wf_compare_single_mosaic": [
+            {
+                "task_id": "cfd7c668-83f1-4c17-9d86-ac0018cb7b6e",
+                "centroid_tag": "centroids",
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "clip": true,
+                "quantile": true,
+                "n_top": 0,
+                "colorbar": true,
+                "n_cols": 3,
+                "n_rows": 3,
+                "auto_rotate": true,
+                "colormap": "viridis",
+                "dpi": 100
+            }
+        ],
+        "wf_compare_mosaic": [
+            {
+                "task_id": "9b6cb225-d317-4caa-8adc-cb73670630e8",
+                "centroid_tag": "centroids",
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "quantile": true,
+                "common_intensity": true,
+                "n_top": 0,
+                "one_dir": true,
+                "colorbar": true,
+                "merge_by_mz": true,
+                "mz_n_cols": 0,
+                "merge_by_dataset": false,
+                "dataset_n_cols": 0,
+                "auto_rotate": true,
+                "colormap": "viridis",
+                "dpi": 100
+            },
+            {
+                "task_id": "23d50b03-4940-4c39-a51e-8c19e8a3d30b",
+                "centroid_tag": "centroids",
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "quantile": true,
+                "common_intensity": false,
+                "n_top": 0,
+                "one_dir": true,
+                "colorbar": true,
+                "merge_by_mz": true,
+                "mz_n_cols": 0,
+                "merge_by_dataset": false,
+                "dataset_n_cols": 0,
+                "auto_rotate": true,
+                "colormap": "viridis",
+                "dpi": 100
+            }
+        ],
+        "wf_unsupervised_single": [
+            {
+                "task_id": "82d7b878-b966-4c63-93e6-e1d1adb08cb9",
+                "algorithm": "KMeans",
+                "centroid_tag": "centroids",
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "optimise_n": false,
+                "n": 5,
+                "distance": "euclidean",
+                "n_neighbors": 15,
+                "min_dist": 0.1,
+                "tag": "n=5_norm_tag=raw_norm_name=TIC",
+                "auto_rotate": true,
+                "colormap": "viridis",
+                "style": [
+                    "dark_background"
+                ],
+                "dpi": 150
+            },
+            {
+                "task_id": "700f7540-c312-40cb-9fac-270e737c3dfd",
+                "algorithm": "KMeans",
+                "centroid_tag": "centroids",
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "optimise_n": false,
+                "n": 5,
+                "distance": "euclidean",
+                "n_neighbors": 15,
+                "min_dist": 0.1,
+                "tag": "c_tag=centroids_n=5_n_tag=raw_norm=TIC",
+                "auto_rotate": true,
+                "colormap": "viridis",
+                "style": [
+                    "dark_background"
+                ],
+                "dpi": 150
+            }
+        ],
+        "wf_unsupervised_multi": [
+            {
+                "task_id": "ac4c02a9-5bbb-4812-9bb4-924d8aa336a0",
+                "algorithm": "KMeans",
+                "centroid_tag": "centroids",
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "optimise_n": false,
+                "n": 5,
+                "distance": "euclidean",
+                "n_neighbors": 15,
+                "min_dist": 0.1,
+                "inter_norm": false,
+                "batch_norm": false,
+                "tag": "c_tag=centroids_n=5_n_tag=raw_norm=TIC",
+                "auto_rotate": true,
+                "colormap": "viridis",
+                "style": [
+                    "default"
+                ],
+                "dpi": 150
+            }
+        ],
+        "wf_unsupervised_spectrum_single": [
+            {
+                "task_id": "3f41609a-6e52-4d9e-bdc9-aeb380f190ce",
+                "model_tag": "c_tag=centroids_n=5_n_tag=raw_norm=TIC",
+                "norm_tag": "raw",
+                "norm_name": "TIC",
+                "fmt": []
+            }
+        ],
+        "wf_compare_mz_spectra_interactive": [
+            {
+                "task_id": "d23c99e0-dffd-4a31-8a9b-4ac5115120e5",
+                "mzs": [],
+                "separate": false,
+                "normalize": true,
+                "split_peaks": false
+            }
+        ],
+        "wf_compare_mz_spectra_single_grid": [
+            {
+                "task_id": "a6506c55-f86e-47ef-8b50-615342165cf1",
+                "style": [
+                    "dark_background"
+                ],
+                "palette": "husl",
+                "line_width": 1.0,
+                "dpi": 300
+            }
+        ],
+        "wf_compare_mz_spectra_grid": [
+            {
+                "task_id": "21ee5db2-85eb-412b-ad36-a21d85abffb6",
+                "use_tag": true,
+                "include_tag": false,
+                "style": [
+                    "dark_background"
+                ],
+                "palette": "husl",
+                "line_width": 1.0,
+                "dpi": 300
+            }
+        ],
+        "ex_export_imzml": [
+            {
+                "task_id": "68fb2b49-1064-4820-9cb6-6e32969506f3",
+                "method": "parabolic",
+                "snr": 3.0,
+                "threshold": 0.01,
+                "norm_tag": "raw",
+                "norm_name": "TIC"
+            }
+        ]
+    }
+}

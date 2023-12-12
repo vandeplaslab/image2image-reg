@@ -7,20 +7,20 @@ import numpy as np
 def combined_transform(
     image_size: tuple[int, int],
     image_spacing: tuple[float, float],
-    rotation_angle: float | int,
-    translation: tuple[float, float],
+    rotation_angle: float | int = 0,
+    translation: tuple[float, float] = (0, 0),
     flip_lr: bool = False,
 ) -> np.ndarray:
     """Combined transform.
 
     Transformations are performed in the following order:
-    - translation along x/y axis
+    - translation along x/y-axis
     - rotation around the center point
     - horizontal flip
     """
-    image_size = np.asarray(image_size)
-    image_spacing = np.asarray(image_spacing)
-    translation = np.asarray(translation)
+    image_size = np.asarray(image_size)  # type: ignore[assignment]
+    image_spacing = np.asarray(image_spacing)  # type: ignore[assignment]
+    translation = np.asarray(translation)  # type: ignore[assignment]
     tran = centered_translation_transform(translation)
     rot = centered_rotation_transform(image_size, image_spacing, rotation_angle)
     flip = np.eye(3)

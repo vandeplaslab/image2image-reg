@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import typing as ty
+from pathlib import Path
 
 import click
 from click_groups import GroupedGroup
@@ -31,19 +32,24 @@ def set_logger(verbosity: float, no_color: bool) -> None:
     logger.debug(f"Activated logger with level '{level}'.")
 
 
-def get_preprocessing(preprocessing: str) -> Preprocessing | None:
+def get_preprocessing(preprocessing: str, affine: str | None = None) -> Preprocessing | None:
     """Get pre-processing object."""
     from image2image_wsireg.models import Preprocessing
 
-    if preprocessing is None:
-        return None
-    elif preprocessing in ["dark", "fluorescence"]:
-        return Preprocessing.fluorescence()
+    if preprocessing in ["dark", "fluorescence"]:
+        pre = Preprocessing.fluorescence()
     elif preprocessing in ["light", "brightfield"]:
-        return Preprocessing.brightfield()
+        pre = Preprocessing.brightfield()
     elif preprocessing in ["basic"]:
-        return Preprocessing.basic()
-    return None
+        pre = Preprocessing.basic()
+    else:
+        pre = None
+    if pre and affine:
+        if affine and not Path(affine).suffix == ".json":
+            raise ValueError("Affine must be a JSON file.")
+        # will be automatically converted to a numpy array
+        pre.affine = affine  # type: ignore[assignment]
+    return pre
 
 
 @click.group(
@@ -192,6 +198,16 @@ def validate_runner(project_dir: str) -> None:
 
 
 @click.option(
+    "-A",
+    "--affine",
+    help="Path to affine transformation matrix. Matrix must be in JSON format and follow the yx convention."
+    "It's assumed to be in physical units. The matrix will be inversed before it's applied to the image.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    callback=cli_parse_paths,
+)
+@click.option(
     "-P",
     "--preprocessing",
     help="Kind of pre-processing that will be applied to the specified modality.",
@@ -245,9 +261,10 @@ def add_modality(
     image: ty.Sequence[str],
     mask: ty.Sequence[str] | None,
     preprocessing: ty.Sequence[str],
+    affine: ty.Sequence[str] | None,
 ) -> None:
     """Add images to the project."""
-    add_modality_runner(project_dir, name, image, mask, preprocessing)
+    add_modality_runner(project_dir, name, image, mask, preprocessing, affine)
 
 
 def add_modality_runner(
@@ -256,6 +273,7 @@ def add_modality_runner(
     paths: ty.Sequence[str],
     masks: ty.Sequence[str] | None = None,
     preprocessings: ty.Sequence[str | None] | None = None,
+    affines: ty.Sequence[str] | None = None,
 ) -> None:
     """Add images to the project."""
     from image2image_wsireg.workflows.wsireg2d import WsiReg2d
@@ -270,12 +288,18 @@ def add_modality_runner(
         masks = [masks]
     if len(masks) != len(paths) and len(masks) > 0:
         masks = [None] * len(paths)
+    if not affines:
+        affines = [None] * len(paths)
+    if not isinstance(affines, (list, tuple)):
+        affines = [affines]
     if not isinstance(preprocessings, (list, tuple)):
         preprocessings = [preprocessings]
-
     if len(preprocessings) == 1 and len(paths) > 1:
         preprocessings = preprocessings * len(paths)
         info_msg(f"Using same pre-processing for all images: {preprocessings[0]}")
+    if len(affines) == 1 and len(paths) > 1:
+        affines = affines * len(paths)
+        info_msg(f"Using same pre-processing for all images: {affines[0]}")
 
     if len(names) != len(paths) != len(preprocessings) != len(masks):
         raise ValueError("Number of names, paths and pre-processing must match.")
@@ -286,10 +310,11 @@ def add_modality_runner(
         Parameter("Paths", "-i/--image", paths),
         Parameter("Masks", "-m/--mask", masks),
         Parameter("Pre-processing", "-P/--preprocessing", preprocessings),
+        Parameter("Affine", "-A/--affine", affines),
     )
     obj = WsiReg2d.from_path(project_dir)
-    for name, path, mask, preprocessing in zip(names, paths, masks, preprocessings):
-        obj.auto_add_modality(name, path, mask, get_preprocessing(preprocessing))
+    for name, path, mask, preprocessing, affine in zip(names, paths, masks, preprocessings, affines):
+        obj.auto_add_modality(name, path, mask, get_preprocessing(preprocessing, affine))
     obj.save()
 
 
@@ -298,8 +323,8 @@ def add_modality_runner(
     "--preprocessing",
     help="Kind of pre-processing that will be applied to the specified modality - this will override modality-specific"
     " pre-processing.",
-    type=click.Choice(["basic", "light", "dark"], case_sensitive=False),
-    default="basic",
+    type=click.Choice(["none", "basic", "light", "dark"], case_sensitive=False),
+    default="none",
     show_default=True,
     required=False,
 )
@@ -398,7 +423,7 @@ def add_path_runner(
         Parameter("Pre-processing", "-P/--preprocessing", preprocessing),
     )
     obj = WsiReg2d.from_path(project_dir)
-    obj.add_registration_path(source, target, through, list(registration), get_preprocessing(preprocessing))
+    obj.add_registration_path(source, target, list(registration), through, get_preprocessing(preprocessing))
     obj.save()
 
 
@@ -553,9 +578,9 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
     required=True,
 )
 @cli.command("add-merge", help_group="Project")
-def add_merge(project_dir: str, attach_to: str, modality: ty.Sequence[str]) -> None:
+def add_merge(project_dir: str, name: str, modality: ty.Sequence[str]) -> None:
     """Specify how (if) images should be merged."""
-    add_merge_runner(project_dir, attach_to, modality)
+    add_merge_runner(project_dir, name, modality)
 
 
 def add_merge_runner(project_dir: str, name: str, modalities: ty.Sequence[str]) -> None:

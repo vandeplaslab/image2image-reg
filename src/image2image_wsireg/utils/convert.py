@@ -86,12 +86,6 @@ def convert_to_itk(
         itk_tform = bspline_elx_to_itk2d(tform)
     else:
         raise ValueError(f"Transform {tform['Transform'][0]} not supported")
-
-    itk_tform.OutputSpacing = [float(p) for p in tform["Spacing"]]  # type: ignore[union-attr]
-    itk_tform.OutputDirection = [float(p) for p in tform["Direction"]]  # type: ignore[union-attr]
-    itk_tform.OutputOrigin = [float(p) for p in tform["Origin"]]  # type: ignore[union-attr]
-    itk_tform.OutputSize = [int(p) for p in tform["Size"]]  # type: ignore[union-attr]
-    itk_tform.ResampleInterpolator = tform["ResampleInterpolator"][0]  # type: ignore[union-attr]
     return itk_tform
 
 
@@ -123,7 +117,7 @@ def sitk_image_to_itk_image(image: sitk.Image, cast_to_float32=False) -> itk.Ima
     spacing = image.GetSpacing()
     # direction = image.GetDirection()
     is_vector = image.GetNumberOfComponentsPerPixel() > 1
-    if cast_to_float32 is True:
+    if cast_to_float32 :
         image = sitk.Cast(image, sitk.sitkFloat32)
         image = sitk.GetArrayFromImage(image)
     else:

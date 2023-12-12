@@ -164,7 +164,7 @@ def register_2d_images(
     if target.image is None:
         raise ValueError("Target image is None")
 
-    if histogram_match is True:
+    if histogram_match :
         with MeasureTimer() as timer:
             matcher = sitk.HistogramMatchingImageFilter()
             matcher.SetNumberOfHistogramLevels(64)

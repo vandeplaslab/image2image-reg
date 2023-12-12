@@ -14,18 +14,22 @@ class TransformMixin:
 
     resampler: sitk.ResampleImageFilter | None = None
 
+    is_linear: bool = True
     output_origin: tuple[float, float] | None = None
     output_size: tuple[int, int] | None = None
     output_spacing: tuple[float, float] | None = None
     output_direction: tuple[float, float] | None = None
-    resample_interpolator: str | None = None
+    resample_interpolator: str = "FinalNearestNeighborInterpolator"
     final_transform: sitk.Transform | None = None
+    inverse_transform: sitk.Transform
     transforms: list[Transform]
 
     def __call__(self, image: sitk.Image) -> sitk.Image:
         """Transform."""
         if self.resampler is None:
-            raise ValueError("Resampler not built, call `build_resampler` first")
+            self._build_resampler()
+            if self.resampler is None:
+                raise ValueError("Resampler not built, call `build_resampler` first")
         return self.resampler.Execute(image)  # type: ignore[no-any-return, no-untyped-call]
 
     @property
@@ -33,7 +37,17 @@ class TransformMixin:
         """Number of transformations in sequence."""
         return len(self.transforms)
 
-    def _build_resampler(self) -> None:
+    @property
+    def inverse_final_transform(self) -> sitk.Transform:
+        """Return inverse final transform."""
+        if self.final_transform is None:
+            raise ValueError("Final transform does not exist yet.")
+        if not self.is_linear:
+            self.compute_inverse_nonlinear()
+            return self.inverse_transform
+        return self.final_transform.GetInverse()  # type: ignore[no-untyped-call]
+
+    def _build_resampler(self, inverse: bool = False) -> None:
         """Build resampler."""
         from image2image_wsireg.enums import ELX_TO_ITK_INTERPOLATORS
 
@@ -46,10 +60,24 @@ class TransformMixin:
         resampler.SetSize(self.output_size)  # type: ignore[no-untyped-call]
         resampler.SetOutputSpacing(self.output_spacing)  # type: ignore[no-untyped-call]
 
-        interpolator = ELX_TO_ITK_INTERPOLATORS[self.resample_interpolator]  # type: ignore[no-untyped-call]
+        interpolator = ELX_TO_ITK_INTERPOLATORS[self.resample_interpolator]
         resampler.SetInterpolator(interpolator)  # type: ignore[no-untyped-call]
-        resampler.SetTransform(self.final_transform)  # type: ignore[no-untyped-call]
+        transform = self.inverse_final_transform if inverse else self.final_transform
+        resampler.SetTransform(transform)  # type: ignore[no-untyped-call]
         self.resampler = resampler
+
+    def compute_inverse_nonlinear(self) -> None:
+        """Compute the inverse of a BSpline transform using ITK."""
+        tform_to_disp_field = sitk.TransformToDisplacementFieldFilter()  # type: ignore[no-untyped-call]
+        tform_to_disp_field.SetOutputSpacing(self.output_spacing)  # type: ignore[no-untyped-call]
+        tform_to_disp_field.SetOutputOrigin(self.output_origin)  # type: ignore[no-untyped-call]
+        tform_to_disp_field.SetOutputDirection(self.output_direction)  # type: ignore[no-untyped-call]
+        tform_to_disp_field.SetSize(self.output_size)  # type: ignore[no-untyped-call]
+
+        displacement_field = tform_to_disp_field.Execute(self.itk_transform)  # type: ignore[no-untyped-call]
+        displacement_field = sitk.InvertDisplacementField(displacement_field)  # type: ignore[no-untyped-call]
+        displacement_field = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
+        self.inverse_transform = displacement_field
 
     def transform_points(
         self, points: np.ndarray, is_px: bool = True, source_pixel_size: float = 1, px: bool = True
@@ -74,15 +102,18 @@ class TransformMixin:
         transformed_points: np.ndarray
             Transformed points
         """
+        if not self.output_spacing:
+            raise ValueError("Output spacing not set, call `set_output_spacing` first")
+
         transformed_points = []
         for point in points:
-            if is_px is True:
+            if is_px:
                 point = point * source_pixel_size
             for _index, transform in enumerate(self.transforms):
                 point = transform.inverse_transform.TransformPoint(point)
             transformed_point = np.array(point)
 
-            if px is True:
+            if px:
                 transformed_point *= 1 / self.output_spacing[0]
             transformed_points.append(transformed_point)
         return np.stack(transformed_points)
@@ -96,17 +127,72 @@ class TransformMixin:
         Parameters
         ----------
         spacing: tuple of float
-            Spacing to set the new image.
-            Will also change the output size to match.
-
+            Spacing to set the new image. Will also change the output size to match.
         """
         output_size_scaling = np.asarray(self.output_spacing) / np.asarray(spacing)
         new_size = np.ceil(np.multiply(self.output_size, output_size_scaling))
-        new_size: tuple[int, int] = tuple([int(i) for i in new_size])
+        new_size: tuple[int, int] = tuple([int(i) for i in new_size])  # type: ignore[no-redef]
 
         self.output_spacing = spacing
-        self.output_size = new_size
+        self.output_size = new_size  # type: ignore[assignment]
         self._build_resampler()
+
+    def as_array(
+        self,
+        yx: bool = False,
+        n_dim: int = 3,
+        inverse: bool = False,
+        px: bool = False,
+    ) -> np.ndarray | None:
+        """Creates an affine transform matrix as np.ndarray whether the center of rotation is 0,0.
+
+        Optionally in physical or pixel coordinates.
+
+        Parameters
+        ----------
+        yx: bool
+            Use numpy ordering of yx (napari-compatible)
+        n_dim: int
+            Number of dimensions in the affine matrix, using 3 creates a 3x3 array
+        inverse: bool
+            return the inverse affine transformation
+        px: bool
+            return the transformation matrix specified in pixels or physical (microns).
+
+        Returns
+        -------
+        full_matrix: np.ndarray
+            Affine transformation matrix
+        """
+        if not self.final_transform:
+            raise ValueError("Final transform does not exist yet.")
+
+        if self.is_linear:
+            if yx:
+                order = slice(None, None, -1)
+            else:
+                order = slice(None, None, 1)
+
+            transform = self.final_transform.GetInverse() if inverse else self.final_transform
+
+            # pull transform values
+            transform_matrix = np.array(transform.GetMatrix()[order]).reshape(2, 2)
+            center = np.array(transform.GetCenter()[order])
+            translation = np.array(transform.GetTranslation()[order])
+
+            if px:
+                phys_to_index = 1 / np.asarray(self.output_spacing).astype(np.float64)
+                center *= phys_to_index
+                translation *= phys_to_index
+
+            # construct matrix
+            full_matrix = np.eye(n_dim)
+            full_matrix[0:2, 0:2] = transform_matrix
+            full_matrix[0:2, n_dim - 1] = -np.dot(transform_matrix, center) + translation + center
+
+            return full_matrix
+        warn("Non-linear transformations can not be represented converted" "to homogenous matrix", stacklevel=2)
+        return None
 
 
 class Transform(TransformMixin):
@@ -162,77 +248,7 @@ class Transform(TransformMixin):
         else:
             self.inverse_transform = None
 
-    def compute_inverse_nonlinear(self) -> None:
-        """Compute the inverse of a BSpline transform using ITK."""
-        tform_to_disp_field = sitk.TransformToDisplacementFieldFilter()  # type: ignore[no-untyped-call]
-        tform_to_disp_field.SetOutputSpacing(self.output_spacing)  # type: ignore[no-untyped-call]
-        tform_to_disp_field.SetOutputOrigin(self.output_origin)  # type: ignore[no-untyped-call]
-        tform_to_disp_field.SetOutputDirection(self.output_direction)  # type: ignore[no-untyped-call]
-        tform_to_disp_field.SetSize(self.output_size)  # type: ignore[no-untyped-call]
-
-        displacement_field = tform_to_disp_field.Execute(self.itk_transform)  # type: ignore[no-untyped-call]
-        displacement_field = sitk.InvertDisplacementField(displacement_field)  # type: ignore[no-untyped-call]
-        displacement_field = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
-        self.inverse_transform = displacement_field
-
     @property
     def final_transform(self) -> sitk.Transform:  # type: ignore[override]
         """Return final transform."""
         return self.itk_transform
-
-    def as_array(
-        self,
-        use_np_ordering: bool = False,
-        n_dim: int = 3,
-        inverse: bool = False,
-        px: bool = False,
-    ) -> np.ndarray | None:
-        """Creates an affine transform matrix as np.ndarray whether the center of rotation is 0,0.
-
-        Optionally in physical or pixel coordinates.
-
-        Parameters
-        ----------
-        use_np_ordering: bool
-            Use numpy ordering of yx (napari-compatible)
-        n_dim: int
-            Number of dimensions in the affine matrix, using 3 creates a 3x3 array
-        inverse: bool
-            return the inverse affine transformation
-        px: bool
-            return the transformation matrix specified in pixels or physical (microns).
-
-        Returns
-        -------
-        full_matrix: np.ndarray
-            Affine transformation matrix
-        """
-        if self.is_linear:
-            if use_np_ordering is True:
-                order = slice(None, None, -1)
-            else:
-                order = slice(None, None, 1)
-
-            if inverse is True:
-                transform = self.inverse_transform
-            else:
-                transform = self.itk_transform
-
-            # pull transform values
-            transform_matrix = np.array(transform.GetMatrix()[order]).reshape(2, 2)
-            center = np.array(transform.GetCenter()[order])
-            translation = np.array(transform.GetTranslation()[order])
-
-            if px is True:
-                phys_to_index = 1 / np.asarray(self.output_spacing).astype(np.float64)
-                center *= phys_to_index
-                translation *= phys_to_index
-
-            # construct matrix
-            full_matrix = np.eye(n_dim)
-            full_matrix[0:2, 0:2] = transform_matrix
-            full_matrix[0:2, n_dim - 1] = -np.dot(transform_matrix, center) + translation + center
-
-            return full_matrix
-        warn("Non-linear transformations can not be represented converted" "to homogenous matrix", stacklevel=2)
-        return None

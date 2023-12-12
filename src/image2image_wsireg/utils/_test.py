@@ -24,6 +24,46 @@ def get_test_file(filename: str) -> Path:
     return path
 
 
+def make_test_polygon(output_dir: Path) -> None:
+    """Create test data."""
+    import numpy as np
+    import tifffile
+    from skimage.draw import polygon2mask
+
+    im = polygon2mask(
+        (2048, 2048),
+        polygon=np.array(
+            (
+                (300, 300),
+                (980, 320),
+                (380, 730),
+                (220, 590),
+                (300, 300),
+            )
+        ),
+    )
+    im = im.astype(np.uint8)
+    im[im == 1] = 255
+    tifffile.imwrite(output_dir / "moving.tiff", im, compression="deflate")
+
+    im = polygon2mask(
+        (2048, 2048),
+        polygon=np.array(
+            (
+                (300, 300),
+                (980, 320),
+                (380, 730),
+                (220, 590),
+                (300, 300),
+            )
+        )
+        + 900,
+    )
+    im = im.astype(np.uint8)
+    im[im == 1] = 255
+    tifffile.imwrite(output_dir / "fixed.tiff", im, compression="deflate")
+
+
 class CleanupMixin:
     """Mixin class."""
 

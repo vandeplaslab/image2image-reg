@@ -75,7 +75,7 @@ NUMERIC_ELX_PARAMETERS = {
     "TransformParameters": np.float64,
 }
 ELX_LINEAR_TRANSFORMS = ["AffineTransform", "EulerTransform", "SimilarityTransform"]
-ELX_TO_ITK_INTERPOLATORS = {
+ELX_TO_ITK_INTERPOLATORS: dict[str, ty.Any] = {
     "FinalNearestNeighborInterpolator": sitk.sitkNearestNeighbor,
     "FinalLinearInterpolator": sitk.sitkLinear,
     "FinalBSplineInterpolator": sitk.sitkBSpline,

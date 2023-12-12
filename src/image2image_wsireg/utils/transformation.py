@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import typing as ty
+from copy import deepcopy
 from pathlib import Path
 
 import itk
@@ -16,6 +17,54 @@ from image2image_wsireg.utils.convert import itk_image_to_sitk_image, sitk_image
 from image2image_wsireg.utils.registration import json_to_pmap_dict
 
 
+def resample(
+    image: sitk.Image, transform: Transform, image_shape: tuple[int, int], inverse: bool = False
+) -> sitk.Image:
+    """Resample image for specified transform."""
+    resampler = sitk.ResampleImageFilter()  # type: ignore[no-untyped-call]
+    resampler.SetOutputOrigin(transform.output_origin)  # type: ignore[no-untyped-call]
+    resampler.SetOutputDirection(transform.output_direction)  # type: ignore[no-untyped-call]
+    resampler.SetSize(image_shape)  # type: ignore[no-untyped-call]
+    resampler.SetOutputSpacing(transform.output_spacing)  # type: ignore[no-untyped-call]
+
+    interpolator = ELX_TO_ITK_INTERPOLATORS[transform.resample_interpolator]
+    resampler.SetInterpolator(interpolator)  # type: ignore[no-untyped-call]
+    resampler.SetTransform(  #  type: ignore[no-untyped-call]
+        transform.final_transform if not inverse else transform.final_transform.GetInverse(),
+    )
+    return resampler.Execute(image)  # type: ignore[no-untyped-call]
+
+
+def affine_to_itk_affine(
+    affine: np.ndarray,
+    image_shape: tuple[int, int],
+    spacing: float = 1.0,
+    inverse: bool = False,
+) -> dict:
+    """Convert affine matrix (yx, um) to ITK affine matrix.
+
+    The assumption is that the affine matrix is provided in numpy ordering (e.g. from napari) and values are in um.
+    """
+    assert affine.shape == (3, 3), "affine matrix must be 3x3"
+    if inverse:
+        affine = np.linalg.inv(affine)
+    aff = deepcopy(BASE_AFFINE_TRANSFORM)
+    aff["Spacing"] = [str(spacing), str(spacing)]
+    aff["Size"] = [str(image_shape[0]), str(image_shape[1])]
+
+    # extract affine parameters
+    affine_ = affine[:2, :]
+    aff["TransformParameters"] = [
+        affine_[1, 1],
+        affine_[1, 0],
+        affine_[0, 1],
+        affine_[0, 0],
+        affine_[1, 2],
+        affine_[0, 2],
+    ]
+    return aff
+
+
 def prepare_tform_dict(tform_dict: dict, shape_tform: bool = False) -> dict:
     """Prepare the transformation dictionary for use in SimpleElastix."""
     transforms_out_dict = {}
@@ -26,7 +75,7 @@ def prepare_tform_dict(tform_dict: dict, shape_tform: bool = False) -> dict:
             transforms = []
             for tform in v:
                 if "invert" in list(tform.keys()):
-                    if shape_tform is False:
+                    if not shape_tform:
                         transforms.append(tform["image"])
                     else:
                         transforms.append(tform["invert"])
@@ -231,7 +280,7 @@ def generate_rigid_rotation_transform(image: sitk.Image, spacing: float, angle: 
     -------
     SimpleITK.ParameterMap of rotation transformation (EulerTransform)
     """
-    tform = BASE_RIGID_TRANSFORM.copy()
+    tform = deepcopy(BASE_RIGID_TRANSFORM)
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=angle)
     # calculate rotation center point
@@ -265,7 +314,7 @@ def generate_rigid_translation_transform(
     -------
     SimpleITK.ParameterMap of rotation transformation (EulerTransform)
     """
-    tform = BASE_RIGID_TRANSFORM.copy()
+    tform = deepcopy(BASE_RIGID_TRANSFORM)
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
 
@@ -316,7 +365,7 @@ def generate_affine_flip_transform(image: sitk.Image, spacing: float, flip: str 
     SimpleITK.ParameterMap of flipping transformation (AffineTransform)
 
     """
-    tform = BASE_AFFINE_TRANSFORM.copy()
+    tform = deepcopy(BASE_AFFINE_TRANSFORM)
     image.SetSpacing((spacing, spacing))
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
     rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(((bound_w - 1) / 2, (bound_h - 1) / 2))

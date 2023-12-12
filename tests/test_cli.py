@@ -20,8 +20,8 @@ def test_cli_init(tmp_path):
 
 def test_cli_add_images_path_attachment(tmp_path):
     """Test CLI init."""
-    source = get_test_file("moving_image_8bit.tiff")
-    target = get_test_file("target_image_8bit.tiff")
+    source = get_test_file("ellipse_moving.tiff")
+    target = get_test_file("ellipse_target.tiff")
     polygon = get_test_file("polygons.geojson")
 
     tmp = tmp_path
@@ -31,9 +31,9 @@ def test_cli_add_images_path_attachment(tmp_path):
     assert exit_status == 0
 
     # add images
-    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n source -i '{source!s}' -P none")
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n source -i '{source!s}' -P basic")
     assert exit_status == 0
-    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n target -i '{target!s}' -P none")
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n target -i '{target!s}' -P basic")
     assert exit_status == 0
 
     # add paths
@@ -46,4 +46,50 @@ def test_cli_add_images_path_attachment(tmp_path):
 
     # add merge modalities
     exit_status = os.system(f"iwsireg --debug add-merge -p '{path!s}' -n merge -m source -m target")
+    assert exit_status == 0
+
+
+def test_cli_add_images_with_affine(tmp_path):
+    """Test CLI init."""
+    source = get_test_file("ellipse_moving.tiff")
+    target = get_test_file("ellipse_target.tiff")
+    affine = get_test_file("ellipse_affine.json")
+
+    tmp = tmp_path
+    exit_status = os.system(f"iwsireg new -n test.wsireg -o '{tmp!s}' --cache --merge")
+    path = tmp / "test.wsireg"
+    assert path.exists(), "No config file created."
+    assert exit_status == 0
+
+    # add images
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n source -i '{source!s}' -P basic -A {affine!s}")
+    assert exit_status == 0
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n target -i '{target!s}' -P basic")
+    assert exit_status == 0
+
+    # add paths
+    exit_status = os.system(f"iwsireg --debug add-path -p '{path!s}' -s source -t target -R rigid")
+    assert exit_status == 0
+
+
+def test_cli_add_images_path_mask(tmp_path):
+    """Test CLI init."""
+    source = get_test_file("ellipse_moving.tiff")
+    target = get_test_file("ellipse_target.tiff")
+    mask = get_test_file("ellipse_mask.tiff")
+
+    tmp = tmp_path
+    exit_status = os.system(f"iwsireg new -n test.wsireg -o '{tmp!s}' --cache --merge")
+    path = tmp / "test.wsireg"
+    assert path.exists(), "No config file created."
+    assert exit_status == 0
+
+    # add images
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n source -i '{source!s}' -P basic")
+    assert exit_status == 0
+    exit_status = os.system(f"iwsireg --debug add-image -p '{path!s}' -n target -i '{target!s}' -P basic -m {mask!s}")
+    assert exit_status == 0
+
+    # add paths
+    exit_status = os.system(f"iwsireg --debug add-path -p '{path!s}' -s source -t target -R rigid")
     assert exit_status == 0

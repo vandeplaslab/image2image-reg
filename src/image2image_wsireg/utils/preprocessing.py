@@ -1,6 +1,8 @@
 """Pre-process dask array."""
 from __future__ import annotations
 
+from copy import deepcopy
+
 import cv2
 import dask.array as da
 import numpy as np
@@ -12,6 +14,7 @@ from image2image_wsireg.enums import ImageType
 from image2image_wsireg.models import Preprocessing
 from image2image_wsireg.models.preprocessing import BoundingBox
 from image2image_wsireg.utils.transformation import (
+    affine_to_itk_affine,
     generate_affine_flip_transform,
     generate_rigid_original_transform,
     generate_rigid_rotation_transform,
@@ -260,9 +263,12 @@ def preprocess_reg_image_spatial(
     # apply affine transformation
     if preprocessing.affine is not None:
         logger.trace("Applying affine transformation")
-        affine = preprocessing.affine
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine]})
+        affine_tform = preprocessing.affine
+        if isinstance(affine_tform, np.ndarray):
+            affine_tform = affine_to_itk_affine(affine_tform, original_size, pixel_size, True)
+        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
         image = transform_plane(image, final_tform, composite_transform)
+        transforms.append(affine_tform)
 
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))

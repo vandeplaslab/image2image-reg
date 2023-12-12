@@ -1,7 +1,6 @@
 """Transformation sequence."""
 from __future__ import annotations
 
-import typing as ty
 from pathlib import Path
 
 import numpy as np
@@ -89,8 +88,10 @@ class TransformSequence(TransformMixin):
         return self._composite_transform
 
     @composite_transform.setter
-    def composite_transform(self, transforms):
-        self._composite_transform = transforms
+    def composite_transform(self, composite_transform: sitk.CompositeTransform | None) -> None:
+        self._composite_transform = composite_transform
+        if composite_transform:
+            self.is_linear = composite_transform.IsLinear()
 
     @property
     def transform_sequence_index(self) -> list[int]:
@@ -137,15 +138,7 @@ class TransformSequence(TransformMixin):
         self.transform_itk_order = [self.transforms[i] for i in composite_index]
 
     def append(self, other: TransformSequence) -> None:
-        """
-        Concatenate transformation sequences.
-
-        Parameters
-        ----------
-        other: TransformSequence
-            Append a TransformSeq to another
-
-        """
+        """Concatenate transformation sequences."""
         self.add_transforms(other.transforms, other.transform_sequence_index)
 
     @classmethod

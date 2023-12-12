@@ -1,8 +1,10 @@
 """Preprocessing parameters for image2image registration."""
 import typing as ty
 from enum import Enum
+from pathlib import Path
 
 import numpy as np
+from koyo.json import read_json_data
 from pydantic import BaseModel, Field, validator
 
 from image2image_wsireg.enums import CoordinateFlip, ImageType
@@ -149,6 +151,8 @@ class Preprocessing(BaseModel):
     @validator("affine", pre=True)
     def _check_affine(cls, v):
         if v is not None:
+            if isinstance(v, (str, Path)):
+                v = read_json_data(Path(v))
             v = np.asarray(v)
             assert v.ndim == 2, "affine must be 2D"
             assert v.shape[0] == v.shape[1], "affine must be square"
@@ -156,7 +160,7 @@ class Preprocessing(BaseModel):
         return v
 
     def dict(self, **kwargs: ty.Any) -> dict:
-        # make sure serialization to dict is json like for saving YAML file
+        """Convert to dict."""
         output = super().dict(**kwargs)
         for k, v in output.items():
             if isinstance(v, Enum):
