@@ -1397,6 +1397,7 @@ class WsiReg2d:
         )
         path = self.project_dir / filename
         write_json_data(path, config)
+        logger.trace(f"Saved configuration to '{path}'.")
         return path
 
     def save_to_wsireg(self, filename: PathLike | None = None, registered: bool = False) -> Path:

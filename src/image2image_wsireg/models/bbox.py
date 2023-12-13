@@ -56,11 +56,7 @@ class BoundingBox:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         mask = self.to_mask(image_shape, dtype=np.uint8, value=255)
-        imwrite(
-            output_dir / f"{name}_bbox.tiff",
-            mask,
-            compression="deflate",
-        )
+        imwrite(output_dir / f"{name}_bbox.tiff", mask, compression="deflate")
         return output_dir / f"{name}_bbox.tiff"
 
 
