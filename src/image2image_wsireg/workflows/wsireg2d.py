@@ -259,10 +259,12 @@ class WsiReg2d:
         print(f"Project directory: {self.project_dir}")
         print(f"Merging images: {self.merge_images}")
         print(f"Pairwise registration: {self.pairwise}")
+        # print information about the specified modalities
         print(f"Number of modalities: {len(self.modalities)}")
         n = len(self.modalities) - 1
         for i, modality in enumerate(self.modalities.values()):
             print(f" {elbow if i == n else tee}{modality.name} ({modality.path})")
+        # print information about registration paths
         print(f"Number of registration paths: {len(self.registration_paths)}")
         n = len(self.registration_paths) - 1
         for i, (source, targets) in enumerate(self.registration_paths.items()):
@@ -270,6 +272,7 @@ class WsiReg2d:
                 print(f" {elbow if i == n else tee}{source} to {targets[0]}")
             else:
                 print(f" {elbow if i == n else tee}{source} to {targets[1]} via {targets[0]}")
+        # print information about registration nodes
         print(f"Number of registrations: {self.n_registrations}")
         n = len(self.registration_nodes) - 1
         for i, edge in enumerate(self.registration_nodes):
@@ -280,6 +283,7 @@ class WsiReg2d:
             print(f" {insert}{tee}Registered: {edge['registered']}")
             print(f" {insert}{tee}Source preprocessing: {edge['source_preprocessing']}")
             print(f" {insert}{elbow}Target preprocessing: {edge['target_preprocessing']}")
+        # print information about attachment images/shapes
         print(f"Number of attachment images: {len(self.attachment_images)}")
         n = len(self.attachment_images) - 1
         for i, (name, attach_to) in enumerate(self.attachment_images.items()):
@@ -288,6 +292,7 @@ class WsiReg2d:
         n = len(self.attachment_shapes) - 1
         for i, (name, modality) in enumerate(self.attachment_shapes.items()):
             print(f" {elbow if i == n else tee}{name} ({modality.path})")
+        # print information about merge modalities
         print(f"Number of merge modalities: {len(self.merge_modalities)}")
         n = len(self.merge_modalities) - 1
         for i, (name, merge_modalities) in enumerate(self.merge_modalities.items()):
