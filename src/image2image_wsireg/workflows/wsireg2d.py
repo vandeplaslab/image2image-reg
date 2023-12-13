@@ -1119,11 +1119,6 @@ class WsiReg2d:
             path = self._transform_write_image(im_data, transformations, output_path, fmt=fmt)
             paths.append(path)
 
-        # export merge modalities
-        if len(self.merge_modalities.items()) > 0:
-            path = self._transform_write_merge_images(to_original_size=to_original_size)
-            paths.append(path)
-
         # export non-registered nodes
         if write_not_registered:
             # preprocess and save unregistered nodes
@@ -1143,6 +1138,12 @@ class WsiReg2d:
                     paths.append(path)
                 except KeyError:
                     logger.warning(f"Could not find transformation data for {modality}.")
+
+        # export merge modalities
+        if len(self.merge_modalities.items()) > 0:
+            path = self._transform_write_merge_images(to_original_size=to_original_size)
+            paths.append(path)
+
         return paths
 
     def _prepare_registered_image_transform(

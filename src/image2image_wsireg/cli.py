@@ -65,6 +65,7 @@ def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> P
 
 @click.group(
     context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 120, "ignore_unknown_options": True},
+    chain=True,
     cls=GroupedGroup,
 )
 @click.version_option(__version__, prog_name="wsireg")
@@ -700,7 +701,7 @@ def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
     show_default=True,
 )
 @click.option(
-    "--clear_merged/--no_clear_merged",
+    "--remove_merged/--no_remove_merged",
     help="Remove written images that have been merged.",
     is_flag=True,
     default=True,
@@ -747,12 +748,12 @@ def register_cmd(
     n_parallel: int,
     fmt: WriterMode,
     write: bool,
-    clear_merged: bool,
+    remove_merged: bool,
     write_not_registered: bool,
     original_size: bool,
 ) -> None:
     """Register images."""
-    register_runner(project_dir, n_parallel, fmt, write, clear_merged, write_not_registered, original_size)
+    register_runner(project_dir, n_parallel, fmt, write, remove_merged, write_not_registered, original_size)
 
 
 def register_runner(
@@ -775,7 +776,7 @@ def register_runner(
         Parameter(
             "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
         ),
-        Parameter("Remove merged images", "--clear_merged/--no_clear_merged", remove_merged),
+        Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
     )
     for path in paths:
