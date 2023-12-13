@@ -397,6 +397,10 @@ class WsiReg2d:
                 self._load_registered_transform(registered_edge, target)
             self.transformations = self._collate_transformations()
 
+        # load merge modalities
+        for name, merge_modalities in config["merge_images"].items():
+            self.merge_modalities[name] = merge_modalities
+
     def _load_registered_transform(self, edge: SerializedRegisteredRegistrationNode, target: str) -> None:
         """Load registered transform and make sure all attributes are correctly set-up."""
         from image2image_wsireg.wrapper import ImageWrapper
