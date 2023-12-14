@@ -1064,6 +1064,7 @@ class IWsiReg:
         remove_merged: bool = True,
         to_original_size: bool = True,
         preview: bool = False,
+        as_uint8: bool | None = None,
         override: bool = False,
     ) -> list | None:
         """Export images after applying transformation."""
@@ -1110,7 +1111,7 @@ class IWsiReg:
                 logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
                 continue
             logger.trace(f"Exporting {modality} to {output_path}...")
-            path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt)
+            path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt, as_uint8=as_uint8)
             paths.append(path)
 
         # export attachment modalities
@@ -1138,7 +1139,7 @@ class IWsiReg:
                 logger.trace(f"Skipping {attach_to_modality} as it already exists ({output_path}).")
                 continue
             logger.trace(f"Exporting {attach_modality} to {output_path}...")
-            path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt)
+            path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt, as_uint8=as_uint8)
             paths.append(path)
 
         # export non-registered nodes
@@ -1156,14 +1157,16 @@ class IWsiReg:
                         logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
                         continue
                     logger.trace(f"Exporting {modality} to {output_path}...")
-                    path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt)
+                    path = self._transform_write_image(
+                        image_modality, transformations, output_path, fmt=fmt, as_uint8=as_uint8
+                    )
                     paths.append(path)
                 except KeyError:
                     logger.warning(f"Could not find transformation data for {modality}.")
 
         # export merge modalities
         if len(self.merge_modalities.items()) > 0:
-            path = self._transform_write_merge_images(to_original_size=to_original_size)
+            path = self._transform_write_merge_images(to_original_size=to_original_size, as_uint8=as_uint8)
             paths.append(path)
 
         return paths
@@ -1296,15 +1299,15 @@ class IWsiReg:
         fmt: WriterMode = "ome-tiff",
         preview: bool = False,
         tile_size: int = 512,
-        as_uint8: bool = False,
+        as_uint8: bool | None = None,
     ) -> Path:
         """Transform and write image."""
         from image2image_io.writers import OmeTiffWriter
 
         from image2image_wsireg.wrapper import ImageWrapper
 
+        as_uint8_ = as_uint8
         wrapper = ImageWrapper(modality, preview=preview)
-
         if fmt in ["ome-tiff", "ome-tiff-by-plane"]:
             writer = OmeTiffWriter(wrapper.reader, transformer=transformations)
         else:
@@ -1320,6 +1323,9 @@ class IWsiReg:
                 raise ValueError("No channel ids have been specified.")
             if len(channel_ids) > wrapper.reader.n_channels:
                 raise ValueError("More channel ids have been specified than there are channels.")
+        # override as_uint8 if explicitly specified
+        if isinstance(as_uint8_, bool):
+            as_uint8 = as_uint8_
         logger.trace(f"Writing {name} to {filename}; channel_ids={channel_ids}; as_uint8={as_uint8}")
         path = writer.write(
             name, output_dir=self.image_dir, channel_ids=channel_ids, as_uint8=as_uint8, tile_size=tile_size
@@ -1331,7 +1337,7 @@ class IWsiReg:
         to_original_size: bool = True,
         preview: bool = False,
         tile_size: int = 512,
-        as_uint8: bool = False,
+        as_uint8: bool | None = None,
     ) -> list[Path]:
         from image2image_io.models.merge import MergeImages
         from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
@@ -1341,12 +1347,14 @@ class IWsiReg:
                 return self.attachment_images[_image], True
             return None, False
 
+        as_uint8_ = as_uint8
         merged_paths = []
         for merge_name, sub_images in self.merge_modalities.items():
             paths = []
             pixel_sizes = []
             channel_names = []
             channel_ids = []
+            as_uint_all = []
             transformations: list[TransformSequence] = []
             non_reg_modalities = self._find_not_registered_modalities()
             for name in sub_images:
@@ -1358,6 +1366,8 @@ class IWsiReg:
                 channel_names.append(channel_names_)
                 if modality.export:
                     channel_ids.append(modality.export.channel_ids)
+                    as_uint_all.append(modality.export.as_uint8)
+                as_uint8 = all(as_uint_all)
                 if name not in non_reg_modalities and attachment_modality not in non_reg_modalities:
                     _, sub_im_transforms, _ = self._prepare_registered_image_transform(
                         name,
@@ -1374,8 +1384,11 @@ class IWsiReg:
                     )
                 transformations.append(sub_im_transforms)
 
-            output_path = self.image_dir / f"{self.name}-{merge_name}_merged-registered"
+            # override as_uint8 if explicitly specified
+            if isinstance(as_uint8_, bool):
+                as_uint8 = as_uint8_
 
+            output_path = self.image_dir / f"{self.name}-{merge_name}_merged-registered"
             logger.trace(f"Writing {merge_name} to {output_path.name}; channel_ids={channel_ids}; as_uint8={as_uint8}")
             merge = MergeImages(paths, pixel_sizes, channel_names=channel_names)
             writer = MergeOmeTiffWriter(merge, transformers=transformations)

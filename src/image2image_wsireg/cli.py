@@ -794,6 +794,14 @@ def register_runner(
 
 
 @click.option(
+    "--as_uint8/--no_as_uint8",
+    help="Downcast the image data format to uint8 which will substantially reduce the size of the files (unless it's"
+    " already in uint8...).",
+    is_flag=True,
+    default=None,
+    show_default=True,
+)
+@click.option(
     "--original_size/--no_original_size",
     help="Write images in their original size after applying transformations.",
     is_flag=True,
@@ -849,9 +857,10 @@ def export_cmd(
     remove_merged: bool,
     write_not_registered: bool,
     original_size: bool,
+    as_uint8: bool | None,
 ) -> None:
     """Export images."""
-    export_runner(project_dir, n_parallel, fmt, remove_merged, write_not_registered, original_size)
+    export_runner(project_dir, n_parallel, fmt, remove_merged, write_not_registered, original_size, as_uint8)
 
 
 def export_runner(
@@ -861,6 +870,7 @@ def export_runner(
     remove_merged: bool = True,
     write_not_registered: bool = True,
     original_size: bool = False,
+    as_uint8: bool | None = False,
     preview: bool = False,
 ) -> None:
     """Register images."""
@@ -875,7 +885,9 @@ def export_runner(
         ),
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
+        Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
     )
+    return
     for path in paths:
         obj = IWsiReg.from_path(path)
         obj.set_logger()
@@ -889,9 +901,18 @@ def export_runner(
             remove_merged=remove_merged,
             to_original_size=original_size,
             preview=preview,
+            as_uint8=as_uint8,
         )
 
 
+@click.option(
+    "--as_uint8/--no_as_uint8",
+    help="Downcast the image data format to uint8 which will substantially reduce the size of the files (unless it's"
+    " already in uint8...).",
+    is_flag=True,
+    default=None,
+    show_default=True,
+)
 @click.option(
     "-f",
     "--fmt",
@@ -939,10 +960,15 @@ def export_runner(
 )
 @cli.command("merge", help_group="Utility")
 def merge_cmd(
-    name: str, path: ty.Sequence[str], output_dir: str, crop_bbox: tuple[int, int, int, int] | None, fmt: WriterMode
+    name: str,
+    path: ty.Sequence[str],
+    output_dir: str,
+    crop_bbox: tuple[int, int, int, int] | None,
+    fmt: WriterMode,
+    as_uint8: bool | None,
 ) -> None:
     """Export images."""
-    merge_runner(name, path, output_dir, crop_bbox, fmt)
+    merge_runner(name, path, output_dir, crop_bbox, fmt, as_uint8)
 
 
 def merge_runner(
@@ -951,6 +977,7 @@ def merge_runner(
     output_dir: str,
     crop_bbox: tuple[int, int, int, int] | None,
     fmt: WriterMode = "ome-tiff",
+    as_uint8: bool | None = False,
 ) -> None:
     """Register images."""
     from image2image_wsireg.workflows.merge import merge as merge_images
@@ -961,9 +988,10 @@ def merge_runner(
         Parameter("Output directory", "-o/--output_dir", output_dir),
         Parameter("Crop bounding box", "-b/--crop_bbox", crop_bbox),
         Parameter("Output format", "-f/--fmt", fmt),
+        Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
     )
 
-    merge_images(name, list(paths), output_dir, crop_bbox, fmt)
+    merge_images(name, list(paths), output_dir, crop_bbox, fmt, as_uint8)
 
 
 def main():

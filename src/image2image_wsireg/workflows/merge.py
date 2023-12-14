@@ -16,6 +16,7 @@ def merge(
     output_dir: PathLike,
     crop_bbox: tuple[int, int, int, int] | None,
     fmt: str = "ome-tiff",
+    as_uint8: bool = False,
 ) -> Path:
     """Merge multiple images."""
     from image2image_io.models.merge import MergeImages
@@ -50,6 +51,6 @@ def merge(
     merge_obj = MergeImages(paths, pixel_sizes, channel_names=channel_names)
     writer = MergeOmeTiffWriter(merge_obj, crop_mask=crop_mask)
     with MeasureTimer() as timer:
-        writer.merge_write_image_by_plane(output_path.name, reader_names, output_dir=output_dir)
+        writer.merge_write_image_by_plane(output_path.name, reader_names, output_dir=output_dir, as_uint8=as_uint8)
     logger.info(f"Merged images in {timer()}.")
     return path
