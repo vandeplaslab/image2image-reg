@@ -14,6 +14,7 @@ class TransformMixin:
 
     resampler: sitk.ResampleImageFilter | None = None
 
+    name: str = "unknown"
     is_linear: bool = True
     output_origin: tuple[float, float] | None = None
     output_size: tuple[int, int] | None = None
@@ -34,7 +35,7 @@ class TransformMixin:
 
     def __repr__(self) -> str:
         """Return repr."""
-        return f"{self.__class__.__name__}(n={self.n_transforms}; is_linear={self.is_linear})"
+        return f"{self.__class__.__name__}(name={self.name}; n={self.n_transforms}; is_linear={self.is_linear})"
 
     @property
     def n_transforms(self) -> int:
@@ -239,6 +240,7 @@ class Transform(TransformMixin):
         self.output_direction = [float(p) for p in self.elastix_transform["Direction"]]
         self.resample_interpolator = self.elastix_transform["ResampleInterpolator"][0]
         self.is_linear = self.itk_transform.IsLinear()
+        self.name = self.itk_transform.GetName()
 
         if self.is_linear:
             self.inverse_transform = self.itk_transform.GetInverse()

@@ -142,9 +142,12 @@ class TransformSequence(TransformMixin):
         self.add_transforms(other.transforms, other.transform_sequence_index)
 
     @classmethod
-    def from_path(cls, path: PathLike) -> TransformSequence:
+    def from_path(cls, path: PathLike, first: bool = False) -> TransformSequence:
         """Load a transform sequence from a path."""
         transforms, transform_sequence_index = _read_wsireg_transform(path)
+        if first:
+            transforms = [transforms[0]]
+            transform_sequence_index = [0]
         return cls(transforms, transform_sequence_index)
 
 

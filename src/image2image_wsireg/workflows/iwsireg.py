@@ -427,7 +427,6 @@ class IWsiReg:
             return
         source = edge["modalities"]["source"]
         transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
-        # transform_tag = edge["transform_tag"]
         if transform_tag and not (self.transformations_dir / transform_tag).exists():
             logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
             return
@@ -445,7 +444,7 @@ class IWsiReg:
             initial_transforms_index = [idx for idx, _ in enumerate(initial_transforms_)]
             initial_transforms_seq = TransformSequence(initial_transforms_, initial_transforms_index)
 
-        transforms_seq = TransformSequence(self.transformations_dir / transform_tag)
+        transforms_seq = TransformSequence.from_path(self.transformations_dir / transform_tag, first=True)
         self.original_size_transforms[target_wrapper.name] = target_wrapper.original_size_transform
 
         # setup parameters

@@ -132,9 +132,7 @@ def register_2d_images(
     histogram_match: bool = False,
     return_image: bool = False,
 ):
-    """
-    Register 2D images with multiple models and return a list of elastix
-    transformation maps.
+    """Register 2D images with multiple models and return a list of elastix transformation maps.
 
     Parameters
     ----------
@@ -164,7 +162,7 @@ def register_2d_images(
     if target.image is None:
         raise ValueError("Target image is None")
 
-    if histogram_match :
+    if histogram_match:
         with MeasureTimer() as timer:
             matcher = sitk.HistogramMatchingImageFilter()
             matcher.SetNumberOfHistogramLevels(64)

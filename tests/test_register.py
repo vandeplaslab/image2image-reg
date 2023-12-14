@@ -9,7 +9,11 @@ from image2image_wsireg.workflows import IWsiReg
 
 
 def _make_ellipse_project(
-    tmp_path: Path, with_mask: bool = False, with_initial: bool = False, with_bbox: bool = False
+    tmp_path: Path,
+    with_mask: bool = False,
+    with_initial: bool = False,
+    with_bbox: bool = False,
+    with_through: bool = False,
 ) -> IWsiReg:
     source = get_test_file("ellipse_moving.tiff")
     target = get_test_file("ellipse_target.tiff")
@@ -25,7 +29,13 @@ def _make_ellipse_project(
         mask_bbox = (500, 500, 2000, 2000)
     obj.add_modality("source", source, preprocessing=pre)
     obj.add_modality("target", target, mask=mask, preprocessing=Preprocessing.basic(), mask_bbox=mask_bbox)
-    obj.add_registration_path("source", "target", transform=["rigid"])
+    if with_through:
+        obj.add_modality("through", source, preprocessing=Preprocessing.basic())
+    if with_through:
+        obj.add_registration_path("through", "target", transform=["rigid"])
+        obj.add_registration_path("source", "target", through="through", transform=["rigid"])
+    else:
+        obj.add_registration_path("source", "target", transform=["rigid"])
     return obj
 
 
@@ -49,6 +59,14 @@ def test_register(tmp_path):
     assert obj.is_registered, "Registration failed."
     obj.write_images()
     assert len(list(obj.image_dir.glob("*.tiff"))) == 2, "No images written."
+
+
+def test_register_through(tmp_path):
+    obj = _make_ellipse_project(tmp_path, with_through=True)
+    obj.register()
+    assert obj.is_registered, "Registration failed."
+    obj.write_images()
+    assert len(list(obj.image_dir.glob("*.tiff"))) == 3, "No images written."
 
 
 def test_register_with_initial(tmp_path):
