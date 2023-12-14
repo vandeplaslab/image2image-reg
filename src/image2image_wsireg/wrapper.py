@@ -34,10 +34,10 @@ class ImageWrapper:
 
         # TODO: this won't work with arrays
         self.reader: BaseReader = get_simple_reader(modality.path, init_pyramid=False, quick=quick)
-        if modality.channel_names:
-            self.reader._channel_names = modality.channel_names
-        if modality.channel_colors:
-            self.reader._channel_colors = modality.channel_colors
+        # if modality.channel_names:
+        #     self.reader._channel_names = modality.channel_names
+        # if modality.channel_colors:
+        #     self.reader._channel_colors = modality.channel_colors
 
         self.image: sitk.Image | None = None
         self._mask: sitk.Image | None = None
@@ -126,24 +126,23 @@ class ImageWrapper:
 
     def load_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None) -> None:
         """Load data from cache."""
-        # TODO: this should do partial checks (e.g. image, mask, pre-processing and initial)
         if not use_cache:
             return
         filename = self.get_cache_path(self.modality, cache_dir, extra=extra, preprocessing=self.preprocessing)
         if filename.exists():
             self.image = sitk.ReadImage(str(filename))
             self.initial_transforms = read_json_data(filename_with_suffix(filename, "initial", ".json"))
-            if filename_with_suffix(filename, "preprocessing", ".json").exists():
-                self.preprocessing = Preprocessing(
-                    **read_json_data(filename_with_suffix(filename, "preprocessing", ".json"))
-                )
-            if filename_with_suffix(filename, "original_size_transform", ".json").exists():
-                self.original_size_transform = read_json_data(
-                    filename_with_suffix(filename, "original_size_transform", ".json")
-                )
-            if filename_with_suffix(filename, "mask", ".tiff").exists():
-                self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
-            logger.trace(f"Loaded image from cache: {filename} for {self.modality.name}")
+        logger.trace(f"Loaded image from cache: {filename} for {self.modality.name}")
+        if filename_with_suffix(filename, "preprocessing", ".json").exists():
+            self.preprocessing = Preprocessing(
+                **read_json_data(filename_with_suffix(filename, "preprocessing", ".json"))
+            )
+        if filename_with_suffix(filename, "original_size_transform", ".json").exists():
+            self.original_size_transform = read_json_data(
+                filename_with_suffix(filename, "original_size_transform", ".json")
+            )
+        if filename_with_suffix(filename, "mask", ".tiff").exists():
+            self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
 
     @classmethod
     def load_original_size_transform(cls, modality: Modality, cache_dir: PathLike) -> dict | None:
@@ -180,8 +179,7 @@ class ImageWrapper:
             logger.trace(f"Pre-processed image in {timer(since_last=True)}")
 
     def read_mask(self, mask: str | Path | sitk.Image | np.ndarray) -> sitk.Image:
-        """
-        Read a mask from geoJSON or a binary image.
+        """Read a mask from geoJSON or a binary image.
 
         Parameters
         ----------

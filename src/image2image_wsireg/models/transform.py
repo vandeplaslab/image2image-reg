@@ -67,8 +67,7 @@ class TransformMixin:
         interpolator = ELX_TO_ITK_INTERPOLATORS[self.resample_interpolator]
         resampler.SetInterpolator(interpolator)  # type: ignore[no-untyped-call]
         # transform = self.inverse_final_transform if inverse else self.final_transform
-        transform = self.final_transform
-        resampler.SetTransform(transform)  # type: ignore[no-untyped-call]
+        resampler.SetTransform(self.final_transform)  # type: ignore[no-untyped-call]
         self.resampler = resampler
 
     def compute_inverse_nonlinear(self) -> None:
