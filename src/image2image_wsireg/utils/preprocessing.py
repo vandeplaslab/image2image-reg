@@ -152,12 +152,12 @@ def preprocess_intensity(
     if preprocessing.image_type == ImageType.DARK:
         preprocessing.invert_intensity = False
     elif preprocessing.image_type == ImageType.LIGHT:
-        preprocessing.nax_intensity_projection = False
+        preprocessing.max_intensity_projection = False
         preprocessing.contrast_enhance = False
         if is_rgb:
             preprocessing.invert_intensity = True
 
-    if preprocessing.nax_intensity_projection:
+    if preprocessing.max_intensity_projection:
         image = sitk_max_int_proj(image)
 
     if preprocessing.contrast_enhance:

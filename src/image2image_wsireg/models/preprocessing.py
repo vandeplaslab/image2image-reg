@@ -33,7 +33,7 @@ class Preprocessing(BaseModel):
     image_type: ImageType
         Whether image is dark or light background. Light background images are intensity inverted
         by default
-    nax_intensity_projection: bool
+    max_intensity_projection: bool
         Perform max intensity projection number of channels > 1.
     contrast_enhance: bool
         Enhance contrast of image
@@ -69,7 +69,7 @@ class Preprocessing(BaseModel):
 
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK
-    nax_intensity_projection: bool = Field(True, alias="max_int_proj")
+    max_intensity_projection: bool = Field(True, alias="max_int_proj")
     channel_indices: ty.Optional[list[int]] = Field(None, alias="ch_indices")
     as_uint8: bool = True
     contrast_enhance: bool = False
