@@ -542,6 +542,7 @@ class IWsiReg:
             mask=mask,
             output_pixel_size=output_pixel_size,
             mask_bbox=mask_bbox,
+            export=export,
         )
         logger.trace(f"Added modality '{name}'.")
         return self.modalities[name]

@@ -1,16 +1,16 @@
 """Export model."""
 import typing as ty
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, validator
 
 
 class Export(BaseModel):
     """Specify how modality should be exported."""
 
-    channel_ids: ty.Optional[list[int]] = Field(None, alias="channel_indices")
-    channel_names: ty.Optional[list[str]] = Field(None)
-    channel_colors: ty.Optional[list[str]] = Field(None)
-    as_uint8: bool = Field(False, alias="export_as_uint8")
+    as_uint8: bool = False
+    channel_ids: ty.Optional[list[int]] = None
+    channel_names: ty.Optional[list[str]] = None
+    channel_colors: ty.Optional[list[str]] = None
 
     def to_dict(self) -> dict:
         """Export as dictionary."""

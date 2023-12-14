@@ -1,5 +1,5 @@
 """Test bbox."""
-from image2image_wsireg.models import BoundingBox
+from image2image_wsireg.models import BoundingBox, Export
 
 
 def test_bbox():
@@ -21,3 +21,15 @@ def test_bbox():
     assert image.GetSize() == (100, 100), "Size should be (100, 100)"
     assert image.GetSpacing() == (1.0, 1.0), "Spacing should be (1.0, 1.0)"
     assert image.GetPixelID() == 1, "PixelID should be 1 (uint8)"
+
+
+def test_export():
+    export = Export(as_uint8=True, channel_ids=[0, 1, 2])
+    assert export.as_uint8 is True, "as_uint8 should be True"
+    assert export.channel_ids == [0, 1, 2], "channel_ids should be [0, 1, 2]"
+
+    data = {"as_uint8": True, "channel_ids": [0, 1, 2]}
+
+    export = Export(**data)
+    assert export.as_uint8 is True, "as_uint8 should be True"
+    assert export.channel_ids == [0, 1, 2], "channel_ids should be [0, 1, 2]"
