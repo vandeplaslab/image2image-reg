@@ -251,58 +251,58 @@ class IWsiReg:
         logger.trace(f"Restored from config in {timer()}")
         return obj
 
-    def print_summary(self) -> None:
+    def print_summary(self, func: ty.Callable = logger.info) -> None:
         """Print summary about the project."""
         elbow, pipe, tee, blank = "└──", "│  ", "├──", "   "
 
-        print(f"Project name: {self.name}")
-        print(f"Project directory: {self.project_dir}")
-        print(f"Merging images: {self.merge_images}")
-        print(f"Pairwise registration: {self.pairwise}")
-        # print information about the specified modalities
-        print(f"Number of modalities: {len(self.modalities)}")
+        func(f"Project name: {self.name}")
+        func(f"Project directory: {self.project_dir}")
+        func(f"Merging images: {self.merge_images}")
+        func(f"Pairwise registration: {self.pairwise}")
+        # func information about the specified modalities
+        func(f"Number of modalities: {len(self.modalities)}")
         n = len(self.modalities) - 1
         for i, modality in enumerate(self.modalities.values()):
-            print(f" {elbow if i == n else tee}{modality.name} ({modality.path})")
-            print(f" {pipe if i != n else blank}{tee}Preprocessing: {modality.preprocessing is not None}")
-            print(f" {pipe if i != n else blank}{elbow}Export: {modality.export}")
+            func(f" {elbow if i == n else tee}{modality.name} ({modality.path})")
+            func(f" {pipe if i != n else blank}{tee}Preprocessing: {modality.preprocessing is not None}")
+            func(f" {pipe if i != n else blank}{elbow}Export: {modality.export}")
 
-        # print information about registration paths
-        print(f"Number of registration paths: {len(self.registration_paths)}")
+        # func information about registration paths
+        func(f"Number of registration paths: {len(self.registration_paths)}")
         n = len(self.registration_paths) - 1
         for i, (source, targets) in enumerate(self.registration_paths.items()):
             if len(targets) == 1:
-                print(f" {elbow if i == n else tee}{source} to {targets[0]}")
+                func(f" {elbow if i == n else tee}{source} to {targets[0]}")
             else:
-                print(f" {elbow if i == n else tee}{source} to {targets[1]} via {targets[0]}")
+                func(f" {elbow if i == n else tee}{source} to {targets[1]} via {targets[0]}")
 
-        # print information about registration nodes
-        print(f"Number of registrations: {self.n_registrations}")
+        # func information about registration nodes
+        func(f"Number of registrations: {self.n_registrations}")
         n = len(self.registration_nodes) - 1
         for i, edge in enumerate(self.registration_nodes):
             insert = pipe if i != n else blank
             modalities = edge["modalities"]
-            print(f" {tee if i != n else elbow}{modalities['source']} to {modalities['target']}")
-            print(f" {insert}{tee}Transformations: {edge['params']}")
-            print(f" {insert}{tee}Registered: {edge['registered']}")
-            print(f" {insert}{tee}Source preprocessing: {edge['source_preprocessing']}")
-            print(f" {insert}{elbow}Target preprocessing: {edge['target_preprocessing']}")
+            func(f" {tee if i != n else elbow}{modalities['source']} to {modalities['target']}")
+            func(f" {insert}{tee}Transformations: {edge['params']}")
+            func(f" {insert}{tee}Registered: {edge['registered']}")
+            func(f" {insert}{tee}Source preprocessing: {edge['source_preprocessing']}")
+            func(f" {insert}{elbow}Target preprocessing: {edge['target_preprocessing']}")
 
-        # print information about attachment images/shapes
-        print(f"Number of attachment images: {len(self.attachment_images)}")
+        # func information about attachment images/shapes
+        func(f"Number of attachment images: {len(self.attachment_images)}")
         n = len(self.attachment_images) - 1
         for i, (name, attach_to) in enumerate(self.attachment_images.items()):
-            print(f" {elbow if i == n else tee}{name} ({attach_to})")
-        print(f"Number of attachment shapes: {len(self.attachment_shapes)}")
+            func(f" {elbow if i == n else tee}{name} ({attach_to})")
+        func(f"Number of attachment shapes: {len(self.attachment_shapes)}")
         n = len(self.attachment_shapes) - 1
         for i, (name, modality) in enumerate(self.attachment_shapes.items()):
-            print(f" {elbow if i == n else tee}{name} ({modality.path})")
+            func(f" {elbow if i == n else tee}{name} ({modality.path})")
 
-        # print information about merge modalities
-        print(f"Number of merge modalities: {len(self.merge_modalities)}")
+        # func information about merge modalities
+        func(f"Number of merge modalities: {len(self.merge_modalities)}")
         n = len(self.merge_modalities) - 1
         for i, (name, merge_modalities) in enumerate(self.merge_modalities.items()):
-            print(f" {elbow if i == n else tee}{name} ({merge_modalities})")
+            func(f" {elbow if i == n else tee}{name} ({merge_modalities})")
 
     def validate(self) -> None:
         """Perform several checks on the project."""
