@@ -1059,6 +1059,7 @@ class IWsiReg:
         self,
         n_parallel: int = 1,
         fmt: WriterMode = "ome-tiff",
+        write_registered: bool = True,
         write_not_registered: bool = True,
         remove_merged: bool = True,
         to_original_size: bool = True,
@@ -1103,44 +1104,49 @@ class IWsiReg:
                     logger.trace(f"Removed {merge_modality} from not registered modalities as it will be merged.")
 
         # export modalities
-        for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
-            image_modality, transformations, output_path = self._prepare_registered_image_transform(
-                modality, attachment=False, to_original_size=to_original_size
-            )
-            if _get_with_suffix(output_path).exists() and not override:
-                logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
-                continue
-            logger.trace(f"Exporting {modality} to {output_path}...")
-            path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt, as_uint8=as_uint8)
-            paths.append(path)
-
-        # export attachment modalities
-        for modality, attach_to_modality in tqdm(
-            self.attachment_images.items(), desc="Exporting attachment modalities..."
-        ):
-            if modality in merge_modalities and remove_merged:
-                continue
-            attach_modality = self.modalities[attach_to_modality]
-            if attach_to_modality in self._find_not_registered_modalities():
-                image_modality, transformations, output_path = self._prepare_not_registered_image_transform(
-                    modality,
-                    attachment=True,
-                    attachment_modality=attach_modality,
-                    to_original_size=to_original_size,
-                )
-            else:
+        if write_registered:
+            for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
                 image_modality, transformations, output_path = self._prepare_registered_image_transform(
-                    modality,
-                    attachment=True,
-                    attachment_modality=attach_modality,
-                    to_original_size=to_original_size,
+                    modality, attachment=False, to_original_size=to_original_size
                 )
-            if _get_with_suffix(output_path).exists() and not override:
-                logger.trace(f"Skipping {attach_to_modality} as it already exists ({output_path}).")
-                continue
-            logger.trace(f"Exporting {attach_modality} to {output_path}...")
-            path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt, as_uint8=as_uint8)
-            paths.append(path)
+                if _get_with_suffix(output_path).exists() and not override:
+                    logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
+                    continue
+                logger.trace(f"Exporting {modality} to {output_path}...")
+                path = self._transform_write_image(
+                    image_modality, transformations, output_path, fmt=fmt, as_uint8=as_uint8
+                )
+                paths.append(path)
+
+            # export attachment modalities
+            for modality, attach_to_modality in tqdm(
+                self.attachment_images.items(), desc="Exporting attachment modalities..."
+            ):
+                if modality in merge_modalities and remove_merged:
+                    continue
+                attach_modality = self.modalities[attach_to_modality]
+                if attach_to_modality in self._find_not_registered_modalities():
+                    image_modality, transformations, output_path = self._prepare_not_registered_image_transform(
+                        modality,
+                        attachment=True,
+                        attachment_modality=attach_modality,
+                        to_original_size=to_original_size,
+                    )
+                else:
+                    image_modality, transformations, output_path = self._prepare_registered_image_transform(
+                        modality,
+                        attachment=True,
+                        attachment_modality=attach_modality,
+                        to_original_size=to_original_size,
+                    )
+                if _get_with_suffix(output_path).exists() and not override:
+                    logger.trace(f"Skipping {attach_to_modality} as it already exists ({output_path}).")
+                    continue
+                logger.trace(f"Exporting {attach_modality} to {output_path}...")
+                path = self._transform_write_image(
+                    image_modality, transformations, output_path, fmt=fmt, as_uint8=as_uint8
+                )
+                paths.append(path)
 
         # export non-registered nodes
         if write_not_registered:

@@ -809,6 +809,13 @@ def register_runner(
     show_default=True,
 )
 @click.option(
+    "--remove_merged/--no_remove_merged",
+    help="Remove written images that have been merged.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+@click.option(
     "--write_merged/--no_write_merged",
     help="Write merge images. Nothing will happen if merge modalities have not been specified.",
     is_flag=True,
@@ -823,8 +830,8 @@ def register_runner(
     show_default=True,
 )
 @click.option(
-    "--remove_merged/--no_remove_merged",
-    help="Remove written images that have been merged.",
+    "-write_registered/--no_write_registered",
+    help="Write registered images.",
     is_flag=True,
     default=True,
     show_default=True,
@@ -877,9 +884,10 @@ def export_runner(
     paths: ty.Sequence[str],
     n_parallel: int = 1,
     fmt: WriterMode = "ome-tiff",
-    remove_merged: bool = True,
+    write_registered: bool = True,
     write_not_registered: bool = True,
     write_merged: bool = True,
+    remove_merged: bool = True,
     original_size: bool = False,
     as_uint8: bool | None = False,
     preview: bool = False,
@@ -894,6 +902,7 @@ def export_runner(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
         Parameter("Output format", "-f/--fmt", fmt),
+        Parameter("Write registered images", "-write_registered/--no_write_registered", write_registered),
         Parameter(
             "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
         ),
@@ -911,12 +920,13 @@ def export_runner(
         obj.write_images(
             n_parallel=n_parallel,
             fmt=fmt,
+            write_registered=write_registered,
             write_not_registered=write_not_registered,
+            write_merged=write_merged,
             remove_merged=remove_merged,
             to_original_size=original_size,
             preview=preview,
             as_uint8=as_uint8,
-            write_merged=write_merged,
         )
 
 
