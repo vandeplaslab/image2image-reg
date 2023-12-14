@@ -32,6 +32,10 @@ class TransformMixin:
                 raise ValueError("Resampler not built, call `build_resampler` first")
         return self.resampler.Execute(image)  # type: ignore[no-any-return, no-untyped-call]
 
+    def __repr__(self) -> str:
+        """Return repr."""
+        return f"{self.__class__.__name__}(n={self.n_transforms}; is_linear={self.is_linear})"
+
     @property
     def n_transforms(self) -> int:
         """Number of transformations in sequence."""
@@ -62,7 +66,8 @@ class TransformMixin:
 
         interpolator = ELX_TO_ITK_INTERPOLATORS[self.resample_interpolator]
         resampler.SetInterpolator(interpolator)  # type: ignore[no-untyped-call]
-        transform = self.inverse_final_transform if inverse else self.final_transform
+        # transform = self.inverse_final_transform if inverse else self.final_transform
+        transform = self.final_transform
         resampler.SetTransform(transform)  # type: ignore[no-untyped-call]
         self.resampler = resampler
 
@@ -119,9 +124,8 @@ class TransformMixin:
         return np.stack(transformed_points)
 
     def set_output_spacing(self, spacing: tuple[float, float] | tuple[int, int]) -> None:
-        """
-        Method that allows setting the output spacing of the resampler
-        to resampled to any pixel spacing desired.
+        """Method that allows setting the output spacing of the resampler to resampled to any pixel spacing desired.
+
         This will also change the output_size to match.
 
         Parameters
@@ -197,6 +201,7 @@ class TransformMixin:
 
 class Transform(TransformMixin):
     """Container for elastix transform that manages inversion and other metadata.
+
     Converts elastix transformation dict to it's SimpleITK representation.
 
     Attributes

@@ -809,6 +809,13 @@ def register_runner(
     show_default=True,
 )
 @click.option(
+    "--write_merged/--no_write_merged",
+    help="Write merge images. Nothing will happen if merge modalities have not been specified.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+@click.option(
     "--write_not_registered/--no_write_not_registered",
     help="Write not-registered images.",
     is_flag=True,
@@ -856,11 +863,14 @@ def export_cmd(
     fmt: WriterMode,
     remove_merged: bool,
     write_not_registered: bool,
+    write_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
 ) -> None:
     """Export images."""
-    export_runner(project_dir, n_parallel, fmt, remove_merged, write_not_registered, original_size, as_uint8)
+    export_runner(
+        project_dir, n_parallel, fmt, remove_merged, write_not_registered, write_merged, original_size, as_uint8
+    )
 
 
 def export_runner(
@@ -869,12 +879,16 @@ def export_runner(
     fmt: WriterMode = "ome-tiff",
     remove_merged: bool = True,
     write_not_registered: bool = True,
+    write_merged: bool = True,
     original_size: bool = False,
     as_uint8: bool | None = False,
     preview: bool = False,
 ) -> None:
     """Register images."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
+
+    if not write_merged:
+        remove_merged = False
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
@@ -883,6 +897,7 @@ def export_runner(
         Parameter(
             "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
         ),
+        Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
@@ -901,6 +916,7 @@ def export_runner(
             to_original_size=original_size,
             preview=preview,
             as_uint8=as_uint8,
+            write_merged=write_merged,
         )
 
 

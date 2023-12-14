@@ -1065,6 +1065,7 @@ class IWsiReg:
         to_original_size: bool = True,
         preview: bool = False,
         as_uint8: bool | None = None,
+        write_merged: bool = True,
         override: bool = False,
     ) -> list | None:
         """Export images after applying transformation."""
@@ -1165,7 +1166,7 @@ class IWsiReg:
                     logger.warning(f"Could not find transformation data for {modality}.")
 
         # export merge modalities
-        if len(self.merge_modalities.items()) > 0:
+        if write_merged and self.merge_modalities:
             path = self._transform_write_merge_images(to_original_size=to_original_size, as_uint8=as_uint8)
             paths.append(path)
 
