@@ -879,13 +879,13 @@ def export_cmd(
     export_runner(
         project_dir,
         n_parallel,
-        fmt,
-        write_registered,
-        write_not_registered,
-        write_merged,
-        remove_merged,
-        original_size,
-        as_uint8,
+        fmt=fmt,
+        write_registered=write_registered,
+        write_not_registered=write_not_registered,
+        write_merged=write_merged,
+        remove_merged=remove_merged,
+        original_size=original_size,
+        as_uint8=as_uint8,
     )
 
 
@@ -911,7 +911,7 @@ def export_runner(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
         Parameter("Output format", "-f/--fmt", fmt),
-        Parameter("Write registered images", "-write_registered/--no_write_registered", write_registered),
+        Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
         Parameter(
             "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
         ),
