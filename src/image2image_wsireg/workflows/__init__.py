@@ -1,4 +1,4 @@
 """Init."""
-from .wsireg2d import WsiReg2d
+from .iwsireg import IWsiReg
 
-__all__ = ["WsiReg2d"]
+__all__ = ["IWsiReg"]

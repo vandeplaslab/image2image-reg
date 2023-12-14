@@ -2,7 +2,7 @@
 import os
 
 from image2image_wsireg.utils._test import get_test_file
-from image2image_wsireg.workflows import WsiReg2d
+from image2image_wsireg.workflows import IWsiReg
 
 
 def test_cli_entrypoint():
@@ -141,7 +141,7 @@ def test_cli_add_images_path_mask_bbox(tmp_path):
     exit_status = os.system(f"iwsireg --debug add-path -p '{path!s}' -s source -t target -R rigid")
     assert exit_status == 0
 
-    obj = WsiReg2d.from_path(path)
+    obj = IWsiReg.from_path(path)
     modality = obj.modalities["target"]
     assert modality.mask_bbox is not None, "No mask bbox found."
     assert modality.mask_bbox.x == 0

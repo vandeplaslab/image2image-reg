@@ -17,7 +17,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from image2image_wsireg.enums import ArrayLike, WriterMode
-from image2image_wsireg.models import Modality, Preprocessing, Registration, Transform, TransformSequence
+from image2image_wsireg.models import Export, Modality, Preprocessing, Registration, Transform, TransformSequence
 
 if ty.TYPE_CHECKING:
     from image2image_io.readers import BaseReader
@@ -95,7 +95,7 @@ class Config(ty.TypedDict):
     merge_images: dict[str, list[str]]
 
 
-class WsiReg2d:
+class IWsiReg:
     """Whole slide registration utilizing WsiReg approach of graph based registration."""
 
     CONFIG_NAME = "project.config.json"
@@ -221,7 +221,7 @@ class WsiReg2d:
         return all(reg_edge["registered"] for reg_edge in self.registration_nodes)
 
     @classmethod
-    def from_path(cls, path: PathLike) -> WsiReg2d:
+    def from_path(cls, path: PathLike) -> IWsiReg:
         """Initialize based on the project path."""
         path = Path(path)
         if not path.exists():
@@ -376,6 +376,7 @@ class WsiReg2d:
                 mask_bbox=modality.get("mask_bbox", None),
                 output_pixel_size=modality.get("output_pixel_size", None),
                 pixel_size=modality.get("pixel_size", None),
+                export=Export(**modality["export"]) if modality.get("export") else None,
             )
         # add registration paths
         for _key, edge in config["registration_paths"].items():
@@ -456,6 +457,7 @@ class WsiReg2d:
         preprocessing: Preprocessing | None = None,
         mask: PathLike | None = None,
         mask_bbox: tuple[int, int, int, int] | None = None,
+        export: Export | dict[str, ty.Any] | None = None,
     ) -> Modality:
         """Add modality."""
         from image2image_io._reader import get_simple_reader, is_supported
@@ -476,6 +478,7 @@ class WsiReg2d:
             mask=mask,
             mask_bbox=mask_bbox,
             preprocessing=preprocessing,
+            export=export,
         )
 
     def add_modality(
@@ -489,6 +492,7 @@ class WsiReg2d:
         mask: PathLike | np.ndarray | None = None,
         mask_bbox: tuple[int, int, int, int] | None = None,
         output_pixel_size: tuple[float, float] | None = None,
+        export: Export | dict[str, ty.Any] | None = None,
     ) -> Modality:
         """Add modality."""
         from image2image_io._reader import is_supported
@@ -502,6 +506,8 @@ class WsiReg2d:
             raise ValueError("Modality name already exists.")
         if isinstance(preprocessing, dict):
             preprocessing = Preprocessing(**preprocessing)
+        if isinstance(export, dict):
+            export = Export(**export)
         if isinstance(mask, (str, Path)):
             mask = Path(mask)
             if not mask.exists():

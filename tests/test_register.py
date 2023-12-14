@@ -5,17 +5,17 @@ import numpy as np
 
 from image2image_wsireg.models import Preprocessing
 from image2image_wsireg.utils._test import get_test_file
-from image2image_wsireg.workflows import WsiReg2d
+from image2image_wsireg.workflows import IWsiReg
 
 
 def _make_ellipse_project(
     tmp_path: Path, with_mask: bool = False, with_initial: bool = False, with_bbox: bool = False
-) -> WsiReg2d:
+) -> IWsiReg:
     source = get_test_file("ellipse_moving.tiff")
     target = get_test_file("ellipse_target.tiff")
     mask = get_test_file("ellipse_mask.tiff") if with_mask else None
 
-    obj = WsiReg2d(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+    obj = IWsiReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
     obj.set_logger()
     pre = Preprocessing.basic()
     if with_initial:
