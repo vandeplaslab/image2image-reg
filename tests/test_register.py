@@ -101,6 +101,14 @@ def test_register_with_initial_with_mask(tmp_path):
     assert len(list(obj.image_dir.glob("*.tiff"))) == 2, "No images written."
 
 
+def test_register_through_with_initial(tmp_path):
+    obj = _make_ellipse_project(tmp_path, with_through=True, with_initial=True)
+    obj.register()
+    assert obj.is_registered, "Registration failed."
+    obj.write_images()
+    assert len(list(obj.image_dir.glob("*.tiff"))) == 3, "No images written."
+
+
 def test_register_with_initial_with_bbox_mask(tmp_path):
     obj = _make_ellipse_project(tmp_path, with_bbox=True, with_initial=True)
     obj.register()

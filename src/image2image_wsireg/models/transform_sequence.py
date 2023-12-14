@@ -143,26 +143,41 @@ class TransformSequence(TransformMixin):
 
     @classmethod
     def from_path(cls, path: PathLike, first: bool = False) -> TransformSequence:
-        """Load a transform sequence from a path."""
-        transforms, transform_sequence_index = _read_wsireg_transform(path)
-        if first:
-            transforms = [transforms[0]]
-            transform_sequence_index = [0]
+        """Load a transform sequence from a path.
+
+        Parameters
+        ----------
+        path : PathLike
+            Path to transform sequence file.
+        first : bool, optional
+            Load only the first transform from the file. This is necessary when e.g. reloading transform data from disk
+            after a registration has been performed but the transform sequence will be altered before being applied.
+            This is ESSENTIAL when doing anything within the IWsiReg object as it will apply other transforms to the
+            image. The transformation json file usually stores ALL necessary transformations.
+        """
+        # TODO: check what happens if there is initial transformation - e.g. user supplied affine matrix
+        transforms, transform_sequence_index = _read_wsireg_transform(path, first)
+        # if first:
+        #     transforms = [transforms[0]]
+        #     transform_sequence_index = [0]
         return cls(transforms, transform_sequence_index)
 
 
 def _read_wsireg_transform(
-    parameter_data: str | (Path | dict[str, list[str]])
+    parameter_data: str | (Path | dict[str, list[str]]), first: bool = False
 ) -> tuple[list[dict[str, list[str]]], list[int]]:
     """Convert wsireg transform dict or from file to List of Transforms."""
     transforms = parameter_data
     if isinstance(parameter_data, (str, Path)):
         transforms: dict[str, list[str]] = read_json_data(parameter_data)
 
+    allowed_n = 1 if first else -1
     index = 0
     transform_list = []
     transform_sequence_index = []
     for key, value in transforms.items():
+        if "initial" not in key and first:
+            allowed_n -= 1
         if key == "initial":
             if isinstance(value, dict):
                 transform_list.append(value)
@@ -183,4 +198,6 @@ def _read_wsireg_transform(
                     transform_list.append(tform)
                     transform_sequence_index.append(index)
                 index += 1
+        if allowed_n == 0 and first:
+            break
     return transform_list, transform_sequence_index
