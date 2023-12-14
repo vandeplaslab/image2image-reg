@@ -65,7 +65,7 @@ class ImageWrapper:
         mask = sitk_image_to_itk_image(self.mask) if self.mask else None
         if inplace:
             self.image = image
-            self.mask = mask
+            self._mask = mask
         return image, mask
 
     @staticmethod
@@ -142,7 +142,7 @@ class ImageWrapper:
                     filename_with_suffix(filename, "original_size_transform", ".json")
                 )
             if filename_with_suffix(filename, "mask", ".tiff").exists():
-                self.mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
+                self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
             logger.trace(f"Loaded image from cache: {filename} for {self.modality.name}")
 
     @classmethod
@@ -172,11 +172,11 @@ class ImageWrapper:
             mask = self.mask
             # set image
             if preprocessing:
-                self.image, self.mask, self.initial_transforms, self.original_size_transform = preprocess(
+                self.image, self._mask, self.initial_transforms, self.original_size_transform = preprocess(
                     image, mask, preprocessing, self.reader.resolution, self.reader.is_rgb, self.initial_transforms
                 )
             else:
-                self.image, self.mask, self.original_size_transform = image, mask, None
+                self.image, self._mask, self.original_size_transform = image, mask, None
             logger.trace(f"Pre-processed image in {timer(since_last=True)}")
 
     def read_mask(self, mask: str | Path | sitk.Image | np.ndarray) -> sitk.Image:
