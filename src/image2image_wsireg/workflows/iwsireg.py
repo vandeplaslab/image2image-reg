@@ -1323,6 +1323,7 @@ class IWsiReg:
                 raise ValueError("No channel ids have been specified.")
             if len(channel_ids) > wrapper.reader.n_channels:
                 raise ValueError("More channel ids have been specified than there are channels.")
+
         # override as_uint8 if explicitly specified
         if isinstance(as_uint8_, bool):
             as_uint8 = as_uint8_
