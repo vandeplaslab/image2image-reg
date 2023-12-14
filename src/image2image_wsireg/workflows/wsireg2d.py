@@ -1081,14 +1081,14 @@ class WsiReg2d:
 
         # export modalities
         for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
-            im_data, transformations, output_path = self._prepare_registered_image_transform(
+            image_modality, transformations, output_path = self._prepare_registered_image_transform(
                 modality, attachment=False, to_original_size=to_original_size
             )
             if _get_with_suffix(output_path).exists() and not override:
                 logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
                 continue
             logger.trace(f"Exporting {modality} to {output_path}...")
-            path = self._transform_write_image(im_data, transformations, output_path, fmt=fmt)
+            path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt)
             paths.append(path)
 
         # export attachment modalities
@@ -1099,14 +1099,14 @@ class WsiReg2d:
                 continue
             attach_modality = self.modalities[attach_to_modality]
             if attach_to_modality in self._find_not_registered_modalities():
-                im_data, transformations, output_path = self._prepare_not_registered_image_transform(
+                image_modality, transformations, output_path = self._prepare_not_registered_image_transform(
                     modality,
                     attachment=True,
                     attachment_modality=attach_modality,
                     to_original_size=to_original_size,
                 )
             else:
-                im_data, transformations, output_path = self._prepare_registered_image_transform(
+                image_modality, transformations, output_path = self._prepare_registered_image_transform(
                     modality,
                     attachment=True,
                     attachment_modality=attach_modality,
@@ -1116,7 +1116,7 @@ class WsiReg2d:
                 logger.trace(f"Skipping {attach_to_modality} as it already exists ({output_path}).")
                 continue
             logger.trace(f"Exporting {attach_modality} to {output_path}...")
-            path = self._transform_write_image(im_data, transformations, output_path, fmt=fmt)
+            path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt)
             paths.append(path)
 
         # export non-registered nodes
@@ -1126,7 +1126,7 @@ class WsiReg2d:
                 if modality in merge_modalities and remove_merged:
                     continue
                 try:
-                    im_data, transformations, output_path = self._prepare_not_registered_image_transform(
+                    image_modality, transformations, output_path = self._prepare_not_registered_image_transform(
                         modality,
                         to_original_size=to_original_size,
                     )
@@ -1134,7 +1134,7 @@ class WsiReg2d:
                         logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
                         continue
                     logger.trace(f"Exporting {modality} to {output_path}...")
-                    path = self._transform_write_image(im_data, transformations, output_path, fmt=fmt)
+                    path = self._transform_write_image(image_modality, transformations, output_path, fmt=fmt)
                     paths.append(path)
                 except KeyError:
                     logger.warning(f"Could not find transformation data for {modality}.")
@@ -1266,8 +1266,51 @@ class WsiReg2d:
             im_data = self.modalities[im_data_key]
         return im_data, transformations, output_path
 
-    def _transform_write_merge_images(self, to_original_size: bool = True) -> list[Path]:
-        from image2image_io.readers.merge import MergeImages
+    def _transform_write_image(
+        self,
+        modality: Modality,
+        transformations: TransformSequence | None,
+        filename: Path,
+        fmt: WriterMode = "ome-tiff",
+        preview: bool = False,
+        tile_size: int = 512,
+        as_uint8: bool = False,
+    ) -> Path:
+        """Transform and write image."""
+        from image2image_io.writers import OmeTiffWriter
+
+        from image2image_wsireg.wrapper import ImageWrapper
+
+        wrapper = ImageWrapper(modality, preview=preview)
+
+        if fmt in ["ome-tiff", "ome-tiff-by-plane"]:
+            writer = OmeTiffWriter(wrapper.reader, transformer=transformations)
+        else:
+            raise ValueError("Other writers are nto yet supported")
+        name = filename.name if not preview else filename.name + "_preview"
+
+        channel_ids = None
+        if modality.export:
+            as_uint8 = modality.export.as_uint8
+            channel_ids = modality.export.channel_ids
+        if channel_ids:
+            if len(channel_ids) == 0:
+                raise ValueError("No channel ids have been specified.")
+            if len(channel_ids) > wrapper.reader.n_channels:
+                raise ValueError("More channel ids have been specified than there are channels.")
+        path = writer.write(
+            name, output_dir=self.image_dir, channel_ids=channel_ids, as_uint8=as_uint8, tile_size=tile_size
+        )
+        return path
+
+    def _transform_write_merge_images(
+        self,
+        to_original_size: bool = True,
+        preview: bool = False,
+        tile_size: int = 512,
+        as_uint8: bool = False,
+    ) -> list[Path]:
+        from image2image_io.models.merge import MergeImages
         from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
 
         def _determine_attachment(_image: str):
@@ -1280,6 +1323,7 @@ class WsiReg2d:
             paths = []
             pixel_sizes = []
             channel_names = []
+            channel_ids = []
             transformations: list[TransformSequence] = []
             non_reg_modalities = self._find_not_registered_modalities()
             for name in sub_images:
@@ -1287,7 +1331,10 @@ class WsiReg2d:
                 modality = self.modalities[name]
                 paths.append(modality.path)
                 pixel_sizes.append(modality.pixel_size)
-                channel_names.append(modality.channel_names)
+                channel_names_ = modality.channel_names
+                channel_names.append(channel_names_)
+                if modality.export:
+                    channel_ids.append(modality.export.channel_ids)
                 if name not in non_reg_modalities and attachment_modality not in non_reg_modalities:
                     _, sub_im_transforms, _ = self._prepare_registered_image_transform(
                         name,
@@ -1307,32 +1354,16 @@ class WsiReg2d:
             output_path = self.image_dir / f"{self.name}-{merge_name}_merged-registered"
             merge = MergeImages(paths, pixel_sizes, channel_names=channel_names)
             writer = MergeOmeTiffWriter(merge, transformers=transformations)
-            path = writer.merge_write_image_by_plane(output_path.name, sub_images, output_dir=self.image_dir)
+            path = writer.write(
+                output_path.name,
+                sub_images,
+                output_dir=self.image_dir,
+                tile_size=tile_size,
+                as_uint8=as_uint8,
+                channel_ids=channel_ids,
+            )
             merged_paths.append(path)
         return merged_paths
-
-    def _transform_write_image(
-        self,
-        modality,
-        transformations: TransformSequence | None,
-        filename: Path,
-        fmt: WriterMode = "ome-tiff",
-        preview: bool = False,
-    ):
-        """Transform and write image."""
-        from image2image_io.writers import OmeTiffWriter
-
-        from image2image_wsireg.wrapper import ImageWrapper
-
-        wrapper = ImageWrapper(modality, preview=preview)
-
-        if fmt in ["ome-tiff", "ome-tiff-by-plane"]:
-            writer = OmeTiffWriter(wrapper.reader, transformer=transformations)
-        else:
-            raise ValueError("Other writers are nto yet supported")
-        name = filename.name if not preview else filename.name + "_preview"
-        path = writer.write(name, output_dir=self.image_dir)
-        return path
 
     def save(self, registered: bool = False, auto: bool = False) -> Path:
         """Save configuration to file."""

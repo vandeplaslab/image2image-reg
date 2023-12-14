@@ -937,7 +937,7 @@ def export_runner(
     show_default=True,
     required=True,
 )
-@cli.command("merge", help_group="Execute")
+@cli.command("merge", help_group="Utility")
 def merge_cmd(
     name: str, path: ty.Sequence[str], output_dir: str, crop_bbox: tuple[int, int, int, int] | None, fmt: WriterMode
 ) -> None:

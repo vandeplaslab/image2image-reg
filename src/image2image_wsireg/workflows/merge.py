@@ -18,7 +18,7 @@ def merge(
     fmt: str = "ome-tiff",
 ) -> Path:
     """Merge multiple images."""
-    from image2image_io.readers.merge import MergeImages
+    from image2image_io.models.merge import MergeImages
     from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
 
     from image2image_wsireg.wrapper import ImageWrapper
