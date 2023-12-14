@@ -887,7 +887,6 @@ def export_runner(
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
     )
-    return
     for path in paths:
         obj = IWsiReg.from_path(path)
         obj.set_logger()
