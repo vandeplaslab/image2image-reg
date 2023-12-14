@@ -868,15 +868,24 @@ def export_cmd(
     project_dir: ty.Sequence[str],
     n_parallel: int,
     fmt: WriterMode,
-    remove_merged: bool,
+    write_registered: bool,
     write_not_registered: bool,
     write_merged: bool,
+    remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
 ) -> None:
     """Export images."""
     export_runner(
-        project_dir, n_parallel, fmt, remove_merged, write_not_registered, write_merged, original_size, as_uint8
+        project_dir,
+        n_parallel,
+        fmt,
+        write_registered,
+        write_not_registered,
+        write_merged,
+        remove_merged,
+        original_size,
+        as_uint8,
     )
 
 
