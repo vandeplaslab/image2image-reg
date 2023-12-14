@@ -25,26 +25,34 @@ def filename_with_suffix(filename: Path, extra: str, suffix: str) -> Path:
 class ImageWrapper:
     """Wrapper around the image class to add additional functionality."""
 
-    def __init__(self, modality: Modality, preprocessing: Preprocessing | None = None, preview: bool = False):
+    def __init__(
+        self, modality: Modality, preprocessing: Preprocessing | None = None, preview: bool = False, quick: bool = False
+    ):
         self.modality = modality
         self.preprocessing = preprocessing
         self.preview = preview
 
         # TODO: this won't work with arrays
-        self.reader: BaseReader = get_simple_reader(modality.path, init_pyramid=False)
+        self.reader: BaseReader = get_simple_reader(modality.path, init_pyramid=False, quick=quick)
         if modality.channel_names:
             self.reader._channel_names = modality.channel_names
         if modality.channel_colors:
             self.reader._channel_colors = modality.channel_colors
 
         self.image: sitk.Image | None = None
-        self.mask: sitk.Image | None = None
-        if self.modality.mask is not None:
-            self.mask = self.read_mask(self.modality.mask)
-        if self.modality.mask_bbox is not None:
-            self.mask = self.make_bbox_mask(self.modality.mask_bbox)
+        self._mask: sitk.Image | None = None
         self.initial_transforms: list[dict] = []
         self.original_size_transform: dict | None = None
+
+    @property
+    def mask(self) -> sitk.Image | None:
+        """Lazy mask."""
+        if self._mask is None:
+            if self.modality.mask is not None:
+                self._mask = self.read_mask(self.modality.mask)
+            if self.modality.mask_bbox is not None:
+                self._mask = self.make_bbox_mask(self.modality.mask_bbox)
+        return self._mask
 
     @property
     def name(self) -> str:

@@ -231,30 +231,30 @@ class IWsiReg:
         if not path.suffix == ".wsireg":
             raise ValueError("Path is not a valid WsiReg project.")
 
-        config_path = path / cls.CONFIG_NAME
-        config: dict | Config | None = None
-        if config_path.exists():
-            config = read_json_data(path / cls.CONFIG_NAME)
-        if config and "name" not in config:
-            config["name"] = path.stem
-        if config and "pairwise" not in config:
-            config["pairwise"] = False
-        if config is None:
-            config = {}
+        with MeasureTimer() as timer:
+            config_path = path / cls.CONFIG_NAME
+            config: dict | Config | None = None
+            if config_path.exists():
+                config = read_json_data(path / cls.CONFIG_NAME)
+            if config and "name" not in config:
+                config["name"] = path.stem
+            if config and "pairwise" not in config:
+                config["pairwise"] = False
+            if config is None:
+                config = {}
 
-        obj = cls(project_dir=path, **config)
-        if config_path.exists():
-            obj.load_from_i2i_wsireg()
-        elif list(obj.project_dir.glob("*.yaml")):
-            obj.load_from_wsireg()
+            obj = cls(project_dir=path, **config)
+            if config_path.exists():
+                obj.load_from_i2i_wsireg()
+            elif list(obj.project_dir.glob("*.yaml")):
+                obj.load_from_wsireg()
+        logger.trace(f"Restored from config in {timer()}")
         return obj
 
     def print_summary(self) -> None:
         """Print summary about the project."""
-        elbow = "└──"
-        pipe = "│  "
-        tee = "├──"
-        blank = "   "
+        elbow, pipe, tee, blank = "└──", "│  ", "├──", "   "
+
         print(f"Project name: {self.name}")
         print(f"Project directory: {self.project_dir}")
         print(f"Merging images: {self.merge_images}")
@@ -264,6 +264,9 @@ class IWsiReg:
         n = len(self.modalities) - 1
         for i, modality in enumerate(self.modalities.values()):
             print(f" {elbow if i == n else tee}{modality.name} ({modality.path})")
+            print(f" {pipe if i != n else blank}{tee}Preprocessing: {modality.preprocessing is not None}")
+            print(f" {pipe if i != n else blank}{elbow}Export: {modality.export}")
+
         # print information about registration paths
         print(f"Number of registration paths: {len(self.registration_paths)}")
         n = len(self.registration_paths) - 1
@@ -272,6 +275,7 @@ class IWsiReg:
                 print(f" {elbow if i == n else tee}{source} to {targets[0]}")
             else:
                 print(f" {elbow if i == n else tee}{source} to {targets[1]} via {targets[0]}")
+
         # print information about registration nodes
         print(f"Number of registrations: {self.n_registrations}")
         n = len(self.registration_nodes) - 1
@@ -283,6 +287,7 @@ class IWsiReg:
             print(f" {insert}{tee}Registered: {edge['registered']}")
             print(f" {insert}{tee}Source preprocessing: {edge['source_preprocessing']}")
             print(f" {insert}{elbow}Target preprocessing: {edge['target_preprocessing']}")
+
         # print information about attachment images/shapes
         print(f"Number of attachment images: {len(self.attachment_images)}")
         n = len(self.attachment_images) - 1
@@ -292,6 +297,7 @@ class IWsiReg:
         n = len(self.attachment_shapes) - 1
         for i, (name, modality) in enumerate(self.attachment_shapes.items()):
             print(f" {elbow if i == n else tee}{name} ({modality.path})")
+
         # print information about merge modalities
         print(f"Number of merge modalities: {len(self.merge_modalities)}")
         n = len(self.merge_modalities) - 1
@@ -363,44 +369,53 @@ class IWsiReg:
         self.pairwise = config["pairwise"]
         self.merge_images = config["merge"]
         # add modality information
-        for name, modality in config["modalities"].items():
-            if not Path(modality["path"]).exists():
-                raise ValueError(f"Modality path '{modality['path']}' does not exist.")
-            self.add_modality(
-                name=name,
-                path=modality["path"],
-                preprocessing=Preprocessing(**modality["preprocessing"]) if modality.get("preprocessing") else None,
-                channel_names=modality.get("channel_names", None),
-                channel_colors=modality.get("channel_colors", None),
-                mask=modality.get("mask", None),
-                mask_bbox=modality.get("mask_bbox", None),
-                output_pixel_size=modality.get("output_pixel_size", None),
-                pixel_size=modality.get("pixel_size", None),
-                export=Export(**modality["export"]) if modality.get("export") else None,
-            )
-        # add registration paths
-        for _key, edge in config["registration_paths"].items():
-            self.add_registration_path(
-                source=edge["source"],
-                target=edge["target"],
-                through=edge["through"],
-                transform=edge["reg_params"],
-                preprocessing={"source": edge.get("source_preprocessing"), "target": edge.get("target_preprocessing")},
-            )
+        with MeasureTimer() as timer:
+            for name, modality in config["modalities"].items():
+                if not Path(modality["path"]).exists():
+                    raise ValueError(f"Modality path '{modality['path']}' does not exist.")
+                self.add_modality(
+                    name=name,
+                    path=modality["path"],
+                    preprocessing=Preprocessing(**modality["preprocessing"]) if modality.get("preprocessing") else None,
+                    channel_names=modality.get("channel_names", None),
+                    channel_colors=modality.get("channel_colors", None),
+                    mask=modality.get("mask", None),
+                    mask_bbox=modality.get("mask_bbox", None),
+                    output_pixel_size=modality.get("output_pixel_size", None),
+                    pixel_size=modality.get("pixel_size", None),
+                    export=Export(**modality["export"]) if modality.get("export") else None,
+                )
+            logger.trace(f"Loaded modalities in {timer()}")
+            # add registration paths
+            for _key, edge in config["registration_paths"].items():
+                self.add_registration_path(
+                    source=edge["source"],
+                    target=edge["target"],
+                    through=edge["through"],
+                    transform=edge["reg_params"],
+                    preprocessing={
+                        "source": edge.get("source_preprocessing"),
+                        "target": edge.get("target_preprocessing"),
+                    },
+                )
+            logger.trace(f"Loaded registration paths in {timer(since_last=True)}")
 
-        # check whether the registered version of the config exists
-        if (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
-            registered_config: Config = read_json_data(self.project_dir / self.REGISTERED_CONFIG_NAME)
-            # load transformation data from file
-            for registered_edge in registered_config["registration_graph_edges"]:
-                source = registered_edge["modalities"]["source"]
-                target = self.registration_paths[source][-1]
-                self._load_registered_transform(registered_edge, target)
-            self.transformations = self._collate_transformations()
+            # check whether the registered version of the config exists
+            if (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
+                registered_config: Config = read_json_data(self.project_dir / self.REGISTERED_CONFIG_NAME)
+                # load transformation data from file
+                for registered_edge in registered_config["registration_graph_edges"]:
+                    source = registered_edge["modalities"]["source"]
+                    target = self.registration_paths[source][-1]
+                    self._load_registered_transform(registered_edge, target)
+                self.transformations = self._collate_transformations()
+                logger.trace(f"Loaded registered transformations in {timer(since_last=True)}")
 
-        # load merge modalities
-        for name, merge_modalities in config["merge_images"].items():
-            self.merge_modalities[name] = merge_modalities
+            # load merge modalities
+            if config["merge_images"]:
+                for name, merge_modalities in config["merge_images"].items():
+                    self.merge_modalities[name] = merge_modalities
+                logger.trace(f"Loaded merge modalities in {timer(since_last=True)}")
 
     def _load_registered_transform(self, edge: SerializedRegisteredRegistrationNode, target: str) -> None:
         """Load registered transform and make sure all attributes are correctly set-up."""
@@ -418,10 +433,10 @@ class IWsiReg:
             return
 
         target_modality = self.modalities[target]
-        target_wrapper = ImageWrapper(target_modality, edge["target_preprocessing"])
+        target_wrapper = ImageWrapper(target_modality, edge["target_preprocessing"], quick=True)
 
         source_modality = self.modalities[source]
-        source_wrapper = ImageWrapper(source_modality, edge["source_preprocessing"])
+        source_wrapper = ImageWrapper(source_modality, edge["source_preprocessing"], quick=True)
         initial_transforms = source_wrapper.initial_transforms
 
         initial_transforms_seq = None
@@ -1304,6 +1319,7 @@ class IWsiReg:
                 raise ValueError("No channel ids have been specified.")
             if len(channel_ids) > wrapper.reader.n_channels:
                 raise ValueError("More channel ids have been specified than there are channels.")
+        logger.trace(f"Writing {name} to {filename}; channel_ids={channel_ids}; as_uint8={as_uint8}")
         path = writer.write(
             name, output_dir=self.image_dir, channel_ids=channel_ids, as_uint8=as_uint8, tile_size=tile_size
         )
@@ -1358,6 +1374,8 @@ class IWsiReg:
                 transformations.append(sub_im_transforms)
 
             output_path = self.image_dir / f"{self.name}-{merge_name}_merged-registered"
+
+            logger.trace(f"Writing {merge_name} to {output_path.name}; channel_ids={channel_ids}; as_uint8={as_uint8}")
             merge = MergeImages(paths, pixel_sizes, channel_names=channel_names)
             writer = MergeOmeTiffWriter(merge, transformers=transformations)
             path = writer.write(
