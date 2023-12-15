@@ -6,7 +6,10 @@ from pathlib import Path
 
 import click
 from click_groups import GroupedGroup
-from koyo.click import Parameter, cli_parse_paths, info_msg, print_parameters, warning_msg
+from koyo.click import Parameter, cli_parse_paths_sort, info_msg, print_parameters, warning_msg
+from koyo.system import IS_MAC
+from koyo.timer import MeasureTimer
+from koyo.typing import PathLike
 from koyo.utilities import running_as_pyinstaller_app
 from loguru import logger
 
@@ -27,7 +30,7 @@ def arg_split_bbox(ctx, param, value):
     return args
 
 
-def set_logger(verbosity: float, no_color: bool) -> None:
+def set_logger(verbosity: float, no_color: bool, log: PathLike | None = None) -> None:
     """Setup logger."""
     from koyo.logging import get_loguru_config, set_loguru_env, set_loguru_log
 
@@ -41,6 +44,18 @@ def set_logger(verbosity: float, no_color: bool) -> None:
     # override koyo logger
     set_loguru_log(level=level.upper(), no_color=no_color)  # type: ignore[attr-defined]
     logger.debug(f"Activated logger with level '{level}'.")
+    if log:
+        set_loguru_log(
+            log,
+            level=level.upper(),  # type: ignore[attr-defined]
+            enqueue=enqueue,
+            colorize=False,
+            no_color=True,
+            catch=True,
+            diagnose=True,
+            logger=logger,
+            remove=False,
+        )
 
 
 def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> Preprocessing | None:
@@ -94,13 +109,27 @@ def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> P
     help="Verbose output. This is additive flag so `-vvv` will print `INFO` messages and -vvvv will print `DEBUG`"
     " information.",
 )
+@click.option(
+    "--log",
+    help="Log CLI output to a log file.",
+    type=click.Path(exists=False, resolve_path=True, file_okay=True, dir_okay=False),
+    default=None,
+    show_default=True,
+)
 def cli(
     verbosity: float = 1,
     no_color: bool = False,
     dev: bool = False,
+    log: PathLike | None = None,
 ) -> None:
     r"""Launch registration app."""
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
+
+    if IS_MAC:
+        import os
+
+        os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
+        logger.trace("Disabled OBJC fork safety on macOS.")
 
     if dev:
         if running_as_pyinstaller_app():
@@ -115,7 +144,7 @@ def cli(
         verbosity = 0
     elif dev:
         uninstall_debugger_hook()
-    set_logger(verbosity, no_color)
+    set_logger(verbosity, no_color, log)
 
 
 @click.option(
@@ -217,7 +246,7 @@ def validate_runner(project_dir: str) -> None:
     type=click.UNPROCESSED,
     show_default=True,
     multiple=True,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @click.option(
     "-P",
@@ -247,7 +276,7 @@ def validate_runner(project_dir: str) -> None:
     show_default=True,
     multiple=True,
     required=False,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @click.option(
     "-i",
@@ -257,7 +286,7 @@ def validate_runner(project_dir: str) -> None:
     show_default=True,
     multiple=True,
     required=True,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @click.option(
     "-n",
@@ -486,7 +515,7 @@ def add_path_runner(
     show_default=True,
     multiple=True,
     required=True,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @click.option(
     "-n",
@@ -551,7 +580,7 @@ def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], pa
     show_default=True,
     multiple=True,
     required=True,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @click.option(
     "-n",
@@ -604,13 +633,21 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
 
 
 @click.option(
+    "--auto",
+    help="Automatically add all modalities inside a project.",
+    is_flag=True,
+    default=None,
+    show_default=True,
+)
+@click.option(
     "-m",
     "--modality",
     help="Name of the modality that should be merged.",
     type=click.STRING,
     show_default=True,
     multiple=True,
-    required=True,
+    required=False,
+    default=None,
 )
 @click.option(
     "-n",
@@ -623,29 +660,35 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
 @click.option(
     "-p",
     "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    help="Path to the project directory. It usually ends in .wsireg extension.",
+    type=click.UNPROCESSED,
     show_default=True,
     required=True,
+    multiple=True,
+    callback=cli_parse_paths_sort,
 )
 @cli.command("add-merge", help_group="Project")
-def add_merge_cmd(project_dir: str, name: str, modality: ty.Sequence[str]) -> None:
+def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Sequence[str] | None, auto: bool) -> None:
     """Specify how (if) images should be merged."""
-    add_merge_runner(project_dir, name, modality)
+    add_merge_runner(project_dir, name, modality, auto)
 
 
-def add_merge_runner(project_dir: str, name: str, modalities: ty.Sequence[str]) -> None:
+def add_merge_runner(paths: ty.Sequence[str], name: str, modalities: ty.Sequence[str], auto: bool = False) -> None:
     """Add attachment modality."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
     print_parameters(
-        Parameter("Project directory", "-p/--project_dir", project_dir),
+        Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Name", "-n/--name", name),
         Parameter("Modalities", "-m/--modality", modalities),
     )
-    obj = IWsiReg.from_path(project_dir)
-    obj.add_merge_modalities(name, list(modalities))
-    obj.save()
+    for path in paths:
+        obj = IWsiReg.from_path(path)
+        if auto:
+            obj.auto_add_merge_modalities(name)
+        else:
+            obj.add_merge_modalities(name, list(modalities))
+        obj.save()
 
 
 @click.option(
@@ -664,7 +707,7 @@ def add_merge_runner(project_dir: str, name: str, modalities: ty.Sequence[str]) 
     show_default=True,
     required=True,
     multiple=True,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @cli.command("preprocess", help_group="Execute")
 def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int) -> None:
@@ -674,28 +717,46 @@ def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int) -> None:
 
 def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
     """Register images."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from mpire import WorkerPool
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
     )
-    for path in paths:
-        obj = IWsiReg.from_path(path)
-        obj.set_logger()
-        obj.preprocess(n_parallel=n_parallel)
+
+    with MeasureTimer() as timer:
+        if n_parallel > 1:
+            logger.trace(f"Running {n_parallel} actions in parallel.")
+            with WorkerPool(n_parallel) as pool:
+                for path in pool.imap(_preprocess, paths):
+                    logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+        else:
+            for path in paths:
+                _preprocess(path)
+                logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+    logger.info(f"Finished processing all projects in {timer()}.")
+
+
+def _preprocess(path: PathLike) -> PathLike:
+    from image2image_wsireg.workflows.iwsireg import IWsiReg
+
+    obj = IWsiReg.from_path(path)
+    obj.set_logger()
+    obj.preprocess()
+    return path
 
 
 @click.option(
-    "--original_size/--no_original_size",
-    help="Write images in their original size after applying transformations.",
+    "--as_uint8/--no_as_uint8",
+    help="Downcast the image data format to uint8 which will substantially reduce the size of the files (unless it's"
+    " already in uint8...).",
     is_flag=True,
-    default=True,
+    default=None,
     show_default=True,
 )
 @click.option(
-    "--write_not_registered/--no_write_not_registered",
-    help="Write not-registered images.",
+    "--original_size/--no_original_size",
+    help="Write images in their original size after applying transformations.",
     is_flag=True,
     default=True,
     show_default=True,
@@ -708,8 +769,22 @@ def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
     show_default=True,
 )
 @click.option(
-    "--write/--no_write",
-    help="Write images to disk.",
+    "--write_merged/--no_write_merged",
+    help="Write merge images. Nothing will happen if merge modalities have not been specified.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+@click.option(
+    "--write_not_registered/--no_write_not_registered",
+    help="Write not-registered images.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+@click.option(
+    "-write_registered/--no_write_registered",
+    help="Write registered images.",
     is_flag=True,
     default=True,
     show_default=True,
@@ -722,6 +797,13 @@ def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
     default="ome-tiff",
     show_default=True,
     required=False,
+)
+@click.option(
+    "--write/--no_write",
+    help="Write images to disk.",
+    is_flag=True,
+    default=True,
+    show_default=True,
 )
 @click.option(
     "-n",
@@ -740,57 +822,131 @@ def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
     show_default=True,
     required=True,
     multiple=True,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @cli.command("register", help_group="Execute")
 def register_cmd(
     project_dir: ty.Sequence[str],
     n_parallel: int,
-    fmt: WriterMode,
     write: bool,
-    remove_merged: bool,
+    fmt: WriterMode,
+    write_registered: bool,
     write_not_registered: bool,
+    write_merged: bool,
+    remove_merged: bool,
     original_size: bool,
+    as_uint8: bool | None,
 ) -> None:
     """Register images."""
-    register_runner(project_dir, n_parallel, fmt, write, remove_merged, write_not_registered, original_size)
+    register_runner(
+        project_dir,
+        n_parallel,
+        write_images=write,
+        fmt=fmt,
+        write_registered=write_registered,
+        write_merged=write_merged,
+        remove_merged=remove_merged,
+        write_not_registered=write_not_registered,
+        original_size=original_size,
+        as_uint8=as_uint8,
+    )
 
 
 def register_runner(
     paths: ty.Sequence[str],
     n_parallel: int = 1,
-    fmt: WriterMode = "ome-tiff",
     write_images: bool = True,
-    remove_merged: bool = True,
+    fmt: WriterMode = "ome-tiff",
+    write_registered: bool = True,
     write_not_registered: bool = True,
+    write_merged: bool = True,
+    remove_merged: bool = True,
     original_size: bool = False,
+    as_uint8: bool | None = False,
 ) -> None:
     """Register images."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from mpire import WorkerPool
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
-        Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write images", "--write/--no_write", write_images),
+        Parameter("Output format", "-f/--fmt", fmt),
+        Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
         Parameter(
             "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
         ),
+        Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
+        Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
     )
-    for path in paths:
-        obj = IWsiReg.from_path(path)
-        obj.set_logger()
-        obj.register(n_parallel=n_parallel)
-        if write_images:
-            obj.write_images(
-                n_parallel=n_parallel,
-                fmt=fmt,
-                write_not_registered=write_not_registered,
-                remove_merged=remove_merged,
-                to_original_size=original_size,
-            )
+
+    with MeasureTimer() as timer:
+        if n_parallel > 1:
+            with WorkerPool(n_parallel) as pool:
+                for path in pool.imap(
+                    _register,
+                    [
+                        (
+                            path,
+                            write_images,
+                            fmt,
+                            write_registered,
+                            write_not_registered,
+                            write_merged,
+                            remove_merged,
+                            original_size,
+                            as_uint8,
+                        )
+                        for path in paths
+                    ],
+                ):
+                    logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+        else:
+            for path in paths:
+                _register(
+                    path,
+                    write_images,
+                    fmt,
+                    write_registered,
+                    write_not_registered,
+                    write_merged,
+                    remove_merged,
+                    original_size,
+                    as_uint8,
+                )
+                logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+    logger.info(f"Finished processing all projects in {timer()}.")
+
+
+def _register(
+    path: PathLike,
+    write_images: bool,
+    fmt: WriterMode,
+    write_registered: bool,
+    write_not_registered: bool,
+    write_merged: bool,
+    remove_merged: bool,
+    original_size: bool,
+    as_uint8: bool | None,
+) -> PathLike:
+    from image2image_wsireg.workflows.iwsireg import IWsiReg
+
+    obj = IWsiReg.from_path(path)
+    obj.set_logger()
+    obj.register()
+    if write_images:
+        obj.write_images(
+            fmt=fmt,
+            write_registered=write_registered,
+            write_not_registered=write_not_registered,
+            write_merged=write_merged,
+            remove_merged=remove_merged,
+            to_original_size=original_size,
+            as_uint8=as_uint8,
+        )
+    return path
 
 
 @click.option(
@@ -861,7 +1017,7 @@ def register_runner(
     show_default=True,
     required=True,
     multiple=True,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @cli.command("export", help_group="Execute")
 def export_cmd(
@@ -899,10 +1055,9 @@ def export_runner(
     remove_merged: bool = True,
     original_size: bool = False,
     as_uint8: bool | None = False,
-    preview: bool = False,
 ) -> None:
     """Register images."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from mpire import WorkerPool
 
     if not write_merged:
         remove_merged = False
@@ -920,23 +1075,70 @@ def export_runner(
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
     )
-    for path in paths:
-        obj = IWsiReg.from_path(path)
-        obj.set_logger()
-        if not obj.is_registered:
-            warning_msg(f"Project {obj.name} is not registered.")
-            continue
-        obj.write_images(
-            n_parallel=n_parallel,
-            fmt=fmt,
-            write_registered=write_registered,
-            write_not_registered=write_not_registered,
-            write_merged=write_merged,
-            remove_merged=remove_merged,
-            to_original_size=original_size,
-            preview=preview,
-            as_uint8=as_uint8,
-        )
+
+    with MeasureTimer() as timer:
+        if n_parallel > 1:
+            with WorkerPool(n_parallel) as pool:
+                for path in pool.imap(
+                    _export,
+                    [
+                        (
+                            path,
+                            fmt,
+                            write_registered,
+                            write_not_registered,
+                            write_merged,
+                            remove_merged,
+                            original_size,
+                            as_uint8,
+                        )
+                        for path in paths
+                    ],
+                ):
+                    logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+        else:
+            for path in paths:
+                _export(
+                    path,
+                    fmt,
+                    write_registered,
+                    write_not_registered,
+                    write_merged,
+                    remove_merged,
+                    original_size,
+                    as_uint8,
+                )
+                logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+    logger.info(f"Finished processing all projects in {timer()}.")
+
+
+def _export(
+    path: PathLike,
+    fmt: WriterMode,
+    write_registered: bool,
+    write_not_registered: bool,
+    write_merged: bool,
+    remove_merged: bool,
+    original_size: bool,
+    as_uint8: bool | None,
+) -> PathLike:
+    from image2image_wsireg.workflows.iwsireg import IWsiReg
+
+    obj = IWsiReg.from_path(path)
+    obj.set_logger()
+    if not obj.is_registered:
+        warning_msg(f"Project {obj.name} is not registered.")
+        return path
+    obj.write_images(
+        fmt=fmt,
+        write_registered=write_registered,
+        write_not_registered=write_not_registered,
+        write_merged=write_merged,
+        remove_merged=remove_merged,
+        to_original_size=original_size,
+        as_uint8=as_uint8,
+    )
+    return path
 
 
 @click.option(
@@ -982,7 +1184,7 @@ def export_runner(
     show_default=True,
     required=True,
     multiple=True,
-    callback=cli_parse_paths,
+    callback=cli_parse_paths_sort,
 )
 @click.option(
     "-n",
@@ -1025,7 +1227,9 @@ def merge_runner(
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
     )
 
-    merge_images(name, list(paths), output_dir, crop_bbox, fmt, as_uint8)
+    with MeasureTimer() as timer:
+        merge_images(name, list(paths), output_dir, crop_bbox, fmt, as_uint8)
+    logger.info(f"Finished processing project in {timer()}.")
 
 
 def main():

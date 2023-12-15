@@ -145,12 +145,15 @@ class ImageWrapper:
             self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
 
     @classmethod
-    def load_original_size_transform(cls, modality: Modality, cache_dir: PathLike) -> dict | None:
+    def load_original_size_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:
         """Load original size transform metadata."""
         filename = cls.get_cache_path(modality, cache_dir)
+        transforms = []
+        if filename_with_suffix(filename, "initial", ".json").exists():
+            transforms.append(read_json_data(filename_with_suffix(filename, "initial", ".json")))
         if filename_with_suffix(filename, "original_size_transform", ".json").exists():
-            return read_json_data(filename_with_suffix(filename, "original_size_transform", ".json"))
-        return None
+            transforms.append(read_json_data(filename_with_suffix(filename, "original_size_transform", ".json")))
+        return transforms or None
 
     def preprocess(self) -> None:
         """Pre-process image."""

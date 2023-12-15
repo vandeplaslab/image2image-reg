@@ -71,3 +71,9 @@ class Modality(BaseModel):
             if data.get("export"):
                 data.pop("export")
         return data
+
+    def to_wrapper(self):
+        """Convert to ImageWrapper."""
+        from image2image_wsireg.wrapper import ImageWrapper
+
+        return ImageWrapper(self)

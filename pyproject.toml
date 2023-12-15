@@ -36,6 +36,7 @@ dependencies = [
     "SimpleITK",
     "scikit-image",
     "click-groups",
+    "mpire",
 ]
 
 # extras

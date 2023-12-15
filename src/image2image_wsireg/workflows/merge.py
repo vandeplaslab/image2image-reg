@@ -16,7 +16,7 @@ def merge(
     output_dir: PathLike,
     crop_bbox: tuple[int, int, int, int] | None,
     fmt: str = "ome-tiff",
-    as_uint8: bool = False,
+    as_uint8: bool | None = None,
 ) -> Path:
     """Merge multiple images."""
     from image2image_io.models.merge import MergeImages

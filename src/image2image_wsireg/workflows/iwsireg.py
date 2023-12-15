@@ -304,7 +304,7 @@ class IWsiReg:
         for i, (name, merge_modalities) in enumerate(self.merge_modalities.items()):
             func(f" {elbow if i == n else tee}{name} ({merge_modalities})")
 
-    def validate(self) -> None:
+    def validate(self, allow_not_registered: bool = True) -> bool:
         """Perform several checks on the project."""
         # check whether the paths are still where they were set up
         is_valid = True
@@ -344,22 +344,24 @@ class IWsiReg:
                     is_valid = False
 
         # check whether all modalities have been registered
-        for edge in self.registration_nodes:
-            if not edge["registered"]:
-                logger.error(
-                    f"❌ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
-                    f"has not been registered."
-                )
-                is_valid = False
-            else:
-                logger.success(
-                    f"✅ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
-                    f"has been registered."
-                )
+        if not allow_not_registered:
+            for edge in self.registration_nodes:
+                if not edge["registered"]:
+                    logger.error(
+                        f"❌ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
+                        f"has not been registered."
+                    )
+                    is_valid = False
+                else:
+                    logger.success(
+                        f"✅ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
+                        f"has been registered."
+                    )
         if not is_valid:
             logger.error("❌ Project configuration is invalid.")
         else:
             logger.success("✅ Project configuration is valid.")
+        return is_valid
 
     def load_from_i2i_wsireg(self) -> None:
         """Load data from image2image-wsireg project file."""
@@ -530,6 +532,8 @@ class IWsiReg:
             raise ValueError("Pixel size must be greater than 0.")
         if isinstance(output_pixel_size, (int, float)):
             output_pixel_size = (float(output_pixel_size), float(output_pixel_size))
+        if "initial" in name:
+            raise ValueError("Sorry, the word 'initial' cannot be used in the modality name as it's reserved.")
 
         self.modalities[name] = Modality(
             name=name,
@@ -673,6 +677,11 @@ class IWsiReg:
         }
         logger.trace(f"Added shape set '{name}'.")
 
+    def auto_add_merge_modalities(self, name: str):
+        """Add merge modalities."""
+        modalities = list(self.modalities.keys())
+        self.add_merge_modalities(name, modalities)
+
     def add_merge_modalities(self, name: str, modalities: list[str]) -> None:
         """Add merge modality."""
         for modality in modalities:
@@ -690,7 +699,7 @@ class IWsiReg:
         self,
         source: str,
         target: str,
-        transform: str | list[str],
+        transform: str | ty.Iterable[str],
         through: str | None = None,
         preprocessing: dict | None = None,
     ) -> None:
@@ -699,12 +708,12 @@ class IWsiReg:
         You can define registration from source to target or from source through 'through' to target.
         """
         if source not in self.modalities:
-            raise ValueError("Source modality does not exist.")
+            raise ValueError(f"Source modality '{source}' does not exist.")
         if target not in self.modalities:
-            raise ValueError("Target modality does not exist.")
+            raise ValueError(f"Target modality '{target}' does not exist.")
         if through is not None:
             if through not in self.modalities:
-                raise ValueError("Through modality does not exist.")
+                raise ValueError(f"Through modality '{through}' does not exist.")
             if through == target:
                 raise ValueError("Through modality cannot be the same as target.")
             if through == source:
@@ -721,7 +730,7 @@ class IWsiReg:
         source: str,
         target: str,
         through: str | None,
-        transform: str | list[str],
+        transform: str | ty.Iterable[str],
         preprocessing: dict | None = None,
     ) -> None:
         """Add registration node."""
@@ -1244,12 +1253,14 @@ class IWsiReg:
             or im_data.preprocessing.flip
             or im_data.preprocessing.crop_to_bbox
             or im_data.preprocessing.crop_bbox
+            or im_data.preprocessing.affine is not None
         ):
             im_initial_transforms = ImageWrapper.load_original_size_transform(im_data, self.cache_dir)
 
             if im_initial_transforms:
+                # TODO: this might be broken
                 transformations = TransformSequence(
-                    [Transform(t) for t in im_initial_transforms[0]],
+                    [Transform(t[0]) for t in im_initial_transforms],
                     transform_sequence_index=list(range(len(im_initial_transforms))),
                 )
 
