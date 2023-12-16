@@ -1,6 +1,7 @@
 """CLI."""
 from __future__ import annotations
 
+import sys
 import typing as ty
 from pathlib import Path
 
@@ -56,6 +57,7 @@ def set_logger(verbosity: float, no_color: bool, log: PathLike | None = None) ->
             logger=logger,
             remove=False,
         )
+        logger.trace(f"Command: {' '.join(sys.argv)}")
 
 
 def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> Preprocessing | None:

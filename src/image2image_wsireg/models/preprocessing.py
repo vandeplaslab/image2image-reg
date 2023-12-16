@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 from koyo.json import read_json_data
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, validator
 
 from image2image_wsireg.enums import CoordinateFlip, ImageType
 from image2image_wsireg.models.bbox import BoundingBox, _transform_to_bbox
@@ -69,8 +69,8 @@ class Preprocessing(BaseModel):
 
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK
-    max_intensity_projection: bool = Field(True, alias="max_int_proj")
-    channel_indices: ty.Optional[list[int]] = Field(None, alias="ch_indices")
+    max_intensity_projection: bool = True
+    channel_indices: ty.Optional[list[int]] = None
     as_uint8: bool = True
     contrast_enhance: bool = False
     invert_intensity: bool = False
@@ -78,12 +78,27 @@ class Preprocessing(BaseModel):
 
     # spatial preprocessing
     affine: ty.Optional[np.ndarray] = None
-    rotate_counter_clockwise: float = Field(0, ge=-360, le=360, alias="rotate_cc")
+    rotate_counter_clockwise: float = 0
     flip: ty.Optional[CoordinateFlip] = None
-    crop_to_bbox: bool = Field(False, alias="crop_to_mask_bbox")
-    crop_bbox: ty.Optional[BoundingBox] = Field(None, alias="mask_bbox")
-    downsample: int = Field(1, ge=1, alias="downsampling")
+    crop_to_bbox: bool = False
+    crop_bbox: ty.Optional[BoundingBox] = None
+    downsample: int = 1
     use_mask: bool = True
+
+    def __init__(self, **kwargs: ty.Any):
+        if "max_int_proj" in kwargs:
+            kwargs["max_intensity_projection"] = kwargs.pop("max_int_proj")
+        if "ch_indices" in kwargs:
+            kwargs["channel_indices"] = kwargs.pop("ch_indices")
+        if "rotate_cc" in kwargs:
+            kwargs["rotate_counter_clockwise"] = kwargs.pop("rotate_cc")
+        if "crop_to_mask_bbox" in kwargs:
+            kwargs["crop_to_bbox"] = kwargs.pop("crop_to_mask_bbox")
+        if "mask_bbox" in kwargs:
+            kwargs["crop_bbox"] = kwargs.pop("mask_bbox")
+        if "downsampling" in kwargs:
+            kwargs["downsample"] = kwargs.pop("downsampling")
+        super().__init__(**kwargs)
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Return dict."""
@@ -108,12 +123,12 @@ class Preprocessing(BaseModel):
     @classmethod
     def basic(cls) -> "Preprocessing":
         """Basic image preprocessing."""
-        return cls(image_type=ImageType.DARK, as_uint8=True, max_int_proj=True)  # type: ignore[call-arg]
+        return cls(image_type=ImageType.DARK, as_uint8=True, max_int_proj=True)
 
     @classmethod
     def fluorescence(cls) -> "Preprocessing":
         """Basic image preprocessing."""
-        return cls(  # type: ignore[call-arg]
+        return cls(
             image_type=ImageType.DARK,
             as_uint8=True,
             max_int_proj=True,
@@ -123,7 +138,7 @@ class Preprocessing(BaseModel):
     @classmethod
     def brightfield(cls) -> "Preprocessing":
         """Basic image preprocessing."""
-        return cls(  # type: ignore[call-arg]
+        return cls(
             image_type=ImageType.LIGHT,
             as_uint8=True,
             max_int_proj=False,
