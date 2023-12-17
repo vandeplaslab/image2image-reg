@@ -142,7 +142,7 @@ class TransformSequence(TransformMixin):
         self.add_transforms(other.transforms, other.transform_sequence_index)
 
     @classmethod
-    def from_path(cls, path: PathLike, first: bool = False) -> TransformSequence:
+    def from_path(cls, path: PathLike, first: bool = False, skip_initial: bool = False) -> TransformSequence:
         """Load a transform sequence from a path.
 
         Parameters
@@ -154,9 +154,11 @@ class TransformSequence(TransformMixin):
             after a registration has been performed but the transform sequence will be altered before being applied.
             This is ESSENTIAL when doing anything within the IWsiReg object as it will apply other transforms to the
             image. The transformation json file usually stores ALL necessary transformations.
+        skip_initial: bool, optional
+            Skip the initial transform. This is necessary when e.g. reloading transform data from disk
         """
         # TODO: check what happens if there is initial transformation - e.g. user supplied affine matrix
-        transforms, transform_sequence_index = _read_wsireg_transform(path, first)
+        transforms, transform_sequence_index = _read_wsireg_transform(path, first, skip_initial)
         # if first:
         #     transforms = [transforms[0]]
         #     transform_sequence_index = [0]
@@ -164,7 +166,9 @@ class TransformSequence(TransformMixin):
 
 
 def _read_wsireg_transform(
-    parameter_data: str | (Path | dict[str, list[str]]), first: bool = False
+    parameter_data: str | (Path | dict[str, list[str]]),
+    first: bool = False,
+    skip_initial: bool = False,
 ) -> tuple[list[dict[str, list[str]]], list[int]]:
     """Convert wsireg transform dict or from file to List of Transforms."""
     transforms = parameter_data
@@ -176,6 +180,8 @@ def _read_wsireg_transform(
     transform_list = []
     transform_sequence_index = []
     for key, value in transforms.items():
+        if "initial" in key and skip_initial:
+            continue
         if "initial" not in key and first:
             allowed_n -= 1
         if key == "initial":

@@ -406,11 +406,17 @@ class IWsiReg:
             if (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
                 registered_config: Config = read_json_data(self.project_dir / self.REGISTERED_CONFIG_NAME)
                 # load transformation data from file
+                transformations = {}
                 for registered_edge in registered_config["registration_graph_edges"]:
                     source = registered_edge["modalities"]["source"]
                     target = self.registration_paths[source][-1]
-                    self._load_registered_transform(registered_edge, target)
-                self.transformations = self._collate_transformations()
+                    transforms_seq = self._load_registered_transform(registered_edge, target)
+                    if transforms_seq:
+                        transformations[source] = transforms_seq
+                if transformations:
+                    self.transformations = transformations
+                else:
+                    self.transformations = self._collate_transformations()
                 logger.trace(f"Loaded registered transformations in {timer(since_last=True)}")
 
             # load merge modalities
@@ -419,19 +425,21 @@ class IWsiReg:
                     self.merge_modalities[name] = merge_modalities
                 logger.trace(f"Loaded merge modalities in {timer(since_last=True)}")
 
-    def _load_registered_transform(self, edge: SerializedRegisteredRegistrationNode, target: str) -> None:
+    def _load_registered_transform(
+        self, edge: SerializedRegisteredRegistrationNode, target: str
+    ) -> dict[str, TransformSequence | None] | None:
         """Load registered transform and make sure all attributes are correctly set-up."""
         from image2image_wsireg.wrapper import ImageWrapper
 
         edge_ = self._find_edge_by_edge(edge)
         if not edge_:
             logger.warning("Could not find appropriate registration node.")
-            return
+            return None
         source = edge["modalities"]["source"]
         transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
         if transform_tag and not (self.transformations_dir / transform_tag).exists():
             logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
-            return
+            return None
 
         target_modality = self.modalities[target]
         target_wrapper = ImageWrapper(target_modality, edge["target_preprocessing"], quick=True)
@@ -446,14 +454,22 @@ class IWsiReg:
             initial_transforms_index = [idx for idx, _ in enumerate(initial_transforms_)]
             initial_transforms_seq = TransformSequence(initial_transforms_, initial_transforms_index)
 
-        transforms_seq = TransformSequence.from_path(self.transformations_dir / transform_tag, first=True)
+        transforms_partial_seq = TransformSequence.from_path(
+            self.transformations_dir / transform_tag, first=True, skip_initial=True
+        )
+        transforms_full_seq = TransformSequence.from_path(self.transformations_dir / transform_tag, first=False)
         self.original_size_transforms[target_wrapper.name] = target_wrapper.original_size_transform
 
         # setup parameters
-        edge_["transforms"] = {"registration": transforms_seq, "initial": initial_transforms_seq}
+        edge_["transforms"] = {"registration": transforms_partial_seq, "initial": initial_transforms_seq}
         edge_["registered"] = True
         edge_["transform_tag"] = f"{self.name}-{source}_to_{target}_transformations.json"
         logger.trace(f"Restored previous transformation data for {source} - {target}")
+        return {
+            f"initial-{source}": initial_transforms_seq,
+            f"000-to-{target}": transforms_partial_seq,
+            "full-transform-seq": transforms_full_seq,
+        }
 
     def _find_edge_by_edge(self, edge: SerializedRegisteredRegistrationNode) -> RegistrationNode | None:
         """Find edge by another edge, potentially from cache."""
@@ -1181,7 +1197,9 @@ class IWsiReg:
 
         # export merge modalities
         if write_merged and self.merge_modalities:
-            path = self._transform_write_merge_images(to_original_size=to_original_size, as_uint8=as_uint8)
+            path = self._transform_write_merge_images(
+                to_original_size=to_original_size, as_uint8=as_uint8, override=override
+            )
             paths.append(path)
 
         return paths
@@ -1356,6 +1374,7 @@ class IWsiReg:
         preview: bool = False,
         tile_size: int = 512,
         as_uint8: bool | None = None,
+        override: bool = False,
     ) -> list[Path]:
         from image2image_io.models.merge import MergeImages
         from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
@@ -1406,7 +1425,15 @@ class IWsiReg:
             if isinstance(as_uint8_, bool):
                 as_uint8 = as_uint8_
 
-            output_path = self.image_dir / f"{self.name}-{merge_name}_merged-registered"
+            if self.name == merge_name:
+                filename = f"{self.name}_merged-registered"
+            else:
+                filename = f"{self.name}-{merge_name}_merged-registered"
+            output_path = self.image_dir / filename
+            if output_path.with_suffix(".ome.tiff").exists() and not override:
+                logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
+                continue
+
             logger.trace(f"Writing {merge_name} to {output_path.name}; channel_ids={channel_ids}; as_uint8={as_uint8}")
             merge = MergeImages(paths, pixel_sizes, channel_names=channel_names)
             writer = MergeOmeTiffWriter(merge, transformers=transformations)

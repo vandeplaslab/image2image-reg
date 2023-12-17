@@ -430,6 +430,56 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "WriteResultImage": ["false"],
         "WriteTransformParametersEachResolution": ["true"],
     },
+    "affine-expanded": {
+        "AutomaticScalesEstimation": ["true"],
+        "AutomaticTransformInitialization": ["true"],
+        "BSplineInterpolationOrder": ["1"],
+        "CompressResultImage": ["true"],
+        "DefaultPixelValue": ["0"],
+        "ErodeMask": ["false"],
+        "FinalBSplineInterpolationOrder": ["1"],
+        "FixedImageDimension": ["2"],
+        "FixedImagePyramid": ["FixedRecursiveImagePyramid"],
+        "FixedInternalImagePixelType": ["float"],
+        "HowToCombineTransforms": ["Compose"],
+        "ImageSampler": ["Random"],
+        "Interpolator": ["LinearInterpolator"],
+        "MaximumNumberOfIterations": ["500"],
+        "MaximumNumberOfSamplingAttempts": [
+            "10",
+        ],
+        "MaximumStepLength": [
+            "100.0",
+            "75.0",
+            "66.0",
+            "50.0",
+            "25.0",
+            "15.0",
+            "10.0",
+            "10.0",
+            "5.0",
+            "1.0",
+        ],
+        "Metric": ["AdvancedMattesMutualInformation"],
+        "MovingImageDimension": ["2"],
+        "MovingImagePyramid": ["MovingRecursiveImagePyramid"],
+        "MovingInternalImagePixelType": ["float"],
+        "NewSamplesEveryIteration": ["true"],
+        "NumberOfHistogramBins": ["32"],
+        "NumberOfResolutions": ["10"],
+        "NumberOfSpatialSamples": ["30000"],
+        "Optimizer": ["AdaptiveStochasticGradientDescent"],
+        "Registration": ["MultiResolutionRegistration"],
+        "RequiredRatioOfValidSamples": ["0.05"],
+        "ResampleInterpolator": ["FinalNearestNeighborInterpolator"],
+        "Resampler": ["DefaultResampler"],
+        "ResultImageFormat": ["mha"],
+        "ResultImagePixelType": ["short"],
+        "Transform": ["AffineTransform"],
+        "UseDirectionCosines": ["true"],
+        "WriteResultImage": ["false"],
+        "WriteTransformParametersEachResolution": ["true"],
+    },
     "nl3": {
         "AutomaticScalesEstimation": ["true"],
         "AutomaticTransformInitialization": ["false"],
@@ -565,16 +615,6 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
     },
 }
 
-# test
-DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_test"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid"].copy()
-DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_test"]["MaximumNumberOfIterations"] = ["10"]
-DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_test"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine"].copy()
-DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_test"]["MaximumNumberOfIterations"] = ["10"]
-DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_test"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity"].copy()
-DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_test"]["MaximumNumberOfIterations"] = ["10"]
-DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_test"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl"].copy()
-DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_test"]["MaximumNumberOfIterations"] = ["10"]
-
 # advanced mean squares
 DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_ams"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid"].copy()
 DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_ams"]["Metric"] = ["AdvancedMeanSquares"]
@@ -594,3 +634,16 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_anc"] = DEFAULT_REGISTRATION_PAR
 DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_anc"]["Metric"] = ["AdvancedNormalizedCorrelation"]
 DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_anc"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl"].copy()
 DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_anc"]["Metric"] = ["AdvancedNormalizedCorrelation"]
+
+# do this here so we can exclude the test registrations
+AVAILABLE_REGISTRATIONS = list(DEFAULT_REGISTRATION_PARAMETERS_MAP.keys())
+
+# test
+DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_test"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid"].copy()
+DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_test"]["MaximumNumberOfIterations"] = ["10"]
+DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_test"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine"].copy()
+DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_test"]["MaximumNumberOfIterations"] = ["10"]
+DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_test"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity"].copy()
+DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_test"]["MaximumNumberOfIterations"] = ["10"]
+DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_test"] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl"].copy()
+DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_test"]["MaximumNumberOfIterations"] = ["10"]
