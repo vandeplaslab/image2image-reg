@@ -13,7 +13,7 @@ from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
 
-from image2image_wsireg.models import BoundingBox, Modality, Preprocessing
+from image2image_wsireg.models import BoundingBox, Modality, Polygon, Preprocessing
 from image2image_wsireg.utils.convert import sitk_image_to_itk_image
 
 
@@ -52,6 +52,8 @@ class ImageWrapper:
                 self._mask = self.read_mask(self.modality.mask)
             if self.modality.mask_bbox is not None:
                 self._mask = self.make_bbox_mask(self.modality.mask_bbox)
+            elif self.modality.mask_polygon is not None:
+                self._mask = self.make_bbox_mask(self.modality.mask_polygon)
         return self._mask
 
     @property
@@ -163,6 +165,7 @@ class ImageWrapper:
 
         # retrieve first array in the pyramid i.e. the highest resolution
         image = self.reader.pyramid[0]
+
         # pre-process image
         with MeasureTimer() as timer:
             image = preprocess_dask_array(image, preprocessing)
@@ -216,7 +219,7 @@ class ImageWrapper:
         mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
         return mask
 
-    def make_bbox_mask(self, bbox: BoundingBox) -> sitk.Image:
+    def make_bbox_mask(self, bbox: BoundingBox | Polygon) -> sitk.Image:
         """Make mask from bounding box."""
         mask = bbox.to_sitk_image(self.reader.image_shape, self.modality.pixel_size)
         mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]

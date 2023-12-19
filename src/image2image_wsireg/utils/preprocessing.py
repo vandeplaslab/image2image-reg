@@ -25,7 +25,7 @@ from image2image_wsireg.utils.transformation import (
 
 
 def preprocess_dask_array(
-    array: da.core.Array,  # type: ignore[name-defined]
+    array: da.core.Array,
     preprocessing: Preprocessing | None = None,
 ) -> sitk.Image:
     """Pre-process dask array."""
@@ -33,62 +33,32 @@ def preprocess_dask_array(
     if is_rgb:
         if preprocessing:
             array_out = np.asarray(grayscale(array, is_interleaved=is_rgb))
-            array_out = sitk.GetImageFromArray(array_out)
+            array_out = sitk.GetImageFromArray(array_out)  # type: ignore[assignment]
         else:
             array_out = np.asarray(array)
-            array_out = sitk.GetImageFromArray(array_out, isVector=True)
+            array_out = sitk.GetImageFromArray(array_out, isVector=True)  # type: ignore[assignment]
 
     elif len(array.shape) == 2:
-        array_out = sitk.GetImageFromArray(np.asarray(array))
+        array_out = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
     else:
         if preprocessing:
             if preprocessing.channel_indices and len(array.shape) > 2:
                 chs = list(preprocessing.channel_indices)
                 array = array[chs, :, :]
-        array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))
+        array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
     return array_out
 
 
 def convert_and_cast(image: sitk.Image, preprocessing: Preprocessing | None = None) -> sitk.Image:
     """Covert image to uint8 if specified in preprocessing."""
-    if preprocessing is not None and preprocessing.as_uint8 is True and image.GetPixelID() != sitk.sitkUInt8:
+    if preprocessing is not None and preprocessing.as_uint8 and image.GetPixelID() != sitk.sitkUInt8:
         image = sitk.RescaleIntensity(image)
         image = sitk.Cast(image, sitk.sitkUInt8)
     return image
 
 
-def read_preprocess_array(
-    array: np.ndarray | da.Array, preprocessing: Preprocessing, force_rgb: bool | None = None
-) -> sitk.Image:
-    """Read np.array, zarr.Array, or dask.array image into memory with preprocessing for registration."""
-    is_interleaved = guess_rgb(array.shape)
-    is_rgb = is_interleaved if not force_rgb else force_rgb
-
-    if is_rgb:
-        if preprocessing:
-            image_out = np.asarray(grayscale(array, is_interleaved=is_interleaved))
-            image_out = sitk.GetImageFromArray(image_out)
-        else:
-            image_out = np.asarray(array)
-            if not is_interleaved:
-                image_out = np.rollaxis(image_out, 0, 3)
-            image_out = sitk.GetImageFromArray(image_out, isVector=True)
-
-    elif len(array.shape) == 2:
-        image_out = sitk.GetImageFromArray(np.asarray(array))
-
-    else:
-        if preprocessing:
-            if preprocessing.channel_indices and len(array.shape) > 2:
-                chs = list(preprocessing.channel_indices)
-                array = array[chs, :, :]
-        image_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))
-    return image_out
-
-
 def sitk_vect_to_gs(image: sitk.Image) -> sitk.Image:
-    """
-    converts simpleITK RGB image to greyscale using cv2.
+    """Converts simpleITK RGB image to greyscale using cv2.
 
     Parameters
     ----------
@@ -109,8 +79,7 @@ def sitk_vect_to_gs(image: sitk.Image) -> sitk.Image:
 
 
 def sitk_max_int_proj(image: sitk.Image) -> sitk.Image:
-    """
-    Finds maximum intensity projection of multi-channel SimpleITK image.
+    """Finds maximum intensity projection of multi-channel SimpleITK image.
 
     Parameters
     ----------
@@ -346,7 +315,6 @@ def preprocess(
     """Run full intensity and spatial preprocessing."""
     # intensity based pre-processing
     image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
-
     # ensure that intensity-based pre-processing resulted in a single-channel image
     if image.GetDepth() >= 1:
         raise ValueError("preprocessing did not result in a single image plane\nmulti-channel or 3D image return")

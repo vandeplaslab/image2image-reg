@@ -129,7 +129,7 @@ def register_2d_images(
     target: ImageWrapper,
     reg_params: list[dict[str, list[str]]],
     output_dir: str | Path,
-    histogram_match: bool = False,
+    histogram_match: bool = True,
     return_image: bool = False,
 ):
     """Register 2D images with multiple models and return a list of elastix transformation maps.
@@ -164,14 +164,14 @@ def register_2d_images(
 
     if histogram_match:
         with MeasureTimer() as timer:
-            matcher = sitk.HistogramMatchingImageFilter()
-            matcher.SetNumberOfHistogramLevels(64)
-            matcher.SetNumberOfMatchPoints(7)
-            matcher.ThresholdAtMeanIntensityOn()
-            source.image = matcher.Execute(source.image, target.image)
+            matcher = sitk.HistogramMatchingImageFilter()  # type: ignore[no-untyped-call]
+            matcher.SetNumberOfHistogramLevels(64)  # type: ignore[no-untyped-call]
+            matcher.SetNumberOfMatchPoints(7)  # type: ignore[no-untyped-call]
+            matcher.ThresholdAtMeanIntensityOn()  # type: ignore[no-untyped-call]
+            source.image = matcher.Execute(source.image, target.image)  # type: ignore[no-untyped-call]
         logger.info(f"Histogram matching took {timer()}")
 
-    pixel_id = source.image.GetPixelID()
+    pixel_id = source.image.GetPixelID()  # type: ignore[union-attr]
     with MeasureTimer() as timer:
         source.sitk_to_itk(True)
         target.sitk_to_itk(True)
@@ -228,7 +228,8 @@ def register_2d_images(
 
     if not return_image:
         return tform_list
+
     image = selx.GetOutput()
     image = itk_image_to_sitk_image(image)
-    image = sitk.Cast(image, pixel_id)
+    image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
     return tform_list, image

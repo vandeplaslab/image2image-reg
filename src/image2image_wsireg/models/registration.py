@@ -43,6 +43,9 @@ def _read_elastix_parameter_file(
 
 class _RegModelMeta(EnumMeta):
     def __getitem__(self, name):
+        if isinstance(name, str):
+            if "-" in name:
+                name = name.replace("-", "_")
         try:
             return super().__getitem__(name)
         except (TypeError, KeyError):
@@ -50,9 +53,8 @@ class _RegModelMeta(EnumMeta):
                 return _read_elastix_parameter_file(name)
             else:
                 raise ValueError(
-                    "unrecognized registration parameter, please provide"
-                    "file path to elastix transform parameters or specify one of "
-                    f"{[i.name for i in self]}"
+                    f"unrecognized registration parameter ({name}), please provide file path to elastix transform"
+                    f" parameters or specify one of {[i.name for i in self]}"
                 )
 
 
@@ -67,22 +69,28 @@ class Registration(dict, Enum, metaclass=_RegModelMeta):
     similarity: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity"]
     nl: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl"]
     fi_correction: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["fi_correction"]
-    nl_reduced: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl-reduced"]
-    nl_mid: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl-mid"]
+    nl_reduced: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_reduced"]
+    nl_mid: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_mid"]
     nl2: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl2"]
-    rigid_expanded: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid-expanded"]
-    rigid_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_test"]
-    affine_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_test"]
-    similarity_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_test"]
-    nl_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_test"]
+    # expanded parameters
+    rigid_expanded: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_expanded"]
+    affine_expanded: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_expanded"]
+    nl_expanded: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_expanded"]
+    # advanced mean squares
     rigid_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_ams"]
     affine_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_ams"]
     similarity_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_ams"]
     nl_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_ams"]
+    # normalized correlation
     rigid_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_anc"]
     affine_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_anc"]
     similarity_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_anc"]
     nl_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_anc"]
+    # test parameters
+    rigid_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_test"]
+    affine_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_test"]
+    similarity_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_test"]
+    nl_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_test"]
 
     def __str__(self):
         return self.name

@@ -8,7 +8,7 @@ from koyo.typing import PathLike
 from pydantic import BaseModel, validator
 
 from image2image_wsireg.enums import ArrayLike
-from image2image_wsireg.models.bbox import BoundingBox
+from image2image_wsireg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 from image2image_wsireg.models.export import Export
 from image2image_wsireg.models.preprocessing import Preprocessing
 
@@ -30,19 +30,16 @@ class Modality(BaseModel):
     pixel_size: float = 1.0
     mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None
     mask_bbox: ty.Optional[BoundingBox] = None
+    mask_polygon: ty.Optional[Polygon] = None
     output_pixel_size: ty.Optional[tuple[float, float]] = None
 
     @validator("mask_bbox", pre=True)
     def _validate_bbox(cls, v) -> ty.Optional[BoundingBox]:
-        if isinstance(v, dict):
-            return BoundingBox(**v)
-        elif isinstance(v, (list, tuple)):
-            v = list(v)
-            assert len(v) == 4, "Bounding box must have 4 values"
-            return BoundingBox(*v)
-        elif isinstance(v, BoundingBox):
-            return v
-        return None
+        return _transform_to_bbox(v)
+
+    @validator("mask_polygon", pre=True)
+    def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
+        return _transform_to_polygon(v)
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Convert to dict."""
@@ -60,6 +57,8 @@ class Modality(BaseModel):
                 data["mask"] = "ArrayLike"
         if data.get("mask_bbox"):
             data["mask_bbox"] = data["mask_bbox"].to_dict()
+        if data.get("mask_polygon"):
+            data["mask_polygon"] = data["mask_polygon"].to_dict()
         # if export for wsireg, let's remove all extra components and rename few attributes
         if as_wsireg:
             if data.get("path"):
@@ -70,6 +69,8 @@ class Modality(BaseModel):
                 data["output_res"] = data.pop("output_pixel_size")
             if data.get("export"):
                 data.pop("export")
+            if data.get("mask_polygon"):
+                data.pop("mask_polygon")
         return data
 
     def to_wrapper(self):

@@ -9,13 +9,77 @@ from koyo.typing import PathLike
 from loguru import logger
 
 
-class BoundingBox:
+class MaskMixin:
+    """Mask mixin."""
+
+    mask_type: str
+
+    def to_mask(self, image_shape: tuple[int, int], dtype: type = bool, value: bool | int = True) -> np.ndarray:
+        """Return mask."""
+        raise NotImplementedError("Must implement method")
+
+    def to_sitk_image(self, image_shape: tuple[int, int], pixel_size: float = 1.0) -> sitk.Image:
+        """Return image."""
+        mask = self.to_mask(image_shape, dtype=np.uint8, value=255)
+        image = sitk.GetImageFromArray(mask, isVector=False)
+        image.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
+        return image
+
+    def to_file(self, name: str, output_dir: PathLike, image_shape: tuple[int, int]) -> Path:
+        """Save bounding box to file."""
+        from tifffile import imwrite
+
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        mask = self.to_mask(image_shape, dtype=np.uint8, value=255)
+        imwrite(output_dir / f"{name}_{self.mask_type}.tiff", mask, compression="deflate")
+        return output_dir / f"{name}_{self.mask_type}.tiff"
+
+
+class Polygon(MaskMixin):
+    """Polygon where data is in yx format."""
+
+    xy: np.ndarray
+    mask_type: str = "polygon"
+
+    def __init__(self, xy: np.ndarray):
+        self.xy = xy
+
+    def to_dict(self, as_wsireg: bool = False) -> list:
+        """Return dict."""
+        return self.xy.tolist()  # type: ignore[no-any-return]
+
+    def to_mask(self, image_shape: tuple[int, int], dtype: type = bool, value: bool | int = True) -> np.ndarray:
+        """Return mask."""
+        import cv2
+
+        dtype = np.uint8
+        mask = np.zeros(image_shape, dtype=dtype)
+        mask = cv2.fillPoly(mask, pts=[self.xy.astype(np.int32)], color=np.iinfo(dtype).max)
+        return mask
+
+
+def _transform_to_polygon(v: np.ndarray) -> Polygon:
+    """Transform to bounding box."""
+    if v is None:
+        return None
+    if isinstance(v, list):
+        v = np.array(v)
+        return Polygon(v)
+    elif isinstance(v, Polygon):
+        return v
+    return Polygon(v)
+
+
+class BoundingBox(MaskMixin):
     """Bounding box named tuple."""
 
     x: int
     y: int
     width: int
     height: int
+    mask_type: str = "bbox"
 
     def __init__(self, x: int, y: int, width: int, height: int):
         self.x = x
@@ -41,25 +105,17 @@ class BoundingBox:
         mask[self.y : self.y + self.height, self.x : self.x + self.width] = value
         return mask
 
-    def to_sitk_image(self, image_shape: tuple[int, int], pixel_size: float = 1.0) -> sitk.Image:
-        """Return image."""
-        mask = self.to_mask(image_shape, dtype=np.uint8, value=255)
-        image = sitk.GetImageFromArray(mask, isVector=False)
-        image.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
-        return image
 
-    def to_file(self, name: str, output_dir: PathLike, image_shape: tuple[int, int]) -> Path:
-        """Save bounding box to file."""
-        from tifffile import imwrite
-
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        mask = self.to_mask(image_shape, dtype=np.uint8, value=255)
-        imwrite(output_dir / f"{name}_bbox.tiff", mask, compression="deflate")
-        return output_dir / f"{name}_bbox.tiff"
-
-
-def _transform_to_bbox(mask_bbox: tuple[int, int, int, int] | list[int]) -> BoundingBox:
+def _transform_to_bbox(v: tuple[int, int, int, int] | list[int]) -> BoundingBox:
     """Transform to bounding box."""
-    return BoundingBox(*mask_bbox)
+    if v is None:
+        return None
+    if isinstance(v, dict):
+        return BoundingBox(**v)
+    elif isinstance(v, (list, tuple)):
+        v = list(v)
+        assert len(v) == 4, "Bounding box must have 4 values"
+        return BoundingBox(*v)
+    elif isinstance(v, BoundingBox):
+        return v
+    return BoundingBox(*v)

@@ -8,7 +8,7 @@ from koyo.json import read_json_data
 from pydantic import BaseModel, validator
 
 from image2image_wsireg.enums import CoordinateFlip, ImageType
-from image2image_wsireg.models.bbox import BoundingBox, _transform_to_bbox
+from image2image_wsireg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 
 
 def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:
@@ -82,6 +82,7 @@ class Preprocessing(BaseModel):
     flip: ty.Optional[CoordinateFlip] = None
     crop_to_bbox: bool = False
     crop_bbox: ty.Optional[BoundingBox] = None
+    crop_polygon: ty.Optional[Polygon] = None
     downsample: int = 1
     use_mask: bool = True
 
@@ -118,6 +119,8 @@ class Preprocessing(BaseModel):
                 data["rotate_cc"] = data.pop("rotate_counter_clockwise")
             if data.get("max_intensity_projection"):
                 data["max_int_proj"] = data.pop("max_intensity_projection")
+            if data.get("crop_polygon"):
+                data.pop("crop_polygon")
         return data
 
     @classmethod
@@ -146,10 +149,14 @@ class Preprocessing(BaseModel):
         )
 
     @validator("crop_bbox", pre=True)
-    def _make_bbox(cls, v):
+    def _validate_bbox(cls, v):
         if v is None:
             return None
         return _transform_to_bbox(v)
+
+    @validator("crop_polygon", pre=True)
+    def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
+        return _transform_to_polygon(v)
 
     @validator("channel_indices", pre=True)
     def _make_ch_list(cls, v):

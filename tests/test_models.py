@@ -1,5 +1,25 @@
 """Test bbox."""
-from image2image_wsireg.models import BoundingBox, Export
+import numpy as np
+
+from image2image_wsireg.models import BoundingBox, Export, Polygon
+
+
+def test_polygon():
+    poly = Polygon(np.array([[0, 0], [0, 10], [10, 10], [10, 0]]))
+    assert poly.yx.shape == (4, 2), "Shape should be (4, 2)"
+
+    mask = poly.to_mask((100, 100))
+    assert mask.shape == (100, 100), "Shape should be (100, 100)"
+    assert mask.max() == 255, "Max value should be 255"
+
+    mask = poly.to_mask((150, 100))
+    assert mask.shape == (150, 100), "Shape should be (150, 100)"
+    assert mask.max() == 255, "Max value should be 255"
+
+    image = poly.to_sitk_image((100, 100), pixel_size=1.0)
+    assert image.GetSize() == (100, 100), "Size should be (100, 100)"
+    assert image.GetSpacing() == (1.0, 1.0), "Spacing should be (1.0, 1.0)"
+    assert image.GetPixelID() == 1, "PixelID should be 1 (uint8)"
 
 
 def test_bbox():

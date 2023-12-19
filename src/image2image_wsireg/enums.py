@@ -7,6 +7,8 @@ import numpy as np
 import SimpleITK as sitk
 import zarr
 
+from image2image_wsireg.parameters.registration import AVAILABLE_REGISTRATIONS
+
 
 class ImageType(str, Enum):
     """Set the photometric interpretation of the image
@@ -80,3 +82,16 @@ ELX_TO_ITK_INTERPOLATORS: dict[str, ty.Any] = {
     "FinalLinearInterpolator": sitk.sitkLinear,
     "FinalBSplineInterpolator": sitk.sitkBSpline,
 }
+
+
+__all__ = [
+    "AVAILABLE_REGISTRATIONS",
+    "ArrayLike",
+    "CoordinateFlip",
+    "ELX_LINEAR_TRANSFORMS",
+    "ELX_TO_ITK_INTERPOLATORS",
+    "ImageType",
+    "NUMERIC_ELX_PARAMETERS",
+    "SITK_TO_NP_DTYPE",
+    "WriterMode",
+]

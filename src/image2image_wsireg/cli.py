@@ -15,10 +15,96 @@ from koyo.utilities import running_as_pyinstaller_app
 from loguru import logger
 
 from image2image_wsireg import __version__
-from image2image_wsireg.enums import WriterMode
+from image2image_wsireg.enums import AVAILABLE_REGISTRATIONS, WriterMode
 
 if ty.TYPE_CHECKING:
     from image2image_wsireg.models import Preprocessing
+
+
+# declare common options
+as_uint8_ = click.option(
+    "-u/-U",
+    "--as_uint8/--no_as_uint8",
+    help="Downcast the image data format to uint8 which will substantially reduce the size of the files (unless it's"
+    " already in uint8...).",
+    is_flag=True,
+    default=None,
+    show_default=True,
+)
+original_size_ = click.option(
+    "-o/-O",
+    "--original_size/--no_original_size",
+    help="Write images in their original size after applying transformations.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+remove_merged_ = click.option(
+    "-g/-G",
+    "--remove_merged/--no_remove_merged",
+    help="Remove written images that have been merged.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+write_merged_ = click.option(
+    "-m/-M",
+    "--write_merged/--no_write_merged",
+    help="Write merge images. Nothing will happen if merge modalities have not been specified.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+write_not_registered_ = click.option(
+    "-n/-N",
+    "--write_not_registered/--no_write_not_registered",
+    help="Write not-registered images.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+write_registered_ = click.option(
+    "-r/-R",
+    "--write_registered/--no_write_registered",
+    help="Write registered images.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+fmt_ = click.option(
+    "-f",
+    "--fmt",
+    help="Output format.",
+    type=click.Choice(["ome-tiff"], case_sensitive=False),
+    default="ome-tiff",
+    show_default=True,
+    required=False,
+)
+write_ = click.option(
+    "-w/-W",
+    "--write/--no_write",
+    help="Write images to disk.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
+n_parallel_ = click.option(
+    "-j",
+    "--n_parallel",
+    help="How many actions should be taken simultaneously.",
+    type=click.IntRange(1, 24, clamp=True),
+    show_default=True,
+    default=1,
+)
+parallel_mode_ = click.option(
+    "-P",
+    "--parallel_mode",
+    help="Parallel mode.",
+    type=click.Choice(["inner", "outer"], case_sensitive=False),
+    default="inner",
+    show_default=True,
+    required=False,
+)
 
 
 # noinspection PyUnusedLocal
@@ -406,24 +492,7 @@ def add_modality_runner(
     "--registration",
     help="Registration steps to be taken. These will be stacked.",
     type=click.Choice(
-        [
-            "rigid",
-            "affine",
-            "similarity",
-            "nl",
-            "fi_correction",
-            "nl_reduced",
-            "nl_mid",
-            "nl2",
-            "rigid_expanded",
-            "rigid_ams",
-            "affine_ams",
-            "nl_ams",
-            "rigid_anc",
-            "affine_anc",
-            "similarity_anc",
-            "nl_anc",
-        ],
+        AVAILABLE_REGISTRATIONS,
         case_sensitive=False,
     ),
     default=None,
@@ -670,12 +739,14 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
     callback=cli_parse_paths_sort,
 )
 @cli.command("add-merge", help_group="Project")
-def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Sequence[str] | None, auto: bool) -> None:
+def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
     """Specify how (if) images should be merged."""
     add_merge_runner(project_dir, name, modality, auto)
 
 
-def add_merge_runner(paths: ty.Sequence[str], name: str, modalities: ty.Sequence[str], auto: bool = False) -> None:
+def add_merge_runner(
+    paths: ty.Sequence[str], name: str, modalities: ty.Iterable[str] | None, auto: bool = False
+) -> None:
     """Add attachment modality."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
@@ -693,14 +764,8 @@ def add_merge_runner(paths: ty.Sequence[str], name: str, modalities: ty.Sequence
         obj.save()
 
 
-@click.option(
-    "-n",
-    "--n_parallel",
-    help="How many actions should be taken simultaneously.",
-    type=click.IntRange(1, 24, clamp=True),
-    show_default=True,
-    default=1,
-)
+@parallel_mode_
+@n_parallel_
 @click.option(
     "-p",
     "--project_dir",
@@ -712,12 +777,12 @@ def add_merge_runner(paths: ty.Sequence[str], name: str, modalities: ty.Sequence
     callback=cli_parse_paths_sort,
 )
 @cli.command("preprocess", help_group="Execute")
-def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int) -> None:
+def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str) -> None:
     """Preprocess images."""
-    preprocess_runner(project_dir, n_parallel)
+    preprocess_runner(project_dir, n_parallel, parallel_mode)
 
 
-def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
+def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1, parallel_mode: str = "outer") -> None:
     """Register images."""
     from mpire import WorkerPool
 
@@ -727,93 +792,43 @@ def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1) -> None:
     )
 
     with MeasureTimer() as timer:
-        if n_parallel > 1:
+        if n_parallel > 1 and len(paths) > 1 and parallel_mode == "outer":
             logger.trace(f"Running {n_parallel} actions in parallel.")
             with WorkerPool(n_parallel) as pool:
                 for path in pool.imap(_preprocess, paths):
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
         else:
             for path in paths:
-                _preprocess(path)
+                _preprocess(path, n_parallel)
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
     logger.info(f"Finished processing all projects in {timer()}.")
 
 
-def _preprocess(path: PathLike) -> PathLike:
+def _preprocess(path: PathLike, n_parallel: int) -> PathLike:
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
-    obj.preprocess()
+    obj.preprocess(n_parallel)
     return path
 
 
+@parallel_mode_
+@n_parallel_
+@as_uint8_
+@original_size_
+@remove_merged_
+@write_merged_
+@write_not_registered_
+@write_registered_
+@fmt_
 @click.option(
-    "--as_uint8/--no_as_uint8",
-    help="Downcast the image data format to uint8 which will substantially reduce the size of the files (unless it's"
-    " already in uint8...).",
-    is_flag=True,
-    default=None,
-    show_default=True,
-)
-@click.option(
-    "--original_size/--no_original_size",
-    help="Write images in their original size after applying transformations.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--remove_merged/--no_remove_merged",
-    help="Remove written images that have been merged.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--write_merged/--no_write_merged",
-    help="Write merge images. Nothing will happen if merge modalities have not been specified.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--write_not_registered/--no_write_not_registered",
-    help="Write not-registered images.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "-write_registered/--no_write_registered",
-    help="Write registered images.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "-f",
-    "--fmt",
-    help="Output format.",
-    type=click.Choice(["ome-tiff"], case_sensitive=False),
-    default="ome-tiff",
-    show_default=True,
-    required=False,
-)
-@click.option(
+    "-w/-W",
     "--write/--no_write",
     help="Write images to disk.",
     is_flag=True,
     default=True,
     show_default=True,
-)
-@click.option(
-    "-n",
-    "--n_parallel",
-    help="How many actions should be taken simultaneously.",
-    type=click.IntRange(1, 24, clamp=True),
-    show_default=True,
-    default=1,
 )
 @click.option(
     "-p",
@@ -829,7 +844,6 @@ def _preprocess(path: PathLike) -> PathLike:
 @cli.command("register", help_group="Execute")
 def register_cmd(
     project_dir: ty.Sequence[str],
-    n_parallel: int,
     write: bool,
     fmt: WriterMode,
     write_registered: bool,
@@ -838,11 +852,12 @@ def register_cmd(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
+    n_parallel: int,
+    parallel_mode: str,
 ) -> None:
     """Register images."""
     register_runner(
         project_dir,
-        n_parallel,
         write_images=write,
         fmt=fmt,
         write_registered=write_registered,
@@ -851,12 +866,13 @@ def register_cmd(
         write_not_registered=write_not_registered,
         original_size=original_size,
         as_uint8=as_uint8,
+        n_parallel=n_parallel,
+        parallel_mode=parallel_mode,
     )
 
 
 def register_runner(
     paths: ty.Sequence[str],
-    n_parallel: int = 1,
     write_images: bool = True,
     fmt: WriterMode = "ome-tiff",
     write_registered: bool = True,
@@ -865,13 +881,14 @@ def register_runner(
     remove_merged: bool = True,
     original_size: bool = False,
     as_uint8: bool | None = False,
+    n_parallel: int = 1,
+    parallel_mode: str = "outer",
 ) -> None:
     """Register images."""
     from mpire import WorkerPool
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
-        Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
         Parameter("Write images", "--write/--no_write", write_images),
         Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
@@ -882,10 +899,11 @@ def register_runner(
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
+        Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
     )
 
     with MeasureTimer() as timer:
-        if n_parallel > 1:
+        if n_parallel > 1 and len(paths) > 1 and parallel_mode == "outer":
             with WorkerPool(n_parallel) as pool:
                 for path in pool.imap(
                     _register,
@@ -917,6 +935,7 @@ def register_runner(
                     remove_merged,
                     original_size,
                     as_uint8,
+                    n_parallel=n_parallel,
                 )
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
     logger.info(f"Finished processing all projects in {timer()}.")
@@ -932,6 +951,7 @@ def _register(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
+    n_parallel: int = 1,
 ) -> PathLike:
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
@@ -947,70 +967,20 @@ def _register(
             remove_merged=remove_merged,
             to_original_size=original_size,
             as_uint8=as_uint8,
+            n_parallel=n_parallel,
         )
     return path
 
 
-@click.option(
-    "--as_uint8/--no_as_uint8",
-    help="Downcast the image data format to uint8 which will substantially reduce the size of the files (unless it's"
-    " already in uint8...).",
-    is_flag=True,
-    default=None,
-    show_default=True,
-)
-@click.option(
-    "--original_size/--no_original_size",
-    help="Write images in their original size after applying transformations.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--remove_merged/--no_remove_merged",
-    help="Remove written images that have been merged.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--write_merged/--no_write_merged",
-    help="Write merge images. Nothing will happen if merge modalities have not been specified.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "--write_not_registered/--no_write_not_registered",
-    help="Write not-registered images.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "-write_registered/--no_write_registered",
-    help="Write registered images.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@click.option(
-    "-f",
-    "--fmt",
-    help="Output format.",
-    type=click.Choice(["ome-tiff"], case_sensitive=False),
-    default="ome-tiff",
-    show_default=True,
-    required=False,
-)
-@click.option(
-    "-n",
-    "--n_parallel",
-    help="How many actions should be taken simultaneously.",
-    type=click.IntRange(1, 24, clamp=True),
-    show_default=True,
-    default=1,
-)
+@parallel_mode_
+@n_parallel_
+@as_uint8_
+@original_size_
+@remove_merged_
+@write_merged_
+@write_not_registered_
+@write_registered_
+@fmt_
 @click.option(
     "-p",
     "--project_dir",
@@ -1024,7 +994,6 @@ def _register(
 @cli.command("export", help_group="Execute")
 def export_cmd(
     project_dir: ty.Sequence[str],
-    n_parallel: int,
     fmt: WriterMode,
     write_registered: bool,
     write_not_registered: bool,
@@ -1032,11 +1001,12 @@ def export_cmd(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
+    n_parallel: int,
+    parallel_mode: str,
 ) -> None:
     """Export images."""
     export_runner(
         project_dir,
-        n_parallel,
         fmt=fmt,
         write_registered=write_registered,
         write_not_registered=write_not_registered,
@@ -1044,12 +1014,13 @@ def export_cmd(
         remove_merged=remove_merged,
         original_size=original_size,
         as_uint8=as_uint8,
+        n_parallel=n_parallel,
+        parallel_mode=parallel_mode,
     )
 
 
 def export_runner(
     paths: ty.Sequence[str],
-    n_parallel: int = 1,
     fmt: WriterMode = "ome-tiff",
     write_registered: bool = True,
     write_not_registered: bool = True,
@@ -1057,6 +1028,8 @@ def export_runner(
     remove_merged: bool = True,
     original_size: bool = False,
     as_uint8: bool | None = False,
+    n_parallel: int = 1,
+    parallel_mode: str = "outer",
 ) -> None:
     """Register images."""
     from mpire import WorkerPool
@@ -1079,7 +1052,7 @@ def export_runner(
     )
 
     with MeasureTimer() as timer:
-        if n_parallel > 1:
+        if n_parallel > 1 and len(paths) > 1 and parallel_mode == "outer":
             with WorkerPool(n_parallel) as pool:
                 for path in pool.imap(
                     _export,
@@ -1109,6 +1082,7 @@ def export_runner(
                     remove_merged,
                     original_size,
                     as_uint8,
+                    n_parallel=n_parallel,
                 )
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
     logger.info(f"Finished processing all projects in {timer()}.")
@@ -1123,6 +1097,7 @@ def _export(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
+    n_parallel: int = 1,
 ) -> PathLike:
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
@@ -1139,27 +1114,13 @@ def _export(
         remove_merged=remove_merged,
         to_original_size=original_size,
         as_uint8=as_uint8,
+        n_parallel=n_parallel,
     )
     return path
 
 
-@click.option(
-    "--as_uint8/--no_as_uint8",
-    help="Downcast the image data format to uint8 which will substantially reduce the size of the files (unless it's"
-    " already in uint8...).",
-    is_flag=True,
-    default=None,
-    show_default=True,
-)
-@click.option(
-    "-f",
-    "--fmt",
-    help="Output format.",
-    type=click.Choice(["ome-tiff"], case_sensitive=False),
-    default="ome-tiff",
-    show_default=True,
-    required=False,
-)
+@as_uint8_
+@fmt_
 @click.option(
     "-b",
     "--crop_bbox",
