@@ -1419,22 +1419,33 @@ class IWsiReg:
             raise ValueError("Other writers are nto yet supported")
         name = filename.name if not preview else filename.name + "_preview"
 
-        channel_ids = None
+        channel_ids, channel_names = None, None
         if modality.export:
             as_uint8 = modality.export.as_uint8
             channel_ids = modality.export.channel_ids
+            channel_names = modality.export.channel_names
         if channel_ids:
             if len(channel_ids) == 0:
                 raise ValueError("No channel ids have been specified.")
             if len(channel_ids) > wrapper.reader.n_channels:
                 raise ValueError("More channel ids have been specified than there are channels.")
+        if channel_names:
+            if len(channel_names) == 0:
+                raise ValueError("No channel names have been specified.")
+            if len(channel_names) > wrapper.reader.n_channels:
+                raise ValueError("More channel names have been specified than there are channels.")
 
         # override as_uint8 if explicitly specified
         if isinstance(as_uint8_, bool):
             as_uint8 = as_uint8_
         logger.trace(f"Writing {name} to {filename}; channel_ids={channel_ids}; as_uint8={as_uint8}")
         path = writer.write(
-            name, output_dir=self.image_dir, channel_ids=channel_ids, as_uint8=as_uint8, tile_size=tile_size
+            name,
+            output_dir=self.image_dir,
+            channel_ids=channel_ids,
+            as_uint8=as_uint8,
+            tile_size=tile_size,
+            channel_names=channel_names,
         )
         return path
 
