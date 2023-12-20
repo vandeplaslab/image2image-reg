@@ -831,6 +831,13 @@ def _preprocess(path: PathLike, n_parallel: int) -> PathLike:
     show_default=True,
 )
 @click.option(
+    "--histogram_match/--no_histogram_match",
+    help="Match image histograms before co-registering - this might improve co-registration.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
     "-p",
     "--project_dir",
     help="Path to the project directory. It usually ends in .wsireg extension.",
@@ -844,6 +851,7 @@ def _preprocess(path: PathLike, n_parallel: int) -> PathLike:
 @cli.command("register", help_group="Execute")
 def register_cmd(
     project_dir: ty.Sequence[str],
+    histogram_match: bool,
     write: bool,
     fmt: WriterMode,
     write_registered: bool,
@@ -858,6 +866,7 @@ def register_cmd(
     """Register images."""
     register_runner(
         project_dir,
+        histogram_match=histogram_match,
         write_images=write,
         fmt=fmt,
         write_registered=write_registered,
@@ -873,6 +882,7 @@ def register_cmd(
 
 def register_runner(
     paths: ty.Sequence[str],
+    histogram_match: bool = False,
     write_images: bool = True,
     fmt: WriterMode = "ome-tiff",
     write_registered: bool = True,
@@ -910,6 +920,7 @@ def register_runner(
                     [
                         (
                             path,
+                            histogram_match,
                             write_images,
                             fmt,
                             write_registered,
@@ -927,6 +938,7 @@ def register_runner(
             for path in paths:
                 _register(
                     path,
+                    histogram_match,
                     write_images,
                     fmt,
                     write_registered,
@@ -943,6 +955,7 @@ def register_runner(
 
 def _register(
     path: PathLike,
+    histogram_match: bool,
     write_images: bool,
     fmt: WriterMode,
     write_registered: bool,
@@ -957,7 +970,7 @@ def _register(
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
-    obj.register()
+    obj.register(histogram_match=histogram_match)
     if write_images:
         obj.write_images(
             fmt=fmt,

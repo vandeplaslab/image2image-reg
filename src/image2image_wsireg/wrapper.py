@@ -178,7 +178,13 @@ class ImageWrapper:
             # set image
             if preprocessing:
                 self.image, self._mask, self.initial_transforms, self.original_size_transform = preprocess(
-                    image, mask, preprocessing, self.reader.resolution, self.reader.is_rgb, self.initial_transforms
+                    image,
+                    mask,
+                    preprocessing,
+                    self.reader.resolution,
+                    self.reader.is_rgb,
+                    self.initial_transforms,
+                    transform_mask=self.modality.transform_mask,
                 )
             else:
                 self.image, self._mask, self.original_size_transform = image, mask, None

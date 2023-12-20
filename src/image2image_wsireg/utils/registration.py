@@ -129,7 +129,7 @@ def register_2d_images(
     target: ImageWrapper,
     reg_params: list[dict[str, list[str]]],
     output_dir: str | Path,
-    histogram_match: bool = True,
+    histogram_match: bool = False,
     return_image: bool = False,
 ):
     """Register 2D images with multiple models and return a list of elastix transformation maps.

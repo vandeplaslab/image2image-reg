@@ -31,6 +31,7 @@ class Modality(BaseModel):
     mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None
     mask_bbox: ty.Optional[BoundingBox] = None
     mask_polygon: ty.Optional[Polygon] = None
+    transform_mask: bool = True
     output_pixel_size: ty.Optional[tuple[float, float]] = None
 
     @validator("mask_bbox", pre=True)
@@ -71,6 +72,8 @@ class Modality(BaseModel):
                 data.pop("export")
             if data.get("mask_polygon"):
                 data.pop("mask_polygon")
+            if data.get("transform_mask"):
+                data.pop("transform_mask")
         return data
 
     def to_wrapper(self):

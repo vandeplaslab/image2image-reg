@@ -201,6 +201,7 @@ def preprocess_reg_image_spatial(
     pixel_size: float,
     mask: sitk.Image | None = None,
     imported_transforms=None,
+    transform_mask: bool = True,
 ) -> tuple[sitk.Image, sitk.Image | None, list[dict], tuple]:
     """
     Spatial preprocessing of the reg_image.
@@ -215,6 +216,8 @@ def preprocess_reg_image_spatial(
         List of pre-initial transformations.
     original_size_transform: tuple, optional
         Transform to return the image to its original size.
+    transform_mask : bool
+        If True, mask will be transformed using the same transformation parameters as the image.
     """
     transforms = []
     original_size = image.GetSize()
@@ -241,7 +244,8 @@ def preprocess_reg_image_spatial(
 
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
+            if transform_mask:
+                mask = transform_plane(mask, final_tform, composite_transform)
 
     # rotate counter-clockwise
     if float(preprocessing.rotate_counter_clockwise) != 0.0:
@@ -252,7 +256,8 @@ def preprocess_reg_image_spatial(
 
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
+            if transform_mask:
+                mask = transform_plane(mask, final_tform, composite_transform)
         transforms.append(rot_tform)
 
     # flip image
@@ -265,7 +270,8 @@ def preprocess_reg_image_spatial(
 
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
+            if transform_mask:
+                mask = transform_plane(mask, final_tform, composite_transform)
 
         transforms.append(flip_tform)
 
@@ -311,6 +317,7 @@ def preprocess(
     pixel_size: float,
     is_rgb: bool,
     transforms: list,
+    transform_mask: bool = True,
 ) -> sitk.Image:
     """Run full intensity and spatial preprocessing."""
     # intensity based pre-processing
@@ -325,6 +332,11 @@ def preprocess(
 
     # spatial pre-processing
     image, mask, transforms, original_size_transform = preprocess_reg_image_spatial(
-        image, preprocessing, pixel_size, mask, transforms
+        image,
+        preprocessing,
+        pixel_size,
+        mask,
+        transforms,
+        transform_mask=transform_mask,
     )
     return image, mask, transforms, original_size_transform

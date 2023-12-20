@@ -528,6 +528,7 @@ class IWsiReg:
         mask_bbox: tuple[int, int, int, int] | BoundingBox | None = None,
         mask_polygon: np.ndarray | Polygon | None = None,
         output_pixel_size: tuple[float, float] | None = None,
+        transform_mask: bool = True,
         export: Export | dict[str, ty.Any] | None = None,
     ) -> Modality:
         """Add modality."""
@@ -573,6 +574,7 @@ class IWsiReg:
             mask_bbox=mask_bbox,
             mask_polygon=mask_polygon,
             export=export,
+            transform_mask=transform_mask,
         )
         logger.trace(f"Added modality '{name}'.")
         return self.modalities[name]
@@ -879,6 +881,7 @@ class IWsiReg:
         target_wrapper: ImageWrapper,
         parameters: list[str],
         output_dir: Path,
+        histogram_match: bool = False,
     ) -> tuple[TransformSequence, TransformSequence | None]:
         """Co-register images."""
         from image2image_wsireg.utils.registration import _prepare_reg_models, register_2d_images, sitk_pmap_to_dict
@@ -886,7 +889,13 @@ class IWsiReg:
         with MeasureTimer() as timer:
             logger.trace(f"Co-registering {source_wrapper.name} to {target_wrapper.name} using {parameters}.")
             # co-register images
-            transform = register_2d_images(source_wrapper, target_wrapper, _prepare_reg_models(parameters), output_dir)
+            transform = register_2d_images(
+                source_wrapper,
+                target_wrapper,
+                _prepare_reg_models(parameters),
+                output_dir,
+                histogram_match=histogram_match,
+            )
             # convert transformation to something readable
             transforms = [sitk_pmap_to_dict(tf) for tf in transform]
             # check whether the source modality had any initial transforms
@@ -969,7 +978,7 @@ class IWsiReg:
                 self._preprocess_image(modality, None)
                 logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
 
-    def register(self, n_parallel: int = 1) -> None:
+    def register(self, n_parallel: int = 1, histogram_match: bool = False) -> None:
         """Co-register images."""
         # TODO: add multi-core support
         self.set_logger()
@@ -1002,7 +1011,11 @@ class IWsiReg:
 
             # register images
             registration, initial = self._coregister_images(
-                source_wrapper, target_wrapper, edge["params"], registration_dir
+                source_wrapper,
+                target_wrapper,
+                edge["params"],
+                registration_dir,
+                histogram_match=histogram_match,
             )
             edge["transforms"] = {"registration": registration, "initial": initial}
             edge["registered"] = True
@@ -1481,10 +1494,12 @@ class IWsiReg:
                 paths.append(modality.path)
                 pixel_sizes.append(modality.pixel_size)
                 channel_names_ = modality.channel_names
-                channel_names.append(channel_names_)
                 if modality.export:
                     channel_ids.append(modality.export.channel_ids)
                     as_uint_all.append(modality.export.as_uint8)
+                    # if modality.export.channel_names:
+                    #     channel_names_ = modality.export.channel_names
+                channel_names.append(channel_names_)
                 as_uint8 = all(as_uint_all)
                 if name not in non_reg_modalities and attachment_modality not in non_reg_modalities:
                     _, sub_im_transforms, _ = self._prepare_registered_image_transform(
