@@ -979,13 +979,15 @@ class IWsiReg:
                 self._preprocess_image(modality, None)
                 logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
 
-    def register(self, n_parallel: int = 1, histogram_match: bool = False) -> None:
+    def register(self, n_parallel: int = 1, preprocess_first: bool = True, histogram_match: bool = False) -> None:
         """Co-register images."""
         # TODO: add multi-core support
         self.set_logger()
         self.save(registered=False)
         if not self.registration_nodes:
             raise ValueError("No registration paths have been defined.")
+        if preprocess_first:
+            self.preprocess(n_parallel=n_parallel)
 
         # compute transformation information
         for edge in tqdm(self.registration_nodes, desc="Registering nodes..."):
