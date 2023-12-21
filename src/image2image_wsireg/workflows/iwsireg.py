@@ -388,6 +388,7 @@ class IWsiReg:
                     mask_polygon=modality.get("mask_polygon", None),
                     output_pixel_size=modality.get("output_pixel_size", None),
                     pixel_size=modality.get("pixel_size", None),
+                    transform_mask=modality.get("transform_mask", True),
                     export=Export(**modality["export"]) if modality.get("export") else None,
                 )
             logger.trace(f"Loaded modalities in {timer()}")
