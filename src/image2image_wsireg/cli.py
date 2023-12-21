@@ -101,9 +101,27 @@ parallel_mode_ = click.option(
     "--parallel_mode",
     help="Parallel mode.",
     type=click.Choice(["inner", "outer"], case_sensitive=False),
-    default="inner",
+    default="outer",
     show_default=True,
     required=False,
+)
+project_path_multi_ = click.option(
+    "-p",
+    "--project_dir",
+    help="Path to the project directory. It usually ends in .wsireg extension.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    required=True,
+    multiple=True,
+    callback=cli_parse_paths_sort,
+)
+project_path_single_ = click.option(
+    "-p",
+    "--project_dir",
+    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=True,
 )
 
 
@@ -282,48 +300,36 @@ def new_runner(output_dir: str, name: str, cache: bool, merge: bool) -> None:
     obj.save()
 
 
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-)
+@project_path_single_
 @cli.command("about", help_group="Project")
-def about_cmd(project_dir: str) -> None:
+def about_cmd(project_dir: ty.Sequence[str]) -> None:
     """Add images to the project."""
     about_runner(project_dir)
 
 
-def about_runner(project_dir: str) -> None:
+def about_runner(paths: ty.Sequence[str]) -> None:
     """Add images to the project."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
-    obj = IWsiReg.from_path(project_dir)
-    obj.print_summary()
+    for project_dir in paths:
+        obj = IWsiReg.from_path(project_dir)
+        obj.print_summary()
 
 
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-)
+@project_path_multi_
 @cli.command("validate", help_group="Project")
-def validate_cmd(project_dir: str) -> None:
+def validate_cmd(project_dir: ty.Sequence[str]) -> None:
     """Add images to the project."""
     validate_runner(project_dir)
 
 
-def validate_runner(project_dir: str) -> None:
+def validate_runner(paths: ty.Sequence[str]) -> None:
     """Add images to the project."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
-    obj = IWsiReg.from_path(project_dir)
-    obj.validate()
+    for project_dir in paths:
+        obj = IWsiReg.from_path(project_dir)
+        obj.validate()
 
 
 @click.option(
@@ -385,14 +391,7 @@ def validate_runner(project_dir: str) -> None:
     multiple=True,
     required=True,
 )
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-)
+@project_path_single_
 @cli.command("add-image", help_group="Project")
 def add_modality_cmd(
     project_dir: str,
@@ -524,14 +523,7 @@ def add_modality_runner(
     show_default=True,
     required=True,
 )
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-)
+@project_path_single_
 @cli.command("add-path", help_group="Project")
 def add_path_cmd(
     project_dir: str,
@@ -606,14 +598,7 @@ def add_path_runner(
     multiple=False,
     required=True,
 )
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-)
+@project_path_single_
 @cli.command("add-attachment", help_group="Project")
 def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
     """Add attachment image."""
@@ -671,14 +656,7 @@ def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], pa
     multiple=False,
     required=True,
 )
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-)
+@project_path_single_
 @cli.command("add-shape", help_group="Project")
 def add_shape_cmd(project_dir: str, attach_to: str, name: str, shape: list[str | Path]) -> None:
     """Add attachment shape (GeoJSON)."""
@@ -728,16 +706,7 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
     show_default=True,
     required=True,
 )
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the project directory. It usually ends in .wsireg extension.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    required=True,
-    multiple=True,
-    callback=cli_parse_paths_sort,
-)
+@project_path_multi_
 @cli.command("add-merge", help_group="Project")
 def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
     """Specify how (if) images should be merged."""
@@ -766,16 +735,7 @@ def add_merge_runner(
 
 @parallel_mode_
 @n_parallel_
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the project directory. It usually ends in .wsireg extension.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    required=True,
-    multiple=True,
-    callback=cli_parse_paths_sort,
-)
+@project_path_multi_
 @cli.command("preprocess", help_group="Execute")
 def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str) -> None:
     """Preprocess images."""
@@ -837,17 +797,7 @@ def _preprocess(path: PathLike, n_parallel: int) -> PathLike:
     default=False,
     show_default=True,
 )
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the project directory. It usually ends in .wsireg extension.",
-    type=click.UNPROCESSED,
-    # type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-    multiple=True,
-    callback=cli_parse_paths_sort,
-)
+@project_path_multi_
 @cli.command("register", help_group="Execute")
 def register_cmd(
     project_dir: ty.Sequence[str],
@@ -994,16 +944,7 @@ def _register(
 @write_not_registered_
 @write_registered_
 @fmt_
-@click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the project directory. It usually ends in .wsireg extension.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    required=True,
-    multiple=True,
-    callback=cli_parse_paths_sort,
-)
+@project_path_multi_
 @cli.command("export", help_group="Execute")
 def export_cmd(
     project_dir: ty.Sequence[str],
