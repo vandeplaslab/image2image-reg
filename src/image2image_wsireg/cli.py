@@ -7,7 +7,14 @@ from pathlib import Path
 
 import click
 from click_groups import GroupedGroup
-from koyo.click import Parameter, cli_parse_paths_sort, info_msg, print_parameters, warning_msg
+from koyo.click import (
+    Parameter,
+    arg_parse_framelist_multi,
+    cli_parse_paths_sort,
+    info_msg,
+    print_parameters,
+    warning_msg,
+)
 from koyo.system import IS_MAC
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
@@ -1076,6 +1083,18 @@ def _export(
 @as_uint8_
 @fmt_
 @click.option(
+    "-C",
+    "--channel_ids",
+    type=click.STRING,
+    default=None,
+    help="Specify channel ids in the format: 1,2,4-6. You can provide multiple. If you are providing any, make sure to"
+    " provide one for each file you are trying to merge.",
+    callback=arg_parse_framelist_multi,
+    show_default=True,
+    multiple=True,
+    required=False,
+)
+@click.option(
     "-b",
     "--crop_bbox",
     help="Bound box to be used for cropping of the image(s). It must be supplied in the format: x,y,width,height and"
@@ -1117,11 +1136,12 @@ def merge_cmd(
     path: ty.Sequence[str],
     output_dir: str,
     crop_bbox: tuple[int, int, int, int] | None,
+    channel_ids: ty.Sequence[tuple] | None,
     fmt: WriterMode,
     as_uint8: bool | None,
 ) -> None:
     """Export images."""
-    merge_runner(name, path, output_dir, crop_bbox, fmt, as_uint8)
+    merge_runner(name, path, output_dir, crop_bbox, channel_ids, fmt, as_uint8)
 
 
 def merge_runner(
@@ -1129,6 +1149,7 @@ def merge_runner(
     paths: ty.Sequence[str],
     output_dir: str,
     crop_bbox: tuple[int, int, int, int] | None,
+    channel_ids: ty.Sequence[tuple] | None,
     fmt: WriterMode = "ome-tiff",
     as_uint8: bool | None = False,
 ) -> None:
@@ -1140,12 +1161,17 @@ def merge_runner(
         Parameter("Image paths", "-p/--path", paths),
         Parameter("Output directory", "-o/--output_dir", output_dir),
         Parameter("Crop bounding box", "-b/--crop_bbox", crop_bbox),
+        Parameter("Channel ids", "-C/--channel_ids", channel_ids),
         Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
     )
 
+    if channel_ids:
+        if len(channel_ids) != len(paths):
+            raise ValueError("Number of channel ids must match number of images.")
+
     with MeasureTimer() as timer:
-        merge_images(name, list(paths), output_dir, crop_bbox, fmt, as_uint8)
+        merge_images(name, list(paths), output_dir, crop_bbox, fmt, as_uint8, channel_ids=channel_ids)
     logger.info(f"Finished processing project in {timer()}.")
 
 
