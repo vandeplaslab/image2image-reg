@@ -14,7 +14,7 @@ from koyo.typing import PathLike
 from loguru import logger
 
 from image2image_wsireg.models import BoundingBox, Modality, Polygon, Preprocessing
-from image2image_wsireg.utils.convert import sitk_image_to_itk_image
+from image2image_wsireg.preprocessing.convert import sitk_image_to_itk_image
 
 
 def filename_with_suffix(filename: Path, extra: str, suffix: str) -> Path:

@@ -11,7 +11,7 @@ from koyo.timer import MeasureTimer
 from loguru import logger
 
 from image2image_wsireg.models import Registration
-from image2image_wsireg.utils.convert import itk_image_to_sitk_image
+from image2image_wsireg.preprocessing.convert import itk_image_to_sitk_image
 
 if ty.TYPE_CHECKING:
     from image2image_wsireg.wrapper import ImageWrapper

@@ -13,7 +13,7 @@ import SimpleITK as sitk
 from image2image_wsireg.enums import ELX_TO_ITK_INTERPOLATORS
 from image2image_wsireg.models import Transform
 from image2image_wsireg.parameters.transformations import BASE_AFFINE_TRANSFORM, BASE_RIGID_TRANSFORM
-from image2image_wsireg.utils.convert import itk_image_to_sitk_image, sitk_image_to_itk_image
+from image2image_wsireg.preprocessing.convert import itk_image_to_sitk_image, sitk_image_to_itk_image
 from image2image_wsireg.utils.registration import json_to_pmap_dict
 
 

@@ -37,6 +37,7 @@ dependencies = [
     "scikit-image",
     "click-groups",
     "mpire",
+    "colour-science",
 ]
 
 # extras
