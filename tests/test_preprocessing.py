@@ -7,6 +7,7 @@ import SimpleITK as sitk
 
 from image2image_wsireg.preprocessing.convert import numpy_to_sitk_image
 from image2image_wsireg.preprocessing.step import (
+    PREPROCESSOR_REGISTER,
     BackgroundColorDistancePreprocessor,
     ContrastEnhancePreprocessor,
     DownsamplePreprocessor,
@@ -17,10 +18,12 @@ from image2image_wsireg.preprocessing.step import (
     MaximumIntensityProcessor,
     Preprocessor,
     StainFlattenerPreprocessor,
+    get_preprocessor,
 )
+from image2image_wsireg.preprocessing.workflow import Workflow
 
 
-def twod_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
+def single_channel_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
     """Get NumPy array."""
     array = np.random.randint(0, 255, size=(100, 100), dtype=np.uint8)
     return numpy_to_sitk_image(array) if as_sitk else array
@@ -32,15 +35,29 @@ def rgb_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
     return numpy_to_sitk_image(array) if as_sitk else array
 
 
-def multichannel_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
+def multi_channel_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
     """Get NumPy array."""
     array = np.random.randint(0, 255, size=(4, 100, 100), dtype=np.uint8)
     return numpy_to_sitk_image(array) if as_sitk else array
 
 
-@pytest.mark.parametrize("array", [twod_array(), twod_array(True)])
+def test_pre_attr_set():
+    for pre_cls in PREPROCESSOR_REGISTER.values():
+        assert pre_cls.allow_multi_channel is not None, "allow_multi_channel not set"
+        assert pre_cls.allow_rgb is not None, "allow_rgb not set"
+        assert pre_cls.allow_single_channel is not None, "allow_twod not set"
+
+
+def test_get_preprocessor():
+    for key in PREPROCESSOR_REGISTER:
+        pre = get_preprocessor(key)
+        assert pre is not None, f"Preprocessor not found for '{key}'"
+
+
+@pytest.mark.parametrize("array", [single_channel_array(), single_channel_array(True)])
 def test_pre_twod(array):
-    pre = Preprocessor(array, pixel_size=1)
+    pre = Preprocessor()
+    pre.set_array(array, 1)
     assert pre.is_single_channel, "Single channel image not detected"
     assert not pre.is_multi_channel, "Multichannel image detected as RGB"
     numpy_array = pre.to_array()
@@ -48,12 +65,13 @@ def test_pre_twod(array):
     sitk_image = pre.to_sitk()
     assert isinstance(sitk_image, sitk.Image), "Conversion to SimpleITK failed"
     with pytest.raises(NotImplementedError):
-        pre.apply()
+        pre.apply(array, 1)
 
 
 @pytest.mark.parametrize("array", [rgb_array(), rgb_array(True)])
 def test_pre_rgb(array):
-    pre = Preprocessor(array, pixel_size=1)
+    pre = Preprocessor()
+    pre.set_array(array, 1)
     assert pre.is_rgb, "RGB image not detected"
     assert not pre.is_multi_channel, "Multichannel image detected as RGB"
     numpy_array = pre.to_array()
@@ -61,12 +79,13 @@ def test_pre_rgb(array):
     sitk_image = pre.to_sitk()
     assert isinstance(sitk_image, sitk.Image), "Conversion to SimpleITK failed"
     with pytest.raises(NotImplementedError):
-        pre.apply()
+        pre.apply(array, 1)
 
 
-@pytest.mark.parametrize("array", [multichannel_array(), multichannel_array(True)])
+@pytest.mark.parametrize("array", [multi_channel_array(), multi_channel_array(True)])
 def test_pre_multichannel(array):
-    pre = Preprocessor(array, pixel_size=1)
+    pre = Preprocessor()
+    pre.set_array(array, 1)
     assert not pre.is_rgb, "RGB image not detected"
     assert pre.is_multi_channel, "Multichannel image detected as RGB"
     numpy_array = pre.to_array()
@@ -74,15 +93,15 @@ def test_pre_multichannel(array):
     sitk_image = pre.to_sitk()
     assert isinstance(sitk_image, sitk.Image), "Conversion to SimpleITK failed"
     with pytest.raises(NotImplementedError):
-        pre.apply()
+        pre.apply(array, 1)
 
 
 @pytest.mark.parametrize("array", [rgb_array(), rgb_array(True)])
 def test_luminosity(array):
-    pre = LuminosityPreprocessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = LuminosityPreprocessor()
+    image = pre.apply(array, 1)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True)
+    array_ = pre.apply(array, 1, to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (100, 100), "Shape mismatch"
     assert array_.dtype == np.uint8, "Incorrect dtype"
@@ -90,10 +109,10 @@ def test_luminosity(array):
 
 @pytest.mark.parametrize("array", [rgb_array(), rgb_array(True)])
 def test_gray(array):
-    pre = GrayPreprocessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = GrayPreprocessor()
+    image = pre.apply(array, 1)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True)
+    array_ = pre.apply(array, 1, to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (100, 100), "Shape mismatch"
     assert array_.dtype == np.uint8, "Incorrect dtype"
@@ -101,32 +120,32 @@ def test_gray(array):
 
 @pytest.mark.parametrize("array", [rgb_array(), rgb_array(True)])
 def test_background(array):
-    pre = BackgroundColorDistancePreprocessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = BackgroundColorDistancePreprocessor()
+    image = pre.apply(array, 1)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True)
+    array_ = pre.apply(array, 1, to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (100, 100), "Shape mismatch"
     assert array_.dtype == np.uint8, "Incorrect dtype"
 
 
-@pytest.mark.parametrize("array", [twod_array(), twod_array(True)])
+@pytest.mark.parametrize("array", [single_channel_array(), single_channel_array(True)])
 def test_invert(array):
-    pre = InvertIntensityPreprocessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = InvertIntensityPreprocessor()
+    image = pre.apply(array, 1)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True)
+    array_ = pre.apply(array, 1, to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (100, 100), "Shape mismatch"
     assert array_.dtype == np.uint8, "Incorrect dtype"
 
 
-@pytest.mark.parametrize("array", [rgb_array(), multichannel_array()])
+@pytest.mark.parametrize("array", [rgb_array(), multi_channel_array()])
 def test_maximum_projection(array):
-    pre = MaximumIntensityProcessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = MaximumIntensityProcessor()
+    image = pre.apply(array, 1)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True)
+    array_ = pre.apply(array, 1, to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (100, 100), "Shape mismatch"
     assert array_.dtype == np.uint8, "Incorrect dtype"
@@ -134,21 +153,21 @@ def test_maximum_projection(array):
 
 @pytest.mark.parametrize("array", [rgb_array(), rgb_array(True)])
 def test_hande(array):
-    pre = HandEDeconvolutionPreprocessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = HandEDeconvolutionPreprocessor()
+    image = pre.apply(array, 1)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True)
+    array_ = pre.apply(array, 1, to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (100, 100), "Shape mismatch"
     assert array_.dtype == np.uint8, "Incorrect dtype"
 
 
-@pytest.mark.parametrize("array", [twod_array(), twod_array(True)])
+@pytest.mark.parametrize("array", [single_channel_array(), single_channel_array(True)])
 def test_contrast_enhance(array):
-    pre = ContrastEnhancePreprocessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = ContrastEnhancePreprocessor()
+    image = pre.apply(array, 1)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True)
+    array_ = pre.apply(array, 1, to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (100, 100), "Shape mismatch"
     assert array_.dtype == np.uint8, "Incorrect dtype"
@@ -156,21 +175,63 @@ def test_contrast_enhance(array):
 
 @pytest.mark.parametrize("array", [rgb_array(), rgb_array(True)])
 def test_stain_flattener(array):
-    pre = StainFlattenerPreprocessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = StainFlattenerPreprocessor()
+    image = pre.apply(array, 1)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True)
+    array_ = pre.apply(array, 1, to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (100, 100), "Shape mismatch"
     assert array_.dtype == np.uint8, "Incorrect dtype"
 
 
-@pytest.mark.parametrize("array", [twod_array(), twod_array(True)])
+@pytest.mark.parametrize("array", [single_channel_array(), single_channel_array(True)])
 def test_downsample_2d(array):
-    pre = DownsamplePreprocessor(array, pixel_size=1)
-    image = pre.apply()
+    pre = DownsamplePreprocessor()
+    image = pre.apply(array, 1, factor=2)
     assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
-    array_ = pre.apply(to_array=True, factor=2)
+    array_ = pre.apply(array, 1, to_array=True, factor=2)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.shape == (50, 50), "Shape mismatch"
+    assert array_.dtype == np.uint8, "Incorrect dtype"
+
+
+@pytest.mark.parametrize("array", [rgb_array(), rgb_array(True)])
+def test_all_rgb(array):
+    for pre in PREPROCESSOR_REGISTER.values():
+        if pre.allow_rgb:
+            image = pre.apply(array, 1)
+            assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
+            array_ = pre.apply(array, 1, to_array=True)
+            assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
+            assert array_.dtype == np.uint8, "Incorrect dtype"
+
+
+@pytest.mark.parametrize("array", [single_channel_array(), single_channel_array(True)])
+def test_all_single_channel(array):
+    for pre in PREPROCESSOR_REGISTER.values():
+        if pre.allow_single_channel:
+            image = pre.apply(array, 1)
+            assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
+            array_ = pre.apply(array, 1, to_array=True)
+            assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
+            assert array_.dtype == np.uint8, "Incorrect dtype"
+
+
+@pytest.mark.parametrize("array", [multi_channel_array(), single_channel_array(True)])
+def test_all_multi_channel(array):
+    for pre in PREPROCESSOR_REGISTER.values():
+        if pre.allow_multi_channel:
+            image = pre.apply(array, 1)
+            assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
+            array_ = pre.apply(array, 1, to_array=True)
+            assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
+            assert array_.dtype == np.uint8, "Incorrect dtype"
+
+
+def test_workflow():
+    wf = Workflow(single_channel_array(), 1, ("contrast_enhance",))
+    image = wf.run()
+    assert isinstance(image, sitk.Image), "Conversion to SimpleITK failed"
+    array_ = wf.run(to_array=True)
+    assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.dtype == np.uint8, "Incorrect dtype"
