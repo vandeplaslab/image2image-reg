@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
-from image2image_io._reader import get_simple_reader
+from image2image_io.readers import get_simple_reader
 from image2image_io.readers import BaseReader, GeoJSONReader
 from koyo.json import read_json_data, write_json_data
 from koyo.secret import hash_parameters

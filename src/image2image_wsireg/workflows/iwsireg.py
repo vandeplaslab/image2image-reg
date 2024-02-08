@@ -496,7 +496,7 @@ class IWsiReg:
         export: Export | dict[str, ty.Any] | None = None,
     ) -> Modality:
         """Add modality."""
-        from image2image_io._reader import get_simple_reader, is_supported
+        from image2image_io.readers import get_simple_reader, is_supported
 
         path = Path(path)
         if not path.exists():
@@ -533,7 +533,7 @@ class IWsiReg:
         export: Export | dict[str, ty.Any] | None = None,
     ) -> Modality:
         """Add modality."""
-        from image2image_io._reader import is_supported
+        from image2image_io.readers import is_supported
 
         path = Path(path)
         if not path.exists():
@@ -582,7 +582,7 @@ class IWsiReg:
 
     def auto_add_attachment_images(self, attach_to_modality: str, name: str, path: PathLike) -> None:
         """Add modality."""
-        from image2image_io._reader import get_simple_reader, is_supported
+        from image2image_io.readers import get_simple_reader, is_supported
 
         path = Path(path)
         if not path.exists():
