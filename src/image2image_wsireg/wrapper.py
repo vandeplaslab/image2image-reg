@@ -168,6 +168,7 @@ class ImageWrapper:
 
         # pre-process image
         with MeasureTimer() as timer:
+            logger.trace(f"Pre-processing image {self.modality.name} with {preprocessing}...")
             image = preprocess_dask_array(image, preprocessing)
             logger.trace(f"Pre-processed image in {timer()}")
             # convert and cast
