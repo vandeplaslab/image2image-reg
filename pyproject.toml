@@ -38,6 +38,7 @@ dependencies = [
     "click-groups",
     "mpire",
     "colour-science",
+    "tabulate",
 ]
 
 # extras
