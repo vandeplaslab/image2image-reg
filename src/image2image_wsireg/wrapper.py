@@ -73,7 +73,7 @@ class ImageWrapper:
     @staticmethod
     def preprocessing_hash(modality: Modality, preprocessing: Preprocessing | None = None) -> str:
         """Hash of the preprocessing parameters."""
-        if preprocessing is None or modality.preprocessing is None:
+        if preprocessing is None and modality.preprocessing is None:
             return hash_parameters(n_in_hash=6)
         if preprocessing:
             return hash_parameters(n_in_hash=6, **preprocessing.dict())
@@ -175,10 +175,10 @@ class ImageWrapper:
             image = convert_and_cast(image, preprocessing)
             logger.trace(f"Converted and cast image in {timer(since_last=True)}")
 
-            mask = self.mask
+            mask = self.mask if self.modality.transform_mask else None
             # set image
             if preprocessing:
-                self.image, self._mask, self.initial_transforms, self.original_size_transform = preprocess(
+                self.image, mask, self.initial_transforms, self.original_size_transform = preprocess(
                     image,
                     mask,
                     preprocessing,
@@ -188,7 +188,10 @@ class ImageWrapper:
                     transform_mask=self.modality.transform_mask,
                 )
             else:
-                self.image, self._mask, self.original_size_transform = image, mask, None
+                self.image, mask, self.original_size_transform = image, mask, None
+            if not self.modality.transform_mask:
+                mask = self.mask
+            self._mask = mask
             logger.trace(f"Pre-processed image in {timer(since_last=True)}")
 
     def read_mask(self, mask: str | Path | sitk.Image | np.ndarray) -> sitk.Image:
@@ -226,9 +229,14 @@ class ImageWrapper:
         mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
         return mask
 
-    def make_bbox_mask(self, bbox: BoundingBox | Polygon) -> sitk.Image:
+    def make_bbox_mask(self, bbox: BoundingBox | Polygon, pixel_size: float | None = None, image_shape: tuple[int, int] | None = None) -> sitk.Image:
         """Make mask from bounding box."""
-        mask = bbox.to_sitk_image(self.reader.image_shape, self.modality.pixel_size)
-        mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
-        logger.trace(f"Loaded mask from bbox for {self.modality.name}")
+        if image_shape is None:
+            # should be height, width
+            image_shape = self.image.GetSize()[::-1] if self.image else self.reader.image_shape
+        if pixel_size is None:
+            pixel_size = self.image.GetSpacing()[0] if self.image else self.modality.pixel_size
+        mask = bbox.to_sitk_image(image_shape, pixel_size)
+        mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
+        logger.trace(f"Loaded mask from bbox for {self.modality.name} with shape: {image_shape} and pixel size: {pixel_size:.2f}")
         return mask

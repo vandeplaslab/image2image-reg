@@ -837,12 +837,12 @@ class IWsiReg:
                     return extended_path
         return None
 
-    def _preprocess_image(self, modality: Modality, preprocessing: Preprocessing | None = None) -> ImageWrapper:
+    def _preprocess_image(self, modality: Modality, preprocessing: Preprocessing | None = None, overwrite: bool = False) -> ImageWrapper:
         """Pre-process images."""
         from image2image_wsireg.wrapper import ImageWrapper
 
         wrapper = ImageWrapper(modality, preprocessing)
-        cached = wrapper.check_cache(self.cache_dir, self.cache_images)
+        cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not overwrite else False
         if not cached:
             wrapper.preprocess()
             wrapper.save_cache(self.cache_dir, self.cache_images)
@@ -958,7 +958,7 @@ class IWsiReg:
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
 
-    def preprocess(self, n_parallel: int = 1) -> None:
+    def preprocess(self, n_parallel: int = 1, overwrite: bool = False) -> None:
         """Pre-process all images."""
         # TODO: add multi-core support
         self.set_logger()
@@ -976,7 +976,7 @@ class IWsiReg:
             #         pool.imap_unordered(self._preprocess_image, to_preprocess)
             for modality in tqdm(self.modalities.values(), desc="Pre-processing images"):
                 logger.trace(f"Pre-processing {modality.name}.")
-                self._preprocess_image(modality, None)
+                self._preprocess_image(modality, None, overwrite=overwrite)
                 logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
 
     def register(self, n_parallel: int = 1, preprocess_first: bool = True, histogram_match: bool = False) -> None:

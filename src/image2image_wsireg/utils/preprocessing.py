@@ -238,9 +238,9 @@ def preprocess_reg_image_spatial(
         affine_tform = preprocessing.affine
         if isinstance(affine_tform, np.ndarray):
             affine_tform = affine_to_itk_affine(affine_tform, original_size, pixel_size, True)
+        transforms.append(affine_tform)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
         image = transform_plane(image, final_tform, composite_transform)
-        transforms.append(affine_tform)
 
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))
@@ -251,6 +251,7 @@ def preprocess_reg_image_spatial(
     if float(preprocessing.rotate_counter_clockwise) != 0.0:
         logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
         rot_tform = generate_rigid_rotation_transform(image, pixel_size, preprocessing.rotate_counter_clockwise)
+        transforms.append(rot_tform)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [rot_tform]})
         image = transform_plane(image, final_tform, composite_transform)
 
@@ -258,7 +259,6 @@ def preprocess_reg_image_spatial(
             mask.SetSpacing((pixel_size, pixel_size))
             if transform_mask:
                 mask = transform_plane(mask, final_tform, composite_transform)
-        transforms.append(rot_tform)
 
     # flip image
     if preprocessing.flip:

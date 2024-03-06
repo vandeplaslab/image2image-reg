@@ -29,6 +29,14 @@ if ty.TYPE_CHECKING:
 
 
 # declare common options
+overwrite_ = click.option(
+    "-W",
+    "--overwrite",
+    help="Overwrite existing data.",
+    is_flag=True,
+    default=None,
+    show_default=True,
+)
 as_uint8_ = click.option(
     "-u/-U",
     "--as_uint8/--no_as_uint8",
@@ -740,43 +748,47 @@ def add_merge_runner(
         obj.save()
 
 
+@overwrite_
 @parallel_mode_
 @n_parallel_
 @project_path_multi_
 @cli.command("preprocess", help_group="Execute")
-def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str) -> None:
+def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str, overwrite: bool) -> None:
     """Preprocess images."""
-    preprocess_runner(project_dir, n_parallel, parallel_mode)
+    preprocess_runner(project_dir, n_parallel, parallel_mode, overwrite)
 
 
-def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1, parallel_mode: str = "outer") -> None:
+def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1, parallel_mode: str = "outer", overwrite: bool = False) -> None:
     """Register images."""
     from mpire import WorkerPool
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
+        Parameter("Parallel mode", "-P/--parallel_mode", parallel_mode),
+        Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
 
     with MeasureTimer() as timer:
         if n_parallel > 1 and len(paths) > 1 and parallel_mode == "outer":
             logger.trace(f"Running {n_parallel} actions in parallel.")
             with WorkerPool(n_parallel) as pool:
-                for path in pool.imap(_preprocess, paths):
+                args = [(path, n_parallel, overwrite) for path in paths]
+                for path in pool.imap(_preprocess, args):
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
         else:
             for path in paths:
-                _preprocess(path, n_parallel)
+                _preprocess(path, n_parallel, overwrite)
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
     logger.info(f"Finished processing all projects in {timer()}.")
 
 
-def _preprocess(path: PathLike, n_parallel: int) -> PathLike:
+def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> PathLike:
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
-    obj.preprocess(n_parallel)
+    obj.preprocess(n_parallel, overwrite=overwrite)
     return path
 
 

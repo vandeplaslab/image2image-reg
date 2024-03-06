@@ -35,6 +35,37 @@ def resample(
     return resampler.Execute(image)  # type: ignore[no-untyped-call]
 
 
+def compute_affine_bound_for_image(image: sitk.Image, affine: np.ndarray) -> tuple[float, float]:
+    """Compute the bounds of an image after an affine transformation."""
+    w, h = image.GetSize()[0:2]  # type: ignore[no-untyped-call]
+    return compute_affine_bound((h, w), affine)
+
+
+def compute_affine_bound(shape: tuple[int, int], affine: np.ndarray) -> tuple[float, float]:
+    """Compute affine bounds."""
+    w, h = shape
+    # Top-left, Top-right, Bottom-left, Bottom-right
+    corners = np.array([
+        [0, 0, 1],  # Adding 1 for homogeneous coordinates (x, y, 1)
+        [w, 0, 1],
+        [0, h, 1],
+        [w, h, 1]
+    ])
+    # Apply affine transformation to corners
+    transformed_corners = np.dot(corners, affine.T)  # Transpose matrix to match shapes
+
+    # Extracting x and y coordinates
+    x_coords, y_coords = transformed_corners[:, 0], transformed_corners[:, 1]
+
+    # Calculate bounds
+    min_x, max_x = np.min(x_coords), np.max(x_coords)
+    min_y, max_y = np.min(y_coords), np.max(y_coords)
+
+    new_width = int(np.ceil(max_x - min_x))
+    new_height = int(np.ceil(max_y - min_y))
+    return new_width, new_height
+
+
 def affine_to_itk_affine(
     affine: np.ndarray,
     image_shape: tuple[int, int],
@@ -50,7 +81,11 @@ def affine_to_itk_affine(
         affine = np.linalg.inv(affine)
     aff = deepcopy(BASE_AFFINE_TRANSFORM)
     aff["Spacing"] = [str(spacing), str(spacing)]
-    aff["Size"] = [str(image_shape[0]), str(image_shape[1])]
+    # compute new image shape
+    new_image_shape = compute_affine_bound(image_shape, affine)  # width, height
+    # adjust for pixel spacing
+    new_image_shape = (int(np.ceil(new_image_shape[0])), int(np.ceil(new_image_shape[1])))
+    aff["Size"] = [str(new_image_shape[0]) , str(new_image_shape[1])]
 
     # extract affine parameters
     affine_ = affine[:2, :]
@@ -241,7 +276,7 @@ def compute_rotation_bounds_for_image(image: sitk.Image, angle: float = 30) -> t
     Parameters
     ----------
     image : sitk.Image
-        SimpleITK image that will be rotated    angle
+        SimpleITK image that will be rotated angle
     angle : float
         angle of rotation in degrees, rotates counter-clockwise if positive
 

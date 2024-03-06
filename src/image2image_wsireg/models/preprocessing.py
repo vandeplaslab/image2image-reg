@@ -86,6 +86,13 @@ class Preprocessing(BaseModel):
     downsample: int = 1
     use_mask: bool = True
 
+    def _validate_rotate_counter_clockwise(cls, v):
+        if v == 360:
+            v = 0
+        if v > 360:
+            v = v % 360
+        return v
+
     def __init__(self, **kwargs: ty.Any):
         if "max_int_proj" in kwargs:
             kwargs["max_intensity_projection"] = kwargs.pop("max_int_proj")
