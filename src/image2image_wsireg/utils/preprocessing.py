@@ -25,12 +25,30 @@ from image2image_wsireg.utils.transformation import (
 )
 
 
+def get_channel_indices_from_names(channel_names: list[str], channel_names_to_select: list[str]) -> list[int]:
+    """Get channel indices from channel names."""
+    channel_indices = []
+    for channel_name in channel_names_to_select:
+        if channel_name in channel_names:
+            channel_indices.append(channel_names.index(channel_name))
+        else:
+            logger.warning(f"Channel name {channel_name} not found in the list of channel names")
+    return channel_indices
+
+
+def sort_indices(channel_indices: list[int]) -> list[int]:
+    """Sort channel indices and remove duplicates."""
+    return np.unique(channel_indices).tolist()
+
+
 def preprocess_dask_array(
     array: da.core.Array,
+    channel_names: list[str],
     preprocessing: Preprocessing | None = None,
 ) -> sitk.Image:
     """Pre-process dask array."""
     is_rgb = guess_rgb(array.shape)
+    # perform max intensity projection
     if is_rgb:
         if preprocessing:
             array_out = np.asarray(grayscale(array, is_interleaved=is_rgb))
@@ -38,14 +56,19 @@ def preprocess_dask_array(
         else:
             array_out = np.asarray(array)
             array_out = sitk.GetImageFromArray(array_out, isVector=True)  # type: ignore[assignment]
-
+    # no need to pre-process
     elif len(array.shape) == 2:
         array_out = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
     else:
+        # select channels
         if preprocessing:
-            if preprocessing.channel_indices and len(array.shape) > 2:
-                chs = list(preprocessing.channel_indices)
-                array = array[chs, :, :]
+            channel_indices = None
+            if len(array.shape) > 2 and preprocessing.channel_indices is not None:
+                channel_indices = list(preprocessing.channel_indices)
+            elif len(array.shape) > 2 and preprocessing.channel_names is not None:
+                channel_indices = get_channel_indices_from_names(channel_names, preprocessing.channel_names)
+            if channel_indices:
+                array = array[sort_indices(channel_indices), :, :]
         array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
     return array_out
 
@@ -236,38 +259,31 @@ def preprocess_reg_image_spatial(
     # apply affine transformation
     if preprocessing.affine is not None:
         logger.trace("Applying affine transformation")
-        # affine_tform = preprocessing.affine
-        # if isinstance(affine_tform, np.ndarray):
-        #     affine_tform = affine_to_itk_affine(image, affine_tform, original_size, pixel_size, True)
-        # transforms.append(affine_tform)
-        # composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
-        # image = transform_plane(image, final_tform, composite_transform)
-        #
-        # if mask is not None:
-        #     mask.SetSpacing((pixel_size, pixel_size))
-        #     if transform_mask:
-        #         mask = transform_plane(mask, final_tform, composite_transform)
+        affine_tform = preprocessing.affine
+        if isinstance(affine_tform, np.ndarray):
+            affine_tform = affine_to_itk_affine(image, affine_tform, original_size, pixel_size, True)
+        transforms.append(affine_tform)
+        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
+        image = transform_plane(image, final_tform, composite_transform)
 
-        # translate x/y image
-        logger.trace("Cropping to mask")
+        if mask is not None:
+            mask.SetSpacing((pixel_size, pixel_size))
+            if transform_mask:
+                mask = transform_plane(mask, final_tform, composite_transform)
+
+    # translate x/y image
+    if preprocessing.translate_x or preprocessing.translate_y:
+        logger.trace(f"Transforming image by translation: {preprocessing.translate_x}, {preprocessing.translate_y}")
         translation_transform = generate_rigid_translation_transform_alt(
-            image,
-            pixel_size,
-            -50,
-            475,
-            original_size,
-            # preprocessing.crop_bbox.x,
-            # preprocessing.crop_bbox.y,
-            # preprocessing.crop_bbox.width,
-            # preprocessing.crop_bbox.height,
+            image, pixel_size, preprocessing.translate_x, preprocessing.translate_y
         )
         transforms.append(translation_transform)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
         image = transform_plane(image, final_tform, composite_transform)
 
         if mask is not None:
-            mask.SetSpacing((pixel_size, pixel_size))
             if transform_mask:
+                mask.SetSpacing((pixel_size, pixel_size))
                 mask = transform_plane(mask, final_tform, composite_transform)
 
     # rotate counter-clockwise
@@ -279,25 +295,24 @@ def preprocess_reg_image_spatial(
         image = transform_plane(image, final_tform, composite_transform)
 
         if mask is not None:
-            mask.SetSpacing((pixel_size, pixel_size))
             if transform_mask:
+                mask.SetSpacing((pixel_size, pixel_size))
                 mask = transform_plane(mask, final_tform, composite_transform)
 
     # flip image
     if preprocessing.flip:
         logger.trace(f"Flipping image {preprocessing.flip.value}")
         flip_tform = generate_affine_flip_transform(image, pixel_size, preprocessing.flip.value)
-
+        transforms.append(flip_tform)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [flip_tform]})
         image = transform_plane(image, final_tform, composite_transform)
 
         if mask is not None:
-            mask.SetSpacing((pixel_size, pixel_size))
             if transform_mask:
+                mask.SetSpacing((pixel_size, pixel_size))
                 mask = transform_plane(mask, final_tform, composite_transform)
 
-        transforms.append(flip_tform)
-
+    # crop to bbox
     if mask and preprocessing.crop_to_bbox:
         logger.trace("Computing mask bounding box")
         if preprocessing.crop_bbox is None:
@@ -315,7 +330,7 @@ def preprocess_reg_image_spatial(
             preprocessing.crop_bbox.width,
             preprocessing.crop_bbox.height,
         )
-
+        transforms.append(translation_transform)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
 
         image = transform_plane(image, final_tform, composite_transform)
@@ -324,7 +339,6 @@ def preprocess_reg_image_spatial(
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))
             mask = transform_plane(mask, final_tform, composite_transform)
-        transforms.append(translation_transform)
 
     return image, mask, transforms, original_size_transform
 

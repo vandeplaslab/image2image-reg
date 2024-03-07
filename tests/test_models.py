@@ -1,7 +1,9 @@
 """Test bbox."""
 import numpy as np
+import pytest
+from pydantic import ValidationError
 
-from image2image_wsireg.models import BoundingBox, Export, Polygon
+from image2image_wsireg.models import BoundingBox, Export, Polygon, Preprocessing
 
 
 def test_polygon():
@@ -49,7 +51,22 @@ def test_export():
     assert export.channel_ids == [0, 1, 2], "channel_ids should be [0, 1, 2]"
 
     data = {"as_uint8": True, "channel_ids": [0, 1, 2]}
-
     export = Export(**data)
     assert export.as_uint8 is True, "as_uint8 should be True"
     assert export.channel_ids == [0, 1, 2], "channel_ids should be [0, 1, 2]"
+
+
+def test_prepro():
+    prepro = Preprocessing(translate_x=0, translate_y=0, rotate_counter_clockwise=0)
+    prepro.translate_x = 50
+    assert prepro.translate_x == 50, "translate_x should be 50"
+    prepro.translate_y = 50
+    assert prepro.translate_y == 50, "translate_y should be 50"
+
+    with pytest.raises(ValidationError):
+        prepro.affine = np.eye(2)
+
+    prepro.rotate_counter_clockwise = 360
+    assert prepro.rotate_counter_clockwise == 0, "rotate_counter_clockwise should be 0"
+    prepro.rotate_counter_clockwise = 360.0
+    assert prepro.rotate_counter_clockwise == 0, "rotate_counter_clockwise should be 0"

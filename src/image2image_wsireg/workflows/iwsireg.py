@@ -861,7 +861,9 @@ class IWsiReg:
             raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
 
         # update caches
-        self.preprocessed_cache["image_spacing"][modality.name] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
+        self.preprocessed_cache["image_spacing"][
+            modality.name
+        ] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
         self.preprocessed_cache["image_sizes"][modality.name] = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
         return wrapper
 
@@ -1352,6 +1354,8 @@ class IWsiReg:
         if im_data.preprocessing and (
             im_data.preprocessing.rotate_counter_clockwise != 0
             or im_data.preprocessing.flip
+            or im_data.preprocessing.translate_x != 0
+            or im_data.preprocessing.translate_y != 0
             or im_data.preprocessing.crop_to_bbox
             or im_data.preprocessing.crop_bbox
             or im_data.preprocessing.affine is not None

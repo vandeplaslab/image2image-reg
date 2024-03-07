@@ -433,7 +433,6 @@ def generate_rigid_translation_transform_alt(
     spacing: float,
     translation_x: float,
     translation_y: float,
-    image_shape: tuple[int, int],
 ) -> dict:
     """Generate a SimpleElastix transformation parameter Map to rotate image by angle.
 
@@ -441,6 +440,7 @@ def generate_rigid_translation_transform_alt(
     -------
     SimpleITK.ParameterMap of rotation transformation (EulerTransform)
     """
+    w, h = image.GetSize()  # type: ignore[no-untyped-call]
     tform = deepcopy(BASE_RIGID_TRANSFORM)
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
@@ -457,7 +457,7 @@ def generate_rigid_translation_transform_alt(
     # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
 
     tform["Spacing"] = [str(spacing), str(spacing)]
-    tform["Size"] = [str(int(ceil(image_shape[0] + translation_x))), str(int(ceil(image_shape[0] + translation_y)))]
+    tform["Size"] = [str(int(ceil(w + translation_x))), str(int(ceil(h + translation_y)))]
     tform["CenterOfRotationPoint"] = [str(rot_cent_pt[0]), str(rot_cent_pt[1])]
     tform["TransformParameters"] = [
         str(0),

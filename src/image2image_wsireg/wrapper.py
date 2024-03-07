@@ -174,11 +174,12 @@ class ImageWrapper:
 
         # retrieve first array in the pyramid i.e. the highest resolution
         image = self.reader.pyramid[0]
+        channel_names = self.reader.channel_names
 
         # pre-process image
         with MeasureTimer() as timer:
             logger.trace(f"Pre-processing image {self.modality.name} with {preprocessing}...")
-            image = preprocess_dask_array(image, preprocessing)
+            image = preprocess_dask_array(image, channel_names, preprocessing)
             logger.trace(f"Pre-processed image in {timer()}")
             # convert and cast
             image = convert_and_cast(image, preprocessing)

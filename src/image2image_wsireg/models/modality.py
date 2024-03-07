@@ -20,6 +20,7 @@ class Modality(BaseModel):
         """Pydantic config."""
 
         arbitrary_types_allowed = True
+        validate_assignment = True
 
     name: str
     path: ty.Union[PathLike, np.ndarray, da.core.Array, zarr.Array]

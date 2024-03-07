@@ -13,7 +13,7 @@ from image2image_wsireg.models.bbox import BoundingBox, Polygon, _transform_to_b
 
 def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:
     """Convert index to list."""
-    if isinstance(ch_indices, int):
+    if isinstance(ch_indices, (int, str)):
         ch_indices = [ch_indices]
     return ch_indices
 
@@ -39,14 +39,23 @@ class Preprocessing(BaseModel):
         Enhance contrast of image
     channel_indices: list of int or int
         Channel indicies to use for registration, 0-index, so ch_indices = 0, pulls the first channel
+    channel_names: list of str or str
+        Channel names to use for registration, if channel_indices is not supplied, this will be used.
+        If channel_indices is supplied, this will be ignored.
     as_uint8: bool
         Whether to byte scale registration image data for memory saving
     invert_intensity: bool
         invert the intensity of an image
+    affine: np.ndarray
+        Affine transformation matrix (3x3) to apply to image. Slightly broken so please avoid for the time being.
     rotate_counter_clockwise: int, float
         Rotate image counter-clockwise by degrees, can be positive or negative (cw rot)
     flip: CoordinateFlip, default: None
         flip coordinates, "v" = vertical flip, "h" = horizontal flip
+    translate_x: int
+        Translate image in x direction (specify in physical units, eg. microns)
+    translate_y: int
+        Translate image in y direction (specify in physical units, eg. microns)
     crop_to_bbox: bool
         Convert a binary mask to a bounding box and crop to this area
     crop_bbox: tuple or list of 4 ints
@@ -66,11 +75,13 @@ class Preprocessing(BaseModel):
 
         use_enum_names = True
         arbitrary_types_allowed = True
+        validate_assignment = True
 
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK
     max_intensity_projection: bool = True
     channel_indices: ty.Optional[list[int]] = None
+    channel_names: ty.Optional[list[str]] = None
     as_uint8: bool = True
     contrast_enhance: bool = False
     invert_intensity: bool = False
@@ -80,18 +91,13 @@ class Preprocessing(BaseModel):
     affine: ty.Optional[np.ndarray] = None
     rotate_counter_clockwise: float = 0
     flip: ty.Optional[CoordinateFlip] = None
+    translate_x: int = 0
+    translate_y: int = 0
     crop_to_bbox: bool = False
     crop_bbox: ty.Optional[BoundingBox] = None
     crop_polygon: ty.Optional[Polygon] = None
     downsample: int = 1
     use_mask: bool = True
-
-    def _validate_rotate_counter_clockwise(cls, v):
-        if v == 360:
-            v = 0
-        if v > 360:
-            v = v % 360
-        return v
 
     def __init__(self, **kwargs: ty.Any):
         if "max_int_proj" in kwargs:
@@ -126,8 +132,9 @@ class Preprocessing(BaseModel):
                 data["rotate_cc"] = data.pop("rotate_counter_clockwise")
             if data.get("max_intensity_projection"):
                 data["max_int_proj"] = data.pop("max_intensity_projection")
-            if data.get("crop_polygon"):
-                data.pop("crop_polygon")
+            for key in ["crop_to_bbox", "crop_polygon", "translate_x", "translate_y", "channel_names"]:
+                if data.get(key):
+                    data.pop(key)
         return data
 
     @classmethod
@@ -157,15 +164,13 @@ class Preprocessing(BaseModel):
 
     @validator("crop_bbox", pre=True)
     def _validate_bbox(cls, v):
-        if v is None:
-            return None
         return _transform_to_bbox(v)
 
     @validator("crop_polygon", pre=True)
     def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
         return _transform_to_polygon(v)
 
-    @validator("channel_indices", pre=True)
+    @validator("channel_indices", "channel_names", pre=True)
     def _make_ch_list(cls, v):
         return _index_to_list(v)
 
@@ -184,6 +189,14 @@ class Preprocessing(BaseModel):
             assert v.ndim == 2, "affine must be 2D"
             assert v.shape[0] == v.shape[1], "affine must be square"
             assert v.shape[0] == 3, "affine must be 3x3"
+        return v
+
+    @validator("rotate_counter_clockwise", pre=True)
+    def _validate_rotate_counter_clockwise(cls, v):
+        if v == 360:
+            v = 0
+        if v > 360:
+            v = v % 360
         return v
 
     def dict(self, **kwargs: ty.Any) -> dict:
