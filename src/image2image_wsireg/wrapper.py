@@ -175,6 +175,7 @@ class ImageWrapper:
             image = convert_and_cast(image, preprocessing)
             logger.trace(f"Converted and cast image in {timer(since_last=True)}")
 
+            # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
             mask = self.mask if self.modality.transform_mask else None
             # set image
             if preprocessing:
@@ -189,8 +190,10 @@ class ImageWrapper:
                 )
             else:
                 self.image, mask, self.original_size_transform = image, mask, None
+            # mask was not transformed so let's now retrieve it if it actually exists
             if not self.modality.transform_mask:
                 mask = self.mask
+            # overwrite existing mask
             self._mask = mask
             logger.trace(f"Pre-processed image in {timer(since_last=True)}")
 
