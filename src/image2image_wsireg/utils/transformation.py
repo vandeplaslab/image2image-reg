@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import typing as ty
 from copy import deepcopy
+from math import ceil
 from pathlib import Path
 
 import itk
@@ -41,16 +42,18 @@ def compute_affine_bound_for_image(image: sitk.Image, affine: np.ndarray) -> tup
     return compute_affine_bound((h, w), affine)
 
 
-def compute_affine_bound(shape: tuple[int, int], affine: np.ndarray) -> tuple[float, float]:
+def compute_affine_bound(shape: tuple[int, int], affine: np.ndarray, spacing: float = 1) -> tuple[float, float]:
     """Compute affine bounds."""
     w, h = shape
     # Top-left, Top-right, Bottom-left, Bottom-right
-    corners = np.array([
-        [0, 0, 1],  # Adding 1 for homogeneous coordinates (x, y, 1)
-        [w, 0, 1],
-        [0, h, 1],
-        [w, h, 1]
-    ])
+    corners = np.array(
+        [
+            [0, 0, 1],  # Adding 1 for homogeneous coordinates (x, y, 1)
+            [w, 0, 1],
+            [0, h, 1],
+            [w, h, 1],
+        ]
+    )
     # Apply affine transformation to corners
     transformed_corners = np.dot(corners, affine.T)  # Transpose matrix to match shapes
 
@@ -61,12 +64,50 @@ def compute_affine_bound(shape: tuple[int, int], affine: np.ndarray) -> tuple[fl
     min_x, max_x = np.min(x_coords), np.max(x_coords)
     min_y, max_y = np.min(y_coords), np.max(y_coords)
 
-    new_width = int(np.ceil(max_x - min_x))
-    new_height = int(np.ceil(max_y - min_y))
-    return new_width, new_height
+    # Calculate new  width and height
+    new_width = int(ceil(max_x - min_x))
+    new_height = int(ceil(max_y - min_y))
+
+    # Get new origin
+    # x_origin = (max_x / 2) / spacing
+    # y_origin = (max_y / 2) / spacing
+
+    # affine_ = affine[:2, :]
+    # new_width += abs(affine_[1, 2] / spacing)
+    # new_height += abs(affine_[0, 2] / spacing)
+    return (new_width, new_height), (new_width / 2, new_height / 2)
+
+
+def calculate_center_of_rotation(
+    affine: np.ndarray, shape: tuple[int, int], spacing: tuple[float, float]
+) -> tuple[float, float]:
+    """
+    Calculate the center of rotation based on the affine matrix, image shape, and pixel spacing.
+
+    Parameters
+    ----------
+    - affine: The 3x3 affine transformation matrix.
+    - shape: The (width, height) of the image.
+    - spacing: The (x, y) pixel spacing.
+
+    Returns
+    -------
+    - A tuple (x, y) representing the center of rotation in the transformed space.
+    """
+    w, h = shape
+    s_x, s_y = spacing
+
+    # Calculate the center of the image in original space, adjusted for pixel spacing
+    center_original = np.array([(w * s_x) / 2, (h * s_y) / 2, 1])
+
+    # Apply the affine transformation to this center
+    center_transformed = np.dot(affine, center_original)
+
+    return center_transformed[0], center_transformed[1]
 
 
 def affine_to_itk_affine(
+    image: sitk.Image,
     affine: np.ndarray,
     image_shape: tuple[int, int],
     spacing: float = 1.0,
@@ -76,20 +117,32 @@ def affine_to_itk_affine(
 
     The assumption is that the affine matrix is provided in numpy ordering (e.g. from napari) and values are in um.
     """
+    # TODO change the origin so that we don't have to make the image bigger
+
     assert affine.shape == (3, 3), "affine matrix must be 3x3"
     if inverse:
         affine = np.linalg.inv(affine)
-    aff = deepcopy(BASE_AFFINE_TRANSFORM)
-    aff["Spacing"] = [str(spacing), str(spacing)]
+
+    tform = deepcopy(BASE_AFFINE_TRANSFORM)
+    tform["Spacing"] = [str(spacing), str(spacing)]
     # compute new image shape
-    new_image_shape = compute_affine_bound(image_shape, affine)  # width, height
+    (bound_w, bound_h), (origin_x, origin_y) = compute_affine_bound(image_shape, affine, spacing)  # width, height
+
+    # calculate rotation center point
+    # center_of_rot = calculate_center_of_rotation(affine, image_shape, (spacing, spacing))
+    center_of_rot = image.TransformContinuousIndexToPhysicalPoint(
+        ((bound_w - 1) / 2, (bound_h - 1) / 2),
+    )  # type: ignore[no-untyped-call]
+    center_of_rot = ((bound_w - 1) / 2, (bound_h - 1) / 2)
+    tform["CenterOfRotationPoint"] = [str(center_of_rot[0]), str(center_of_rot[1])]
+
     # adjust for pixel spacing
-    new_image_shape = (int(np.ceil(new_image_shape[0])), int(np.ceil(new_image_shape[1])))
-    aff["Size"] = [str(new_image_shape[0]) , str(new_image_shape[1])]
+    tform["Size"] = [str(int(ceil(bound_w))), str(int(ceil(bound_h)))]
+    tform["Origin"] = [str(origin_x), str(origin_y)]
 
     # extract affine parameters
     affine_ = affine[:2, :]
-    aff["TransformParameters"] = [
+    tform["TransformParameters"] = [
         affine_[1, 1],
         affine_[1, 0],
         affine_[0, 1],
@@ -97,7 +150,7 @@ def affine_to_itk_affine(
         affine_[1, 2],
         affine_[0, 2],
     ]
-    return aff
+    return tform
 
 
 def prepare_tform_dict(tform_dict: dict, shape_tform: bool = False) -> dict:
@@ -329,7 +382,7 @@ def generate_rigid_rotation_transform(image: sitk.Image, spacing: float, angle: 
     t_y = rot_cent_pt[1] - c_y_phy
 
     tform["Spacing"] = [str(spacing), str(spacing)]
-    tform["Size"] = [str(int(np.ceil(bound_w))), str(int(np.ceil(bound_h)))]
+    tform["Size"] = [str(int(ceil(bound_w))), str(int(ceil(bound_h)))]
     tform["CenterOfRotationPoint"] = [str(rot_cent_pt[0]), str(rot_cent_pt[1])]
     tform["TransformParameters"] = [
         str(np.radians(angle)),
@@ -366,6 +419,45 @@ def generate_rigid_translation_transform(
 
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(size_x), str(size_y)]
+    tform["CenterOfRotationPoint"] = [str(rot_cent_pt[0]), str(rot_cent_pt[1])]
+    tform["TransformParameters"] = [
+        str(0),
+        str(translation_x),
+        str(translation_y),
+    ]
+    return tform
+
+
+def generate_rigid_translation_transform_alt(
+    image: sitk.Image,
+    spacing: float,
+    translation_x: float,
+    translation_y: float,
+    image_shape: tuple[int, int],
+) -> dict:
+    """Generate a SimpleElastix transformation parameter Map to rotate image by angle.
+
+    Returns
+    -------
+    SimpleITK.ParameterMap of rotation transformation (EulerTransform)
+    """
+    tform = deepcopy(BASE_RIGID_TRANSFORM)
+    image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
+    bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
+
+    rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(
+        ((bound_w - 1) / 2, (bound_h - 1) / 2),
+    )  # type: ignore[no-untyped-call]
+    (
+        translation_x,
+        translation_y,
+    ) = image.TransformContinuousIndexToPhysicalPoint(
+        (float(translation_x), float(translation_y)),
+    )  # type: ignore[no-untyped-call]
+    # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
+
+    tform["Spacing"] = [str(spacing), str(spacing)]
+    tform["Size"] = [str(int(ceil(image_shape[0] + translation_x))), str(int(ceil(image_shape[0] + translation_y)))]
     tform["CenterOfRotationPoint"] = [str(rot_cent_pt[0]), str(rot_cent_pt[1])]
     tform["TransformParameters"] = [
         str(0),

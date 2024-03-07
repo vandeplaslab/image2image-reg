@@ -592,7 +592,7 @@ def add_path_runner(
     type=click.UNPROCESSED,
     show_default=True,
     multiple=True,
-    required=True,
+    required=False,
     callback=cli_parse_paths_sort,
 )
 @click.option(
@@ -628,6 +628,10 @@ def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], pa
         names = [names]
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
+    if len(paths) > len(names):
+        raise ValueError("Number of names and paths must match.")
+    if len(names) > 0 and len(paths) == 0:
+        paths = [None] * len(names)
     if len(names) != len(paths):
         raise ValueError("Number of names and paths must match.")
 
@@ -758,7 +762,9 @@ def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode
     preprocess_runner(project_dir, n_parallel, parallel_mode, overwrite)
 
 
-def preprocess_runner(paths: ty.Sequence[str], n_parallel: int = 1, parallel_mode: str = "outer", overwrite: bool = False) -> None:
+def preprocess_runner(
+    paths: ty.Sequence[str], n_parallel: int = 1, parallel_mode: str = "outer", overwrite: bool = False
+) -> None:
     """Register images."""
     from mpire import WorkerPool
 

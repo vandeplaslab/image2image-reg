@@ -531,6 +531,7 @@ class IWsiReg:
         output_pixel_size: tuple[float, float] | None = None,
         transform_mask: bool = True,
         export: Export | dict[str, ty.Any] | None = None,
+        overwrite: bool = False,
     ) -> Modality:
         """Add modality."""
         from image2image_io.readers import is_supported
@@ -540,7 +541,7 @@ class IWsiReg:
             raise ValueError("Path does not exist.")
         if not is_supported(path):
             raise ValueError("Unsupported file format.")
-        if name in self.modalities:
+        if name in self.modalities and not overwrite:
             raise ValueError("Modality name already exists.")
         if isinstance(preprocessing, dict):
             preprocessing = Preprocessing(**preprocessing)
@@ -583,6 +584,11 @@ class IWsiReg:
     def auto_add_attachment_images(self, attach_to_modality: str, name: str, path: PathLike) -> None:
         """Add modality."""
         from image2image_io.readers import get_simple_reader, is_supported
+
+        if not path:
+            if name not in self.modalities:
+                raise ValueError(f"Modality '{name}' does not exist. Please add it first.")
+            path = self.modalities[name].path
 
         path = Path(path)
         if not path.exists():
@@ -636,6 +642,7 @@ class IWsiReg:
             pixel_size,
             channel_names=channel_names,
             channel_colors=channel_colors,
+            overwrite=True,
         )
         self.attachment_images[name] = attach_to_modality
         logger.trace(f"Added attachment image '{name}'.")
@@ -837,7 +844,9 @@ class IWsiReg:
                     return extended_path
         return None
 
-    def _preprocess_image(self, modality: Modality, preprocessing: Preprocessing | None = None, overwrite: bool = False) -> ImageWrapper:
+    def _preprocess_image(
+        self, modality: Modality, preprocessing: Preprocessing | None = None, overwrite: bool = False
+    ) -> ImageWrapper:
         """Pre-process images."""
         from image2image_wsireg.wrapper import ImageWrapper
 
@@ -852,9 +861,7 @@ class IWsiReg:
             raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
 
         # update caches
-        self.preprocessed_cache["image_spacing"][
-            modality.name
-        ] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
+        self.preprocessed_cache["image_spacing"][modality.name] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
         self.preprocessed_cache["image_sizes"][modality.name] = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
         return wrapper
 

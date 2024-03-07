@@ -5,8 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
-from image2image_io.readers import get_simple_reader
-from image2image_io.readers import BaseReader, GeoJSONReader
+from image2image_io.readers import BaseReader, GeoJSONReader, get_simple_reader
 from koyo.json import read_json_data, write_json_data
 from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
@@ -107,6 +106,7 @@ class ImageWrapper:
             # write image
             filename = self.get_cache_path(self.modality, cache_dir, extra=extra, preprocessing=self.preprocessing)
             sitk.WriteImage(self.image, str(filename), useCompression=True)
+            self.write_thumbnail(self.image, filename.with_suffix(".png"))
             # write pre-processing parameters
             write_json_data(filename_with_suffix(filename, "initial", ".json"), self.initial_transforms or None)
             if self.modality.preprocessing:
@@ -124,7 +124,16 @@ class ImageWrapper:
             # write mask
             if self.mask:
                 sitk.WriteImage(self.mask, str(filename_with_suffix(filename, "mask", ".tiff")), useCompression=True)
+                self.write_thumbnail(self.mask, filename_with_suffix(filename, "mask", ".png"))
         logger.trace(f"Saved image to cache: {filename} for {self.modality.name} in {timer()}")
+
+    @staticmethod
+    def write_thumbnail(image: sitk.Image, filename: PathLike, size: int = 512) -> None:
+        """Write thumbnail."""
+        from image2image_wsireg.utils.preprocessing import create_thumbnail
+
+        thumbnail = create_thumbnail(image, size)
+        sitk.WriteImage(thumbnail, str(filename), useCompression=True)
 
     def load_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None) -> None:
         """Load data from cache."""
@@ -232,7 +241,9 @@ class ImageWrapper:
         mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
         return mask
 
-    def make_bbox_mask(self, bbox: BoundingBox | Polygon, pixel_size: float | None = None, image_shape: tuple[int, int] | None = None) -> sitk.Image:
+    def make_bbox_mask(
+        self, bbox: BoundingBox | Polygon, pixel_size: float | None = None, image_shape: tuple[int, int] | None = None
+    ) -> sitk.Image:
         """Make mask from bounding box."""
         if image_shape is None:
             # should be height, width
@@ -241,5 +252,7 @@ class ImageWrapper:
             pixel_size = self.image.GetSpacing()[0] if self.image else self.modality.pixel_size
         mask = bbox.to_sitk_image(image_shape, pixel_size)
         mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
-        logger.trace(f"Loaded mask from bbox for {self.modality.name} with shape: {image_shape} and pixel size: {pixel_size:.2f}")
+        logger.trace(
+            f"Loaded mask from bbox for {self.modality.name} with shape: {image_shape} and pixel size: {pixel_size:.2f}"
+        )
         return mask

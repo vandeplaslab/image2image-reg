@@ -19,6 +19,7 @@ from image2image_wsireg.utils.transformation import (
     generate_rigid_original_transform,
     generate_rigid_rotation_transform,
     generate_rigid_translation_transform,
+    generate_rigid_translation_transform_alt,
     prepare_wsireg_transform_data,
     transform_plane,
 )
@@ -235,11 +236,33 @@ def preprocess_reg_image_spatial(
     # apply affine transformation
     if preprocessing.affine is not None:
         logger.trace("Applying affine transformation")
-        affine_tform = preprocessing.affine
-        if isinstance(affine_tform, np.ndarray):
-            affine_tform = affine_to_itk_affine(affine_tform, original_size, pixel_size, True)
-        transforms.append(affine_tform)
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
+        # affine_tform = preprocessing.affine
+        # if isinstance(affine_tform, np.ndarray):
+        #     affine_tform = affine_to_itk_affine(image, affine_tform, original_size, pixel_size, True)
+        # transforms.append(affine_tform)
+        # composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
+        # image = transform_plane(image, final_tform, composite_transform)
+        #
+        # if mask is not None:
+        #     mask.SetSpacing((pixel_size, pixel_size))
+        #     if transform_mask:
+        #         mask = transform_plane(mask, final_tform, composite_transform)
+
+        # translate x/y image
+        logger.trace("Cropping to mask")
+        translation_transform = generate_rigid_translation_transform_alt(
+            image,
+            pixel_size,
+            -50,
+            475,
+            original_size,
+            # preprocessing.crop_bbox.x,
+            # preprocessing.crop_bbox.y,
+            # preprocessing.crop_bbox.width,
+            # preprocessing.crop_bbox.height,
+        )
+        transforms.append(translation_transform)
+        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
         image = transform_plane(image, final_tform, composite_transform)
 
         if mask is not None:
@@ -276,14 +299,14 @@ def preprocess_reg_image_spatial(
         transforms.append(flip_tform)
 
     if mask and preprocessing.crop_to_bbox:
-        logger.trace("computing mask bounding box")
+        logger.trace("Computing mask bounding box")
         if preprocessing.crop_bbox is None:
             mask_bbox = compute_mask_to_bbox(mask)
             preprocessing.crop_bbox = mask_bbox
 
     original_size_transform = None
     if preprocessing.crop_bbox:
-        logger.trace("cropping to mask")
+        logger.trace("Cropping to mask")
         translation_transform = generate_rigid_translation_transform(
             image,
             pixel_size,
@@ -293,11 +316,7 @@ def preprocess_reg_image_spatial(
             preprocessing.crop_bbox.height,
         )
 
-        (
-            composite_transform,
-            _,
-            final_tform,
-        ) = prepare_wsireg_transform_data({"initial": [translation_transform]})
+        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
 
         image = transform_plane(image, final_tform, composite_transform)
         original_size_transform = generate_rigid_original_transform(original_size, deepcopy(translation_transform))
@@ -340,3 +359,45 @@ def preprocess(
         transform_mask=transform_mask,
     )
     return image, mask, transforms, original_size_transform
+
+
+def create_thumbnail(input_image: sitk.Image, max_thumbnail_size: int = 512) -> sitk.Image:
+    """
+    Creates a thumbnail from a SimpleITK.Image.
+
+    Parameters
+    ----------
+    - input_image: The input SimpleITK.Image object.
+    - max_thumbnail_size: The maximum size of the thumbnail's longest dimension.
+
+    Returns
+    -------
+    - A SimpleITK.Image object representing the thumbnail.
+    """
+    # Get the original size and spacing
+    original_size = input_image.GetSize()
+    original_spacing = input_image.GetSpacing()
+
+    # Calculate the aspect ratio and new size while maintaining the aspect ratio
+    aspect_ratio = original_size[1] / original_size[0]
+    if original_size[0] > original_size[1]:
+        new_size = [max_thumbnail_size, int(max_thumbnail_size * aspect_ratio)]
+    else:
+        new_size = [int(max_thumbnail_size / aspect_ratio), max_thumbnail_size]
+
+    # Calculate new spacing to maintain the aspect ratio
+    new_spacing = [
+        original_spacing[0] * (original_size[0] / new_size[0]),
+        original_spacing[1] * (original_size[1] / new_size[1]),
+    ]
+
+    # Resample the image to the new size
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetSize(new_size)
+    resampler.SetOutputSpacing(new_spacing)
+    resampler.SetOutputOrigin(input_image.GetOrigin())
+    resampler.SetOutputDirection(input_image.GetDirection())
+    resampler.SetInterpolator(sitk.sitkLinear)
+    thumbnail = resampler.Execute(input_image)
+
+    return thumbnail
