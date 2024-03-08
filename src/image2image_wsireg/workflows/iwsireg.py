@@ -861,9 +861,7 @@ class IWsiReg:
             raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
 
         # update caches
-        self.preprocessed_cache["image_spacing"][
-            modality.name
-        ] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
+        self.preprocessed_cache["image_spacing"][modality.name] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
         self.preprocessed_cache["image_sizes"][modality.name] = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
         return wrapper
 

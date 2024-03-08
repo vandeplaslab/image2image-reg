@@ -68,13 +68,9 @@ def compute_affine_bound(shape: tuple[int, int], affine: np.ndarray, spacing: fl
     new_width = int(ceil(max_x - min_x))
     new_height = int(ceil(max_y - min_y))
 
-    # Get new origin
-    # x_origin = (max_x / 2) / spacing
-    # y_origin = (max_y / 2) / spacing
-
-    # affine_ = affine[:2, :]
-    # new_width += abs(affine_[1, 2] / spacing)
-    # new_height += abs(affine_[0, 2] / spacing)
+    affine_ = affine[:2, :]
+    new_width += abs(affine_[1, 2] / spacing)
+    new_height += abs(affine_[0, 2] / spacing)
     return (new_width, new_height), (new_width / 2, new_height / 2)
 
 
@@ -130,15 +126,15 @@ def affine_to_itk_affine(
 
     # calculate rotation center point
     # center_of_rot = calculate_center_of_rotation(affine, image_shape, (spacing, spacing))
-    center_of_rot = image.TransformContinuousIndexToPhysicalPoint(
-        ((bound_w - 1) / 2, (bound_h - 1) / 2),
-    )  # type: ignore[no-untyped-call]
-    center_of_rot = ((bound_w - 1) / 2, (bound_h - 1) / 2)
-    tform["CenterOfRotationPoint"] = [str(center_of_rot[0]), str(center_of_rot[1])]
+    # center_of_rot = image.TransformContinuousIndexToPhysicalPoint(
+    #     ((bound_w - 1) / 2, (bound_h - 1) / 2),
+    # )  # type: ignore[no-untyped-call]
+    # center_of_rot = ((bound_w - 1) / 2, (bound_h - 1) / 2)
+    # tform["CenterOfRotationPoint"] = [str(center_of_rot[0]), str(center_of_rot[1])]
 
     # adjust for pixel spacing
     tform["Size"] = [str(int(ceil(bound_w))), str(int(ceil(bound_h)))]
-    tform["Origin"] = [str(origin_x), str(origin_y)]
+    # tform["Origin"] = [str(origin_x), str(origin_y)]
 
     # extract affine parameters
     affine_ = affine[:2, :]

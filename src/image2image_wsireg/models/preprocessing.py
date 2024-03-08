@@ -80,11 +80,11 @@ class Preprocessing(BaseModel):
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK
     max_intensity_projection: bool = True
+    contrast_enhance: bool = False
+    invert_intensity: bool = False
     channel_indices: ty.Optional[list[int]] = None
     channel_names: ty.Optional[list[str]] = None
     as_uint8: bool = True
-    contrast_enhance: bool = False
-    invert_intensity: bool = False
     custom_processing: ty.Optional[dict[str, ty.Callable]] = None
 
     # spatial preprocessing
