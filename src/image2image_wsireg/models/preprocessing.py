@@ -38,10 +38,11 @@ class Preprocessing(BaseModel):
     contrast_enhance: bool
         Enhance contrast of image
     channel_indices: list of int or int
-        Channel indicies to use for registration, 0-index, so ch_indices = 0, pulls the first channel
+        Channel indicies to use for registration, 0-index, so ch_indices = 0, pulls the first channel. It's ignored
+        if image is RGB.
     channel_names: list of str or str
         Channel names to use for registration, if channel_indices is not supplied, this will be used.
-        If channel_indices is supplied, this will be ignored.
+        If channel_indices is supplied, this will be ignored. It's ignored if image is RGB.
     as_uint8: bool
         Whether to byte scale registration image data for memory saving
     invert_intensity: bool
