@@ -971,8 +971,8 @@ class IWsiReg:
         """Pre-process all images."""
         # TODO: add multi-core support
         self.set_logger()
-        if not self.registration_nodes:
-            raise ValueError("No registration paths have been defined.")
+        # if not self.registration_nodes:
+        #     raise ValueError("No registration paths have been defined.")
 
         # compute transformation information
         with MeasureTimer() as timer:
