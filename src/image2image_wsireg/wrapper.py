@@ -57,6 +57,8 @@ class ImageWrapper:
     def mask(self) -> sitk.Image | None:
         """Lazy mask."""
         if self._mask is None:
+            if self.preprocessing and not self.preprocessing.use_mask:
+                return None
             if self.modality.mask is not None:
                 self._mask = self.read_mask(self.modality.mask)
             if self.modality.mask_bbox is not None:
@@ -166,14 +168,25 @@ class ImageWrapper:
             self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
 
     @classmethod
-    def load_original_size_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:
+    def load_initial_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:
         """Load original size transform metadata."""
         filename = cls.get_cache_path(modality, cache_dir)
         transforms = []
         if filename_with_suffix(filename, "initial", ".json").exists():
-            transforms.append(read_json_data(filename_with_suffix(filename, "initial", ".json")))
+            data = read_json_data(filename_with_suffix(filename, "initial", ".json"))
+            if data:
+                transforms.extend(data)
+        return transforms or None
+
+    @classmethod
+    def load_original_size_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:
+        """Load original size transform metadata."""
+        filename = cls.get_cache_path(modality, cache_dir)
+        transforms = []
         if filename_with_suffix(filename, "original_size_transform", ".json").exists():
-            transforms.append(read_json_data(filename_with_suffix(filename, "original_size_transform", ".json")))
+            data = read_json_data(filename_with_suffix(filename, "original_size_transform", ".json"))
+            if data:
+                transforms.extend(data)
         return transforms or None
 
     def preprocess(self) -> None:
