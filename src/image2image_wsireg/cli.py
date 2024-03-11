@@ -322,13 +322,12 @@ def about_cmd(project_dir: ty.Sequence[str]) -> None:
     about_runner(project_dir)
 
 
-def about_runner(paths: ty.Sequence[str]) -> None:
+def about_runner(project_dir: str) -> None:
     """Add images to the project."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
-    for project_dir in paths:
-        obj = IWsiReg.from_path(project_dir)
-        obj.print_summary()
+    obj = IWsiReg.from_path(project_dir)
+    obj.print_summary()
 
 
 @project_path_multi_

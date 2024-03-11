@@ -40,6 +40,13 @@ class TransformSequence(TransformMixin):
             self._composite_transform = None
             self._n_transforms = 0
 
+    def __repr__(self) -> str:
+        """Return repr."""
+        seq = " > ".join([t.name for t in self.transforms])
+        return (
+            f"{self.__class__.__name__}(name={self.name}; n={self.n_transforms}; is_linear={self.is_linear}; seq={seq})"
+        )
+
     @property
     def final_transform(self) -> sitk.Transform:  # type: ignore[override]
         """Final ITK transform."""
@@ -140,6 +147,15 @@ class TransformSequence(TransformMixin):
     def append(self, other: TransformSequence) -> None:
         """Concatenate transformation sequences."""
         self.add_transforms(other.transforms, other.transform_sequence_index)
+
+    def insert(self, other: TransformSequence) -> None:
+        """Insert transformation sequence before all the other transforms."""
+        n_in_other = len(other.transforms)
+        existing_indices = self.transform_sequence_index
+        existing_transforms = self.transforms
+        self.transforms = other.transforms + existing_transforms
+        self._transform_sequence_index = list(range(n_in_other)) + [x + n_in_other for x in existing_indices]
+        self._update_transform_properties()
 
     @classmethod
     def from_path(cls, path: PathLike, first: bool = False, skip_initial: bool = False) -> TransformSequence:
