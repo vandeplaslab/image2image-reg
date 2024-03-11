@@ -25,14 +25,24 @@ class ImageWrapper:
     """Wrapper around the image class to add additional functionality."""
 
     def __init__(
-        self, modality: Modality, preprocessing: Preprocessing | None = None, preview: bool = False, quick: bool = False
+        self,
+        modality: Modality,
+        preprocessing: Preprocessing | None = None,
+        preview: bool = False,
+        quick: bool = False,
+        raise_on_error: bool = True,
     ):
         self.modality = modality
         self.preprocessing = preprocessing
         self.preview = preview
 
         # TODO: this won't work with arrays
-        self.reader: BaseReader = get_simple_reader(modality.path, init_pyramid=False, quick=quick)
+        try:
+            self.reader: BaseReader = get_simple_reader(modality.path, init_pyramid=False, quick=quick)
+        except Exception as e:
+            if raise_on_error:
+                raise e
+            self.reader = None
         # if modality.channel_names:
         #     self.reader._channel_names = modality.channel_names
         # if modality.channel_colors:

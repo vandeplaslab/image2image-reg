@@ -223,7 +223,7 @@ class IWsiReg:
         return all(reg_edge["registered"] for reg_edge in self.registration_nodes)
 
     @classmethod
-    def from_path(cls, path: PathLike) -> IWsiReg:
+    def from_path(cls, path: PathLike, raise_on_error: bool = True) -> IWsiReg:
         """Initialize based on the project path."""
         path = Path(path)
         if not path.exists():
@@ -247,7 +247,7 @@ class IWsiReg:
 
             obj = cls(project_dir=path, **config)
             if config_path.exists():
-                obj.load_from_i2i_wsireg()
+                obj.load_from_i2i_wsireg(raise_on_error=raise_on_error)
             elif list(obj.project_dir.glob("*.yaml")):
                 obj.load_from_wsireg()
         logger.trace(f"Restored from config in {timer()}")
@@ -365,7 +365,7 @@ class IWsiReg:
             logger.success("✅ Project configuration is valid.")
         return is_valid
 
-    def load_from_i2i_wsireg(self) -> None:
+    def load_from_i2i_wsireg(self, raise_on_error: bool = True) -> None:
         """Load data from image2image-wsireg project file."""
         config: Config = read_json_data(self.project_dir / self.CONFIG_NAME)
         self.name = config["name"]
@@ -375,7 +375,7 @@ class IWsiReg:
         # add modality information
         with MeasureTimer() as timer:
             for name, modality in config["modalities"].items():
-                if not Path(modality["path"]).exists():
+                if not Path(modality["path"]).exists() and raise_on_error:
                     raise ValueError(f"Modality path '{modality['path']}' does not exist.")
                 self.add_modality(
                     name=name,
@@ -390,6 +390,7 @@ class IWsiReg:
                     pixel_size=modality.get("pixel_size", None),
                     transform_mask=modality.get("transform_mask", True),
                     export=Export(**modality["export"]) if modality.get("export") else None,
+                    raise_on_error=raise_on_error,
                 )
             logger.trace(f"Loaded modalities in {timer()}")
             # add registration paths
@@ -414,7 +415,9 @@ class IWsiReg:
                 for registered_edge in registered_config["registration_graph_edges"]:
                     source = registered_edge["modalities"]["source"]
                     target = self.registration_paths[source][-1]
-                    transforms_seq = self._load_registered_transform(registered_edge, target)
+                    transforms_seq = self._load_registered_transform(
+                        registered_edge, target, raise_on_error=raise_on_error
+                    )
                     if transforms_seq:
                         transformations[source] = transforms_seq
                 if transformations:
@@ -430,7 +433,10 @@ class IWsiReg:
                 logger.trace(f"Loaded merge modalities in {timer(since_last=True)}")
 
     def _load_registered_transform(
-        self, edge: SerializedRegisteredRegistrationNode, target: str
+        self,
+        edge: SerializedRegisteredRegistrationNode,
+        target: str,
+        raise_on_error: bool = True,
     ) -> dict[str, TransformSequence | None] | None:
         """Load registered transform and make sure all attributes are correctly set-up."""
         from image2image_wsireg.wrapper import ImageWrapper
@@ -446,10 +452,14 @@ class IWsiReg:
             return None
 
         target_modality = self.modalities[target]
-        target_wrapper = ImageWrapper(target_modality, edge["target_preprocessing"], quick=True)
+        target_wrapper = ImageWrapper(
+            target_modality, edge["target_preprocessing"], quick=True, raise_on_error=raise_on_error
+        )
 
         source_modality = self.modalities[source]
-        source_wrapper = ImageWrapper(source_modality, edge["source_preprocessing"], quick=True)
+        source_wrapper = ImageWrapper(
+            source_modality, edge["source_preprocessing"], quick=True, raise_on_error=raise_on_error
+        )
         initial_transforms = source_wrapper.initial_transforms
 
         initial_transforms_seq = None
@@ -532,14 +542,15 @@ class IWsiReg:
         transform_mask: bool = True,
         export: Export | dict[str, ty.Any] | None = None,
         overwrite: bool = False,
+        raise_on_error: bool = True,
     ) -> Modality:
         """Add modality."""
         from image2image_io.readers import is_supported
 
         path = Path(path)
-        if not path.exists():
+        if not path.exists() and raise_on_error:
             raise ValueError("Path does not exist.")
-        if not is_supported(path):
+        if not is_supported(path, raise_on_error):
             raise ValueError("Unsupported file format.")
         if name in self.modalities and not overwrite:
             raise ValueError("Modality name already exists.")
@@ -566,7 +577,7 @@ class IWsiReg:
 
         self.modalities[name] = Modality(
             name=name,
-            path=path.resolve(),
+            path=path.resolve() if raise_on_error else path,
             pixel_size=pixel_size,
             channel_names=channel_names,
             channel_colors=channel_colors,
@@ -861,7 +872,9 @@ class IWsiReg:
             raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
 
         # update caches
-        self.preprocessed_cache["image_spacing"][modality.name] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
+        self.preprocessed_cache["image_spacing"][
+            modality.name
+        ] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
         self.preprocessed_cache["image_sizes"][modality.name] = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
         return wrapper
 
