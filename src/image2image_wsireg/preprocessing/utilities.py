@@ -10,7 +10,7 @@ from skimage import exposure, measure
 
 
 def get_luminosity(img: np.ndarray) -> np.ndarray:
-    """Get luminosity of an RGB image
+    """Get luminosity of an RGB image.
 
     Converts and RGB image to the CAM16-UCS colorspace, extracts the luminosity, and then scales it between 0-255
 
@@ -142,7 +142,7 @@ def deconvolution_he(
 def calc_background_color_dist(
     img: np.ndarray, brightness_q: float = 0.99, mask: np.ndarray | None = None
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Create mask that only covers tissue
+    """Create mask that only covers tissue.
 
     #. Find background pixel (most luminescent)
     #. Convert image to CAM16-UCS
@@ -252,7 +252,7 @@ def estimate_k(x, max_k: int = 100, step_size: int = 10):
 
 def thresh_unimodal(x: np.ndarray, bins: int = 256) -> int:
     """
-    https://users.cs.cf.ac.uk/Paul.Rosin/resources/papers/unimodal2.pdf
+    https://users.cs.cf.ac.uk/Paul.Rosin/resources/papers/unimodal2.pdf.
 
     To threshold
     :param px_vals:
@@ -364,7 +364,7 @@ def deconvolve_img(rgb_img: np.ndarray, D) -> np.ndarray:
 
 
 def standardize_colorfulness(img, c: float = 0.2, h: int = 0):
-    """Give image constant colorfulness and hue
+    """Give image constant colorfulness and hue.
 
     Image is converted to cylindrical CAM-16UCS assigned a constant
     hue and colorfulness, and then coverted back to RGB.
@@ -406,7 +406,7 @@ def standardize_colorfulness(img, c: float = 0.2, h: int = 0):
 
 
 def create_edges_mask(labeled_img):
-    """Create two masks, one with objects not touching image bordersa second with objects that do touch the border"""
+    """Create two masks, one with objects not touching image bordersa second with objects that do touch the border."""
     unique_v = np.unique(labeled_img)
     unique_v = unique_v[unique_v != 0]
     if len(unique_v) == 1:
