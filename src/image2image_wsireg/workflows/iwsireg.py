@@ -227,7 +227,7 @@ class IWsiReg:
         """Initialize based on the project path."""
         path = Path(path)
         if not path.exists():
-            raise ValueError("Path does not exist.")
+            raise ValueError(f"Path does not exist ({path}).")
         if not path.is_dir():
             raise ValueError("Path is not a directory.")
         if not path.suffix == ".wsireg":
@@ -447,14 +447,16 @@ class IWsiReg:
 
         target_modality = self.modalities[target]
         target_wrapper = ImageWrapper(target_modality, edge["target_preprocessing"], quick=True)
+        # target_wrapper.original_size_transform = source_wrapper.load_original_size_transform(source_modality,
+        # self.cache_dir)
 
         source_modality = self.modalities[source]
         source_wrapper = ImageWrapper(source_modality, edge["source_preprocessing"], quick=True)
-        initial_transforms = source_wrapper.initial_transforms
+        source_wrapper.initial_transforms = source_wrapper.load_initial_transform(source_modality, self.cache_dir)
 
         initial_transforms_seq = None
-        if initial_transforms:
-            initial_transforms_ = [Transform(t) for t in initial_transforms]
+        if source_wrapper.initial_transforms:
+            initial_transforms_ = [Transform(t) for t in source_wrapper.initial_transforms]
             initial_transforms_index = [idx for idx, _ in enumerate(initial_transforms_)]
             initial_transforms_seq = TransformSequence(initial_transforms_, initial_transforms_index)
 
@@ -462,6 +464,8 @@ class IWsiReg:
             self.transformations_dir / transform_tag, first=True, skip_initial=True
         )
         transforms_full_seq = TransformSequence.from_path(self.transformations_dir / transform_tag, first=False)
+        if initial_transforms_seq:
+            transforms_full_seq.insert(initial_transforms_seq)
         self.original_size_transforms[target_wrapper.name] = target_wrapper.original_size_transform
 
         # setup parameters
@@ -1440,6 +1444,7 @@ class IWsiReg:
 
         as_uint8_ = as_uint8
         wrapper = ImageWrapper(modality, preview=preview)
+        logger.trace(f"Writing '{filename}' with {transformations} transform...")
         if fmt in ["ome-tiff", "ome-tiff-by-plane"]:
             writer = OmeTiffWriter(wrapper.reader, transformer=transformations)
         else:
