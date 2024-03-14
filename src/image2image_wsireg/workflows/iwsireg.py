@@ -1,4 +1,5 @@
 """Image registration in 2D."""
+
 from __future__ import annotations
 
 import time
@@ -874,9 +875,7 @@ class IWsiReg:
             raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
 
         # update caches
-        self.preprocessed_cache["image_spacing"][
-            modality.name
-        ] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
+        self.preprocessed_cache["image_spacing"][modality.name] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
         self.preprocessed_cache["image_sizes"][modality.name] = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
         return wrapper
 
@@ -973,9 +972,9 @@ class IWsiReg:
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -1362,24 +1361,30 @@ class IWsiReg:
             modality_key = attachment_modality.name
 
         transformations = None
-        im_data = self.modalities[modality_key]
+        modality = self.modalities[modality_key]
 
-        if im_data.preprocessing and (
-            im_data.preprocessing.rotate_counter_clockwise != 0
-            or im_data.preprocessing.flip
-            or im_data.preprocessing.translate_x != 0
-            or im_data.preprocessing.translate_y != 0
-            or im_data.preprocessing.crop_to_bbox
-            or im_data.preprocessing.crop_bbox
-            or im_data.preprocessing.affine is not None
+        if modality.preprocessing and (
+            modality.preprocessing.rotate_counter_clockwise != 0
+            or modality.preprocessing.flip
+            or modality.preprocessing.translate_x != 0
+            or modality.preprocessing.translate_y != 0
+            or modality.preprocessing.crop_to_bbox
+            or modality.preprocessing.crop_bbox
+            or modality.preprocessing.affine is not None
         ):
-            im_initial_transforms = ImageWrapper.load_original_size_transform(im_data, self.cache_dir)
+            initial_transform = ImageWrapper.load_initial_transform(modality, self.cache_dir)
+            original_size_transform = ImageWrapper.load_original_size_transform(modality, self.cache_dir)
 
-            if im_initial_transforms:
+            if initial_transform:
+                transformations = TransformSequence(
+                    [Transform(t) for t in initial_transform],
+                    transform_sequence_index=list(range(len(initial_transform))),
+                )
+            if original_size_transform:
                 # TODO: this might be broken
                 transformations = TransformSequence(
-                    [Transform(t[0]) for t in im_initial_transforms],
-                    transform_sequence_index=list(range(len(im_initial_transforms))),
+                    [Transform(t[0]) for t in original_size_transform],
+                    transform_sequence_index=list(range(len(original_size_transform))),
                 )
 
         if to_original_size and self.original_size_transforms[modality_key]:
@@ -1396,14 +1401,14 @@ class IWsiReg:
             else:
                 transformations = orig_size_rt
 
-        if im_data.preprocessing and im_data.preprocessing.downsample > 1 and transformations:
-            if not im_data.output_pixel_size:
-                output_spacing_target = im_data.pixel_size
+        if modality.preprocessing and modality.preprocessing.downsample > 1 and transformations:
+            if not modality.output_pixel_size:
+                output_spacing_target = modality.pixel_size
                 transformations.set_output_spacing((output_spacing_target, output_spacing_target))
             else:
-                transformations.set_output_spacing(im_data.output_pixel_size)
+                transformations.set_output_spacing(modality.output_pixel_size)
 
-        elif im_data.preprocessing and im_data.preprocessing.downsample > 1 and not transformations:
+        elif modality.preprocessing and modality.preprocessing.downsample > 1 and not transformations:
             transformations = TransformSequence(
                 [
                     Transform(
@@ -1416,15 +1421,15 @@ class IWsiReg:
                 transform_sequence_index=[0],
             )
 
-            if not im_data.output_pixel_size:
-                output_spacing_target = im_data.pixel_size
+            if not modality.output_pixel_size:
+                output_spacing_target = modality.pixel_size
                 transformations.set_output_spacing((output_spacing_target, output_spacing_target))
             else:
-                transformations.set_output_spacing(im_data.output_pixel_size)
+                transformations.set_output_spacing(modality.output_pixel_size)
 
         if attachment and im_data_key:
-            im_data = self.modalities[im_data_key]
-        return im_data, transformations, output_path
+            modality = self.modalities[im_data_key]
+        return modality, transformations, output_path
 
     def _transform_write_image(
         self,

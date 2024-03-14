@@ -1,4 +1,5 @@
 """Feature detection unit."""
+
 from __future__ import annotations
 
 import typing as ty
@@ -242,6 +243,17 @@ class VggFD(FeatureDetectorBase):
         self,
         kp_detector=DEFAULT_FEATURE_DETECTOR,
         kp_descriptor=cv2.xfeatures2d.VGG_create(scale_factor=5.0),  # type: ignore[attr-defined]
+    ):
+        super().__init__(kp_detector=kp_detector, kp_descriptor=kp_descriptor)
+
+
+class SensitiveVggFD(FeatureDetectorBase):
+    """Uses BRISK for feature detection and VGG for feature description"""
+
+    def __init__(
+        self,
+        kp_detector=cv2.BRISK_create(thresh=5),  # type: ignore[attr-defined]
+        kp_descriptor=cv2.xfeatures2d.VGG_create(scale_factor=5.0),
     ):
         super().__init__(kp_detector=kp_detector, kp_descriptor=kp_descriptor)
 
