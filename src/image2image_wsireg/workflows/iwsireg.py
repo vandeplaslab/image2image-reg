@@ -472,8 +472,8 @@ class IWsiReg:
             self.transformations_dir / transform_tag, first=True, skip_initial=True
         )
         transforms_full_seq = TransformSequence.from_path(self.transformations_dir / transform_tag, first=False)
-        if initial_transforms_seq:
-            transforms_full_seq.insert(initial_transforms_seq)
+        # if initial_transforms_seq:
+        #     transforms_full_seq.insert(initial_transforms_seq)
         self.original_size_transforms[target_wrapper.name] = target_wrapper.original_size_transform
 
         # setup parameters

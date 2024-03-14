@@ -110,6 +110,7 @@ class TransformMixin:
         if not self.output_spacing:
             raise ValueError("Output spacing not set, call `set_output_spacing` first")
 
+        points = np.asarray(points).tolist()
         transformed_points = []
         for point in points:
             if is_px:
