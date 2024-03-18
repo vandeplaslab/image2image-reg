@@ -127,6 +127,7 @@ class ColorStandardizerPreprocessor(Preprocessor):
             return array  # type: ignore[return-value]
         return self.to_sitk()
 
+
 @register("luminosity")
 class LuminosityPreprocessor(Preprocessor):
     """Luminosity."""
