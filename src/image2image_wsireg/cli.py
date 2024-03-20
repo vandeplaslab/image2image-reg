@@ -1,4 +1,5 @@
 """CLI."""
+
 from __future__ import annotations
 
 import sys
@@ -957,6 +958,29 @@ def _register(
             n_parallel=n_parallel,
         )
     return path
+
+
+@project_path_multi_
+@cli.command("clear", help_group="Execute")
+def clear_cmd(project_dir: ty.Sequence[str]) -> None:
+    """Preprocess images."""
+    clear_runner(project_dir)
+
+
+def clear_runner(paths: ty.Sequence[str]) -> None:
+    """Register images."""
+    from image2image_wsireg.workflows.iwsireg import IWsiReg
+
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", paths),
+    )
+
+    with MeasureTimer() as timer:
+        for path in paths:
+            pro = IWsiReg.from_path(path)
+            pro.clear()
+            logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
+    logger.info(f"Finished clearing all projects in {timer()}.")
 
 
 @parallel_mode_

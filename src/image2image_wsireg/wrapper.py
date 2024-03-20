@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
-from image2image_io.readers import BaseReader, GeoJSONReader, get_simple_reader
+from image2image_io.readers import BaseReader, ShapesReader, get_simple_reader
 from koyo.json import read_json_data, write_json_data
 from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
@@ -250,7 +250,7 @@ class ImageWrapper:
         elif isinstance(mask, (str, Path)):
             if Path(mask).suffix.lower() == ".geojson":
                 image_shape = self.reader.image_shape
-                mask_shapes = GeoJSONReader(mask)
+                mask_shapes = ShapesReader(mask)
                 mask = mask_shapes.to_mask_alt(image_shape[::-1], with_index=False)
                 mask = sitk.GetImageFromArray(mask)
                 logger.trace(f"Loaded mask from GeoJSON for {self.modality.name}")

@@ -258,6 +258,17 @@ class SensitiveVggFD(FeatureDetectorBase):
         super().__init__(kp_detector=kp_detector, kp_descriptor=kp_descriptor)
 
 
+class VerySensitiveVggFD(FeatureDetectorBase):
+    """Uses BRISK for feature detection and VGG for feature description"""
+
+    def __init__(
+        self,
+        kp_detector=cv2.BRISK_create(thresh=2),  # type: ignore[attr-defined]
+        kp_descriptor=cv2.xfeatures2d.VGG_create(scale_factor=5.0),
+    ):
+        super().__init__(kp_detector=kp_detector, kp_descriptor=kp_descriptor)
+
+
 class OrbVggFD(FeatureDetectorBase):
     """Uses ORB for feature detection and VGG for feature description."""
 

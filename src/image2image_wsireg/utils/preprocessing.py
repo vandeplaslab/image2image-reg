@@ -1,4 +1,5 @@
 """Pre-process dask array."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -128,11 +129,11 @@ def sitk_inv_int(image: sitk.Image) -> sitk.Image:
     return sitk.InvertIntensity(image)
 
 
-def contrast_enhance(image: sitk.Image) -> sitk.Image:
+def contrast_enhance(image: sitk.Image, alpha: float = 7, beta: float = 1) -> sitk.Image:
     """Enhance contrast of image."""
     spacing = image.GetSpacing()
     image = sitk.GetArrayFromImage(image)
-    image = cv2.convertScaleAbs(image, alpha=7, beta=1)
+    image = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
     image = sitk.GetImageFromArray(image)
     image.SetSpacing(spacing)
     return image
@@ -152,10 +153,8 @@ def preprocess_intensity(
 
     if preprocessing.max_intensity_projection:
         image = sitk_max_int_proj(image)
-
     if preprocessing.contrast_enhance:
         image = contrast_enhance(image)
-
     if preprocessing.invert_intensity:
         image = sitk_inv_int(image)
 

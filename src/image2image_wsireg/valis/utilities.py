@@ -1,12 +1,179 @@
 """Utility functions for image processing and visualization."""
+
 from __future__ import annotations
 
 import re
+import typing as ty
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from koyo.typing import PathLike
 from natsort import natsorted
+
+if ty.TYPE_CHECKING:
+    from valis.registration import Valis
+
+
+def transform_points(registrar: Valis, source_path: PathLike, x: np.ndarray, y: np.ndarray, crop: str = "reference"):
+    """Transform points."""
+    from valis.valtils import get_name
+
+    slide_src = registrar.get_slide(get_name(str(source_path)))
+    if not Path(slide_src.src_f).exists():
+        raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
+    xy_transformed = slide_src.warp_xy(np.c_[x, y], crop=crop, non_rigid=True)
+    return xy_transformed[:, 0], xy_transformed[:, 1]
+
+
+def transform_points_df(
+    registrar: Valis, source_path: PathLike, df: pd.DataFrame, crop: str = "reference"
+) -> pd.DataFrame:
+    """Transform points in a dataframe.
+
+    Parameters
+    ----------
+    registrar : Valis
+        Valis object
+    source_path : PathLike
+        Path to source slide
+    df : pd.DataFrame
+        Dataframe with x and y columns
+    crop : str, optional
+        Crop method, by default "reference"
+    """
+    return _transform_points_df(registrar, source_path, df, "x", "y", crop=crop)
+
+
+def transform_vertices_df(
+    registrar: Valis, source_path: PathLike, df: pd.DataFrame, crop: str = "reference"
+) -> pd.DataFrame:
+    """Transform points in a dataframe.
+
+    Parameters
+    ----------
+    registrar : Valis
+        Valis object
+    source_path : PathLike
+        Path to source slide
+    df : pd.DataFrame
+        Dataframe with x and y columns
+    crop : str, optional
+        Crop method, by default "reference"
+    """
+    return _transform_points_df(registrar, source_path, df, "vertex_", "vertex_y", crop=crop)
+
+
+def _transform_points_df(
+    registrar: Valis,
+    source_path: PathLike,
+    df: pd.DataFrame,
+    x_key: str = "x",
+    y_key: str = "y",
+    crop: str = "reference",
+) -> pd.DataFrame:
+    if x_key not in df.columns or y_key not in df.columns:
+        raise ValueError("Dataframe must have x and y columns.")
+    x = df[x_key].values
+    y = df[y_key].values
+    x, y = transform_points(registrar, source_path, x, y, crop=crop)
+    if f"{x_key}_transformed" in df.columns:
+        df.drop(columns=[f"{x_key}_transformed"], inplace=True)
+    if f"{y_key}_transformed" in df.columns:
+        df.drop(columns=[f"{y_key}_transformed"], inplace=True)
+    df.insert(df.columns.get_loc(x_key), f"{x_key}_transformed", x)
+    df.insert(df.columns.get_loc(y_key), f"{y_key}_transformed", y)
+    return df
+
+
+def transform_attached_image(
+    registrar: Valis,
+    source_path: PathLike,
+    paths_to_register: list[PathLike],
+    output_dir: PathLike,
+    interp_method: str = "bicubic",
+    crop: str = "reference",
+) -> None:
+    """Transform valis image."""
+    from image2image_io.readers import get_simple_reader
+    from image2image_io.writers import write_ome_tiff_from_array
+    from valis.slide_tools import vips2numpy
+    from valis.valtils import get_name
+
+    output_dir = Path(output_dir)
+
+    # get reference slide and source slide
+    slide_ref = registrar.get_ref_slide()
+    if not Path(slide_ref.src_f).exists():
+        raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+    slide_src = registrar.get_slide(get_name(str(source_path)))
+    if not Path(slide_src.src_f).exists():
+        raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
+
+    for path in paths_to_register:
+        reader = get_simple_reader(path)
+        output_filename = output_dir / reader.path.name
+        if output_filename.exists():
+            continue
+
+        # warp image
+        warped = slide_src.warp_slide(level=0, interp_method=interp_method, crop=crop, src_f=str(path))
+        if not isinstance(warped, np.ndarray):
+            warped = vips2numpy(warped)
+
+        # move channel axis to first axis if it's not RGB
+        if warped.ndim == 3 and np.argmin(warped.shape) == 2 and not reader.is_rgb:
+            warped = np.moveaxis(warped, 2, 0)
+
+        write_ome_tiff_from_array(
+            output_filename,
+            None,
+            warped,
+            resolution=slide_ref.resolution,
+            channel_names=reader.channel_names,
+        )
+
+
+def transform_registered_image(
+    registrar: Valis,
+    output_dir: PathLike,
+    interp_method: str = "bicubic",
+    crop: str = "reference",
+) -> None:
+    """Transform valis image."""
+    from image2image_io.readers import get_simple_reader
+    from image2image_io.writers import write_ome_tiff_from_array
+    from valis.slide_tools import vips2numpy
+
+    output_dir = Path(output_dir)
+    # export images to OME-TIFFs
+    slide_ref = registrar.get_ref_slide()
+    if not Path(slide_ref.src_f).exists():
+        raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+    for slide_obj in registrar.slide_dict.values():
+        if not Path(slide_obj.src_f).exists():
+            raise ValueError(f"Slide {slide_ref.src_f} does not exist.")
+
+        reader = get_simple_reader(slide_obj.src_f)
+        output_filename = output_dir / reader.path.name
+        if output_filename.exists():
+            continue
+
+        warped = slide_obj.warp_slide(level=0, interp_method=interp_method, crop=crop)
+        if not isinstance(warped, np.ndarray):
+            warped = vips2numpy(warped)
+
+        # ensure that RGB remains RGB but AF remain AF
+        if warped.ndim == 3 and np.argmin(warped.shape) == 2:
+            warped = np.moveaxis(warped, 2, 0)
+
+        write_ome_tiff_from_array(
+            output_filename,
+            None,
+            warped,
+            resolution=slide_ref.resolution,
+            channel_names=reader.channel_names,
+        )
 
 
 def get_image_files(img_dir: PathLike, ordered: bool = False) -> list[Path]:

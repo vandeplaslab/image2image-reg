@@ -6,6 +6,20 @@ from valis import slide_io
 from valis.preprocessing import ImageProcesser, create_tissue_mask_from_multichannel
 
 
+class NoProcessing(ImageProcesser):
+    """No processing"""
+
+    def __init__(self, image, src_f, level, series, *args, **kwargs):
+        super().__init__(image=image, src_f=src_f, level=level, series=series, *args, **kwargs)
+
+    def create_mask(self):
+        _, tissue_mask = create_tissue_mask_from_multichannel(self.image)
+        return tissue_mask
+
+    def process_image(self, *args, **kwargs):
+        return self.image
+
+
 class MaxIntensityProjection(ImageProcesser):
     """Select channel from image"""
 

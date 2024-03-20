@@ -1054,6 +1054,39 @@ class IWsiReg:
         self.save_transformations()
         self.save(registered=True)
 
+    def clear(self) -> None:
+        """Clear existing data."""
+        from shutil import rmtree
+
+        def _safe_delete(file_: Path) -> None:
+            if not file.exists():
+                return
+            if file_.is_dir():
+                try:
+                    rmtree(file_)
+                    logger.trace(f"Deleted directory {file_}.")
+                except Exception as e:
+                    logger.error(f"Could not delete {file_}. {e}")
+            else:
+                try:
+                    file_.unlink()
+                    logger.trace(f"Deleted file {file_}.")
+                except Exception as e:
+                    logger.error(f"Could not delete {file_}. {e}")
+
+        # clear transformations, cache, images
+        for file in self.transformations_dir.glob("*"):
+            _safe_delete(file)
+        for file in self.cache_dir.glob("*"):
+            _safe_delete(file)
+        for file in self.progress_dir.glob("*"):
+            _safe_delete(file)
+        for file in self.image_dir.glob("*"):
+            _safe_delete(file)
+        # remove config files
+        file = self.project_dir / self.REGISTERED_CONFIG_NAME
+        _safe_delete(file)
+
     def run(self) -> None:
         """Execute workflow."""
         self.set_logger()
