@@ -1,17 +1,19 @@
 """Registration workflow."""
 from __future__ import annotations
-from pathlib import Path
+
 import typing as ty
+from pathlib import Path
+
+from skimage.transform import SimilarityTransform
+from valis.non_rigid_registrars import OpticalFlowWarper
+from valis.preprocessing import DEFAULT_COLOR_STD_C, ChannelGetter, ColorfulStandardizer
 
 from image2image_wsireg.valis.detect import VggFD
-from image2image_wsireg.valis.matcher import Matcher, RANSAC_NAME
-from skimage.transform import SimilarityTransform
-from valis.preprocessing import ColorfulStandardizer, ChannelGetter, DEFAULT_COLOR_STD_C
-from valis.non_rigid_registrars import OpticalFlowWarper
+from image2image_wsireg.valis.matcher import RANSAC_NAME, Matcher
 
 # Default image processing
 DEFAULT_BRIGHTFIELD_CLASS = ColorfulStandardizer
-DEFAULT_BRIGHTFIELD_PROCESSING_ARGS = {'c': DEFAULT_COLOR_STD_C, "h": 0}
+DEFAULT_BRIGHTFIELD_PROCESSING_ARGS = {"c": DEFAULT_COLOR_STD_C, "h": 0}
 DEFAULT_FLOURESCENCE_CLASS = ChannelGetter
 DEFAULT_FLOURESCENCE_PROCESSING_ARGS = {"channel": "dapi", "adaptive_eq": True}
 DEFAULT_NORM_METHOD = "img_stats"
@@ -41,35 +43,41 @@ DEFAULT_MICRO_RIGID_KWARGS: dict = {}
 class ValisWorkflow:
     """Valis workflow for registration."""
 
-    def __init__(self, src_dir, dst_dir, series=None, name=None, image_type=None,
-                 feature_detector_cls=DEFAULT_FD,
-                 transformer_cls=DEFAULT_TRANSFORM_CLASS,
-                 affine_optimizer_cls=DEFAULT_AFFINE_OPTIMIZER_CLASS,
-                 similarity_metric=DEFAULT_SIMILARITY_METRIC,
-                 matcher=DEFAULT_MATCH_FILTER,
-                 imgs_ordered=False,
-                 non_rigid_registrar_cls=DEFAULT_NON_RIGID_CLASS,
-                 non_rigid_reg_kws=DEFAULT_NON_RIGID_KWARGS,
-                 compose_non_rigid=False,
-                 img_list=None,
-                 reference_img_f=None,
-                 align_to_reference=False,
-                 do_rigid=True,
-                 crop=None,
-                 create_masks=True,
-                 denoise_rigid=True,
-                 check_for_reflections=False,
-                 resolution_xyu=None,
-                 slide_dims_dict_wh=None,
-                 max_image_dim_px=DEFAULT_MAX_IMG_DIM,
-                 max_processed_image_dim_px=DEFAULT_MAX_PROCESSED_IMG_SIZE,
-                 max_non_rigid_registration_dim_px=DEFAULT_MAX_PROCESSED_IMG_SIZE,
-                 thumbnail_size=DEFAULT_THUMBNAIL_SIZE,
-                 norm_method=DEFAULT_NORM_METHOD,
-                 micro_rigid_registrar_cls=DEFAULT_MICRO_RIGID_CLASS,
-                 micro_rigid_registrar_kws=DEFAULT_MICRO_RIGID_KWARGS,
-                 qt_emitter=None):
-
+    def __init__(
+        self,
+        src_dir,
+        dst_dir,
+        series=None,
+        name=None,
+        image_type=None,
+        feature_detector_cls=DEFAULT_FD,
+        transformer_cls=DEFAULT_TRANSFORM_CLASS,
+        affine_optimizer_cls=DEFAULT_AFFINE_OPTIMIZER_CLASS,
+        similarity_metric=DEFAULT_SIMILARITY_METRIC,
+        matcher=DEFAULT_MATCH_FILTER,
+        imgs_ordered=False,
+        non_rigid_registrar_cls=DEFAULT_NON_RIGID_CLASS,
+        non_rigid_reg_kws=DEFAULT_NON_RIGID_KWARGS,
+        compose_non_rigid=False,
+        img_list=None,
+        reference_img_f=None,
+        align_to_reference=False,
+        do_rigid=True,
+        crop=None,
+        create_masks=True,
+        denoise_rigid=True,
+        check_for_reflections=False,
+        resolution_xyu=None,
+        slide_dims_dict_wh=None,
+        max_image_dim_px=DEFAULT_MAX_IMG_DIM,
+        max_processed_image_dim_px=DEFAULT_MAX_PROCESSED_IMG_SIZE,
+        max_non_rigid_registration_dim_px=DEFAULT_MAX_PROCESSED_IMG_SIZE,
+        thumbnail_size=DEFAULT_THUMBNAIL_SIZE,
+        norm_method=DEFAULT_NORM_METHOD,
+        micro_rigid_registrar_cls=DEFAULT_MICRO_RIGID_CLASS,
+        micro_rigid_registrar_kws=DEFAULT_MICRO_RIGID_KWARGS,
+        qt_emitter=None,
+    ):
         """
         src_dir: str
             Path to directory containing the slides that will be registered.
@@ -275,7 +283,6 @@ class ValisWorkflow:
             Used to emit signals that update the GUI's progress bars
 
         """
-
         # Get name, based on src directory
         if name is None:
             if src_dir.endswith(os.path.sep):
@@ -297,8 +304,10 @@ class ValisWorkflow:
             elif hasattr(img_list, "__iter__"):
                 self.original_img_list = list(img_list)
             else:
-                msg = (f"Cannot upack `img_list`, which is type {type(img_list).__name__}. "
-                       "Please provide an iterable object (list, tuple, array, etc...) that has the location of the images")
+                msg = (
+                    f"Cannot upack `img_list`, which is type {type(img_list).__name__}. "
+                    "Please provide an iterable object (list, tuple, array, etc...) that has the location of the images"
+                )
                 valtils.print_warning(msg, rgb=Fore.RED)
         else:
             self.get_imgs_in_dir()
@@ -347,17 +356,17 @@ class ValisWorkflow:
         self.micro_rigid_registrar_params = micro_rigid_registrar_kws
         self.denoise_rigid = denoise_rigid
 
-        self._set_rigid_reg_kwargs(name=name,
-                                   feature_detector=feature_detector_cls,
-                                   similarity_metric=similarity_metric,
-                                   matcher=matcher,
-                                   transformer=transformer_cls,
-                                   affine_optimizer=affine_optimizer_cls,
-                                   imgs_ordered=imgs_ordered,
-                                   reference_img_f=reference_img_f,
-                                   check_for_reflections=check_for_reflections,
-                                   )
-
+        self._set_rigid_reg_kwargs(
+            name=name,
+            feature_detector=feature_detector_cls,
+            similarity_metric=similarity_metric,
+            matcher=matcher,
+            transformer=transformer_cls,
+            affine_optimizer=affine_optimizer_cls,
+            imgs_ordered=imgs_ordered,
+            reference_img_f=reference_img_f,
+            check_for_reflections=check_for_reflections,
+        )
 
         # Setup non-rigid registration #
         self.non_rigid_registrar = None
@@ -373,12 +382,13 @@ class ValisWorkflow:
 
         self.compose_non_rigid = compose_non_rigid
         if non_rigid_registrar_cls is not None:
-            self._set_non_rigid_reg_kwargs(name=name,
-                                           non_rigid_reg_class=non_rigid_registrar_cls,
-                                           non_rigid_reg_params=non_rigid_reg_kws,
-                                           reference_img_f=reference_img_f,
-                                           compose_non_rigid=compose_non_rigid,
-                                           )
+            self._set_non_rigid_reg_kwargs(
+                name=name,
+                non_rigid_reg_class=non_rigid_registrar_cls,
+                non_rigid_reg_params=non_rigid_reg_kws,
+                reference_img_f=reference_img_f,
+                compose_non_rigid=compose_non_rigid,
+            )
 
         # Info realted to saving images to view results #
         self.mask_dict = None
