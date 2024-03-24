@@ -972,9 +972,9 @@ class IWsiReg:
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -1059,7 +1059,7 @@ class IWsiReg:
         from shutil import rmtree
 
         def _safe_delete(file_: Path) -> None:
-            if not file.exists():
+            if not file_.exists():
                 return
             if file_.is_dir():
                 try:
@@ -1075,14 +1075,18 @@ class IWsiReg:
                     logger.error(f"Could not delete {file_}. {e}")
 
         # clear transformations, cache, images
-        for file in self.transformations_dir.glob("*"):
-            _safe_delete(file)
         for file in self.cache_dir.glob("*"):
             _safe_delete(file)
+        _safe_delete(self.cache_dir)
         for file in self.progress_dir.glob("*"):
             _safe_delete(file)
+        _safe_delete(self.progress_dir)
         for file in self.image_dir.glob("*"):
             _safe_delete(file)
+        _safe_delete(self.image_dir)
+        for file in self.transformations_dir.glob("*"):
+            _safe_delete(file)
+        _safe_delete(self.transformations_dir)
         # remove config files
         file = self.project_dir / self.REGISTERED_CONFIG_NAME
         _safe_delete(file)

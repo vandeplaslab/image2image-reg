@@ -1,4 +1,5 @@
 """Image wrapper."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -56,15 +57,18 @@ class ImageWrapper:
     @property
     def mask(self) -> sitk.Image | None:
         """Lazy mask."""
-        if self._mask is None:
-            if self.preprocessing and not self.preprocessing.use_mask:
-                return None
-            if self.modality.mask is not None:
-                self._mask = self.read_mask(self.modality.mask)
-            if self.modality.mask_bbox is not None:
-                self._mask = self.make_bbox_mask(self.modality.mask_bbox)
-            elif self.modality.mask_polygon is not None:
-                self._mask = self.make_bbox_mask(self.modality.mask_polygon)
+        preprocessing = self.preprocessing
+        if preprocessing is None:
+            preprocessing = self.modality.preprocessing
+
+        if self._mask is None and preprocessing:
+            if preprocessing.use_mask:
+                if self.modality.mask is not None:
+                    self._mask = self.read_mask(self.modality.mask)
+                if self.modality.mask_bbox is not None:
+                    self._mask = self.make_bbox_mask(self.modality.mask_bbox)
+                elif self.modality.mask_polygon is not None:
+                    self._mask = self.make_bbox_mask(self.modality.mask_polygon)
         return self._mask
 
     @property
@@ -134,7 +138,7 @@ class ImageWrapper:
                     filename_with_suffix(filename, "original_size_transform", ".json"), self.original_size_transform
                 )
             # write mask
-            if self.mask:
+            if self.mask is not None:
                 sitk.WriteImage(self.mask, str(filename_with_suffix(filename, "mask", ".tiff")), useCompression=True)
                 self.write_thumbnail(self.mask, filename_with_suffix(filename, "mask", ".png"))
         logger.trace(f"Saved image to cache: {filename} for {self.modality.name} in {timer()}")

@@ -1,4 +1,5 @@
 """Parameter maps for registration."""
+
 from __future__ import annotations
 
 DEFAULT_REGISTRATION_PARAMETERS_MAP = {
@@ -8,7 +9,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FixedImageDimension": ["2"],
         "FixedImagePyramid": ["FixedRecursiveImagePyramid"],
@@ -58,7 +59,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FixedImageDimension": ["2"],
         "FixedImagePyramid": ["FixedRecursiveImagePyramid"],
@@ -108,7 +109,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FixedImageDimension": ["2"],
         "FixedImagePyramid": ["FixedRecursiveImagePyramid"],
@@ -158,7 +159,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FinalGridSpacingInPhysicalUnits": ["100"],
         "FixedImageDimension": ["2"],
@@ -231,7 +232,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FixedImageDimension": ["2"],
         "FixedImagePyramid": ["FixedRecursiveImagePyramid"],
@@ -271,7 +272,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FinalGridSpacingInPhysicalUnits": ["100"],
         "FixedImageDimension": ["2"],
@@ -328,7 +329,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FinalGridSpacingInPhysicalUnits": ["150"],
         "FixedImageDimension": ["2"],
@@ -386,7 +387,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FixedImageDimension": ["2"],
         "FixedImagePyramid": ["FixedRecursiveImagePyramid"],
@@ -436,7 +437,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FixedImageDimension": ["2"],
         "FixedImagePyramid": ["FixedRecursiveImagePyramid"],
@@ -486,7 +487,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FinalGridSpacingInPhysicalUnits": ["50"],
         "FixedImageDimension": ["2"],
@@ -559,7 +560,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FinalGridSpacingInPhysicalUnits": ["200"],
         "FixedImageDimension": ["2"],
@@ -607,7 +608,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "BSplineInterpolationOrder": ["1"],
         "CompressResultImage": ["true"],
         "DefaultPixelValue": ["0"],
-        "ErodeMask": ["true"],
+        "ErodeMask": ["false"],  # could also be true - need to experiment
         "FinalBSplineInterpolationOrder": ["1"],
         "FinalGridSpacingInPhysicalUnits": ["75"],
         "FixedImageDimension": ["2"],
