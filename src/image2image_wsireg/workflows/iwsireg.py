@@ -140,6 +140,7 @@ class IWsiReg:
         self.attachment_images: dict[str, str] = {}
         self.attachment_shapes: dict[str, Modality] = {}
         self.attachment_geojsons: dict[str, dict] = {}
+        self.attachment_points: dict[str, dict] = {}
         self.merge_modalities: dict[str, list[str]] = {}  # TODO
 
         # setup registration paths
@@ -507,6 +508,7 @@ class IWsiReg:
         mask: PathLike | None = None,
         mask_bbox: tuple[int, int, int, int] | None = None,
         export: Export | dict[str, ty.Any] | None = None,
+        overwrite: bool = False,
     ) -> Modality:
         """Add modality."""
         from image2image_io.readers import get_simple_reader, is_supported
@@ -516,9 +518,13 @@ class IWsiReg:
             raise ValueError("Path does not exist.")
         if not is_supported(path):
             raise ValueError("Unsupported file format.")
-        if name in self.modalities:
-            raise ValueError("Modality name already exists.")
+        if name in self.modalities and not overwrite:
+            raise ValueError(f"Modality name '{name}' already exists.")
         reader: BaseReader = get_simple_reader(path, init_pyramid=False)
+        if preprocessing:
+            preprocessing.channel_names = reader.channel_names
+            preprocessing.channel_indices = reader.channel_ids
+
         return self.add_modality(
             name,
             path,
@@ -528,6 +534,7 @@ class IWsiReg:
             mask_bbox=mask_bbox,
             preprocessing=preprocessing,
             export=export,
+            overwrite=overwrite,
         )
 
     def add_modality(
@@ -556,7 +563,7 @@ class IWsiReg:
         if not is_supported(path, raise_on_error):
             raise ValueError("Unsupported file format.")
         if name in self.modalities and not overwrite:
-            raise ValueError("Modality name already exists.")
+            raise ValueError(f"Modality '{name}' name already exists.")
         if isinstance(preprocessing, dict):
             preprocessing = Preprocessing(**preprocessing)
         if isinstance(export, dict):
@@ -661,6 +668,26 @@ class IWsiReg:
         self.attachment_images[name] = attach_to_modality
         logger.trace(f"Added attachment image '{name}'.")
 
+    def auto_add_attachment_geojson(self, attach_to_modality: str, name: str, path: PathLike) -> None:
+        """Add modality."""
+        from image2image_io.readers import is_supported
+
+        if not path:
+            if name not in self.modalities:
+                raise ValueError(f"Modality '{name}' does not exist. Please add it first.")
+            path = self.modalities[name].path
+
+        path = Path(path)
+        if not path.exists():
+            raise ValueError("Path does not exist.")
+        if not is_supported(path):
+            raise ValueError("Unsupported file format.")
+        if Path(path).suffix not in [".json", ".geojson"]:
+            raise ValueError("Attachment must be in GeoJSON format.")
+        if attach_to_modality not in self.modalities:
+            raise ValueError("Modality does not exist. Please add it before trying to add an attachment.")
+        self.add_attachment_geojson(attach_to_modality, name, path)
+
     def add_attachment_geojson(
         self,
         attach_to_modality: str,
@@ -727,6 +754,93 @@ class IWsiReg:
             "attach_to_modality": attach_to_modality,
         }
         logger.trace(f"Added shape set '{name}'.")
+
+    def auto_add_attachment_points(self, attach_to_modality: str, name: str, path: PathLike) -> None:
+        """Add modality."""
+        from image2image_io.readers import is_supported
+
+        if not path:
+            if name not in self.modalities:
+                raise ValueError(f"Modality '{name}' does not exist. Please add it first.")
+            path = self.modalities[name].path
+
+        path = Path(path)
+        if not path.exists():
+            raise ValueError("Path does not exist.")
+        if not is_supported(path):
+            raise ValueError("Unsupported file format.")
+        if Path(path).suffix not in [".csv", ".txt", ".parquet"]:
+            raise ValueError("Attachment must be in Points format.")
+        if attach_to_modality not in self.modalities:
+            raise ValueError("Modality does not exist. Please add it before trying to add an attachment.")
+        self.add_attachment_points(attach_to_modality, name, path)
+
+    def add_attachment_points(
+        self,
+        attach_to_modality: str,
+        name: str,
+        paths: list[PathLike],
+    ) -> None:
+        """
+        Add attached shapes.
+
+        Parameters
+        ----------
+        attach_to_modality : str
+            image modality to which the shapes are attached
+        name : str
+            Unique name identifier for the shape set
+        paths : list of file paths
+            list of shape data in geoJSON format or list of dicts containing the following keys:
+            "array" = np.ndarray of xy coordinates, "shape_type" = geojson shape type (Polygon, MultiPolygon, etc.),
+            "shape_name" = class of the shape("tumor","normal",etc.)
+        """
+        if attach_to_modality not in self.modalities:
+            raise ValueError(
+                f"The specified modality '{attach_to_modality}' does not exist. Please add it before adding attachment"
+                f" objects."
+            )
+        paths_: list[Path] = []
+        for path in paths:
+            path = Path(path)
+            if not path.exists():
+                raise ValueError(f"Path '{path}' does not exist.")
+            paths_.append(path.resolve())
+
+        pixel_size = self.modalities[attach_to_modality].pixel_size
+        self._add_points_set(attach_to_modality, name, paths_, pixel_size)
+
+    def _add_points_set(
+        self,
+        attach_to_modality: str,
+        name: str,
+        paths: list[Path],
+        pixel_size: float,
+    ) -> None:
+        """
+        Add a shape set to the graph.
+
+        Parameters
+        ----------
+        attach_to_modality : str
+            image modality to which the points are attached
+        name : str
+            Unique name identifier for the shape set
+        paths : list of file paths
+            list of shape data in geoJSON format or list of dicts containing the following keys:
+            "array" = np.ndarray of xy coordinates, "shape_type" = geojson shape type (Polygon, MultiPolygon, etc.),
+            "shape_name" = class of the shape("tumor","normal",etc.)
+        pixel_size : float
+            spatial resolution of shape data's associated image in units per px (i.e. 0.9 um / px)
+        """
+        if name in self.attachment_points:
+            raise ValueError(f"Shape set with name '{name}' already exists. Please use a different name.")
+        self.attachment_points[name] = {
+            "point_files": paths,
+            "pixel_size": pixel_size,
+            "attach_to_modality": attach_to_modality,
+        }
+        logger.trace(f"Added points set '{name}'.")
 
     def auto_add_merge_modalities(self, name: str):
         """Add merge modalities."""
@@ -1735,3 +1849,44 @@ class IWsiReg:
         with open(str(filename), "w") as f:
             yaml.dump(config, f, sort_keys=False)
         return filename
+
+    # def _create_initial_overlap_image(self):
+    #     """Create image showing how images overlap before registration"""
+    #     from itertools import combinations
+    #
+    #     from image2image_wsireg.utils.visuals import color_multichannel, get_n_colors, jzazbz_cmap
+    #
+    #     min_r = np.inf
+    #     max_r = 0
+    #     min_c = np.inf
+    #     max_c = 0
+    #     composite_img_list = [None] * len(self.modalities)
+    #     for src_modality, tgt_modality in combinations(self.modalities.values(), 2):
+    #
+    #         img = img_obj.image
+    #         padded_img = transform.warp(img, img_obj.T, preserve_range=True, output_shape=img_obj.padded_shape_rc)
+    #
+    #         composite_img_list[i] = padded_img
+    #
+    #         img_corners_rc = warp_tools.get_corners_of_image(img.shape[0:2])
+    #         warped_corners_xy = warp_tools.warp_xy(img_corners_rc[:, ::-1], img_obj.T)
+    #         min_r = min(warped_corners_xy[:, 1].min(), min_r)
+    #         max_r = max(warped_corners_xy[:, 1].max(), max_r)
+    #         min_c = min(warped_corners_xy[:, 0].min(), min_c)
+    #         max_c = max(warped_corners_xy[:, 0].max(), max_c)
+    #
+    #     composite_img = np.dstack(composite_img_list)
+    #     cmap = jzazbz_cmap()
+    #     channel_colors = get_n_colors(cmap, composite_img.shape[2])
+    #     overlap_img = color_multichannel(
+    #         composite_img, channel_colors, rescale_channels=True, normalize_by="channel", cspace="CAM16UCS"
+    #     )
+    #
+    #     min_r = int(min_r)
+    #     max_r = int(np.ceil(max_r))
+    #     min_c = int(min_c)
+    #     max_c = int(np.ceil(max_c))
+    #     overlap_img = overlap_img[min_r:max_r, min_c:max_c]
+    #     overlap_img = (255 * overlap_img).astype(np.uint8)
+    #
+    #     return overlap_img

@@ -1,4 +1,5 @@
 """Preprocessing parameters for image2image registration."""
+
 import typing as ty
 from enum import Enum
 from pathlib import Path
@@ -19,7 +20,7 @@ def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:
 
 
 def _transform_custom_proc(
-    custom_procs: ty.Union[list[ty.Callable], tuple[ty.Callable, ...]]
+    custom_procs: ty.Union[list[ty.Callable], tuple[ty.Callable, ...]],
 ) -> dict[str, ty.Callable]:
     """Transform custom processing."""
     return {f"custom processing {str(idx+1).zfill(2)}": proc for idx, proc in enumerate(custom_procs)}
@@ -141,7 +142,7 @@ class Preprocessing(BaseModel):
     @classmethod
     def basic(cls) -> "Preprocessing":
         """Basic image preprocessing."""
-        return cls(image_type=ImageType.DARK, as_uint8=True, max_int_proj=True)
+        return cls(image_type=ImageType.DARK, as_uint8=True, max_intensity_projection=True)
 
     @classmethod
     def fluorescence(cls) -> "Preprocessing":
@@ -149,7 +150,7 @@ class Preprocessing(BaseModel):
         return cls(
             image_type=ImageType.DARK,
             as_uint8=True,
-            max_int_proj=True,
+            max_intensity_projection=True,
             contrast_enhance=True,
         )
 
@@ -159,7 +160,7 @@ class Preprocessing(BaseModel):
         return cls(
             image_type=ImageType.LIGHT,
             as_uint8=True,
-            max_int_proj=False,
+            max_intensity_projection=False,
             invert_intensity=True,
         )
 

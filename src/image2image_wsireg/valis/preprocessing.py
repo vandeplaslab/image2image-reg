@@ -1,9 +1,10 @@
 """Pre-processing utilities."""
 
 import numpy as np
+from image2image_io.readers.utilities import grayscale
 from skimage import exposure
 from valis import slide_io
-from valis.preprocessing import ImageProcesser, create_tissue_mask_from_multichannel
+from valis.preprocessing import ImageProcesser, create_tissue_mask_from_multichannel, create_tissue_mask_from_rgb
 
 
 class NoProcessing(ImageProcesser):
@@ -18,6 +19,24 @@ class NoProcessing(ImageProcesser):
 
     def process_image(self, *args, **kwargs):
         return self.image
+
+
+class HEPreprocessing(ImageProcesser):
+    """HE Pre-processing"""
+
+    def __init__(self, image, src_f, level, series, *args, **kwargs):
+        super().__init__(image=image, src_f=src_f, level=level, series=series, *args, **kwargs)
+
+    def create_mask(self):
+        _, tissue_mask = create_tissue_mask_from_rgb(self.image)
+        return tissue_mask
+
+    def process_image(self, *args, **kwargs):
+        # turn into grayscale
+        image = np.asarray(grayscale(self.image, is_interleaved=True))
+        # invert intensities so dark is light and light is dark
+        image = 255 - image
+        return image
 
 
 class MaxIntensityProjection(ImageProcesser):
