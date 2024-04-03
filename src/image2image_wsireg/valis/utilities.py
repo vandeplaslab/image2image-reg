@@ -164,7 +164,7 @@ def transform_registered_image(
             warped = vips2numpy(warped)
 
         # ensure that RGB remains RGB but AF remain AF
-        if warped.ndim == 3 and np.argmin(warped.shape) == 2:
+        if warped.ndim == 3 and np.argmin(warped.shape) == 2 and not reader.is_rgb:
             warped = np.moveaxis(warped, 2, 0)
 
         write_ome_tiff_from_array(

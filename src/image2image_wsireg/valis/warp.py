@@ -1,4 +1,5 @@
 """Various utilities from valis."""
+
 from __future__ import annotations
 
 import multiprocessing
@@ -22,7 +23,7 @@ from shapely.ops import unary_union
 from shapely.strtree import STRtree
 from skimage import filters, morphology, transform
 
-from image2image_wsireg.feature.utilities import get_image_name
+from image2image_wsireg.valis.utilities import get_image_name
 
 logger = logger.bind(src="Utilities")
 

@@ -347,6 +347,7 @@ def validate_runner(paths: ty.Sequence[str]) -> None:
         obj.validate()
 
 
+@overwrite_
 @click.option(
     "-A",
     "--affine",
@@ -416,9 +417,10 @@ def add_modality_cmd(
     mask_bbox: tuple[int, int, int, int] | None,
     preprocessing: ty.Sequence[str],
     affine: ty.Sequence[str] | None,
+    overwrite: bool = False,
 ) -> None:
     """Add images to the project."""
-    add_modality_runner(project_dir, name, image, mask, mask_bbox, preprocessing, affine)
+    add_modality_runner(project_dir, name, image, mask, mask_bbox, preprocessing, affine, overwrite)
 
 
 def add_modality_runner(
@@ -429,6 +431,7 @@ def add_modality_runner(
     mask_bbox: tuple[int, int, int, int] | None = None,
     preprocessings: ty.Sequence[str | None] | None = None,
     affines: ty.Sequence[str] | None = None,
+    overwrite: bool = False,
 ) -> None:
     """Add images to the project."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
@@ -468,6 +471,7 @@ def add_modality_runner(
         Parameter("Mask bounding box", "-b/--mask_bbox", mask_bbox),
         Parameter("Pre-processing", "-P/--preprocessing", preprocessings),
         Parameter("Affine", "-A/--affine", affines),
+        Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
     obj = IWsiReg.from_path(project_dir)
     for name, path, mask, preprocessing, affine in zip(names, paths, masks, preprocessings, affines):
@@ -477,6 +481,7 @@ def add_modality_runner(
             preprocessing=get_preprocessing(preprocessing, affine),
             mask=mask,
             mask_bbox=mask_bbox,
+            overwrite=overwrite,
         )
     obj.save()
 
@@ -588,7 +593,7 @@ def add_path_runner(
 @click.option(
     "-i",
     "--image",
-    help="Path to image file that should be attached to the <attach_to> modality.",
+    help="Path to image/GeoJSON/points file that should be attached to the <attach_to> modality.",
     type=click.UNPROCESSED,
     show_default=True,
     multiple=True,
@@ -648,8 +653,61 @@ def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], pa
 
 
 @click.option(
-    "-s",
-    "--shape",
+    "-f",
+    "--file",
+    help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths_sort,
+)
+@click.option(
+    "-n",
+    "--name",
+    help="Name to be given to the specified image (modality).",
+    type=click.STRING,
+    show_default=True,
+    multiple=False,
+    required=True,
+)
+@click.option(
+    "-a",
+    "--attach_to",
+    help="Name of the modality to which the attachment should be added.",
+    type=click.STRING,
+    show_default=True,
+    multiple=False,
+    required=True,
+)
+@project_path_single_
+@cli.command("add-points", help_group="Project")
+def add_points_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
+    """Add attachment shape (GeoJSON)."""
+    add_points_runner(project_dir, attach_to, name, file)
+
+
+def add_points_runner(project_dir: str, attach_to: str, name: str, paths: list[str | Path]) -> None:
+    """Add attachment modality."""
+    from image2image_wsireg.workflows.iwsireg import IWsiReg
+
+    if not isinstance(paths, (list, tuple)):
+        paths = [paths]
+
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", project_dir),
+        Parameter("Attach to", "-a/--attach_to", attach_to),
+        Parameter("Name", "-n/--name", name),
+        Parameter("Point Files", "-f/--file", paths),
+    )
+    obj = IWsiReg.from_path(project_dir)
+    obj.add_attachment_points(attach_to, name, paths)
+    obj.save()
+
+
+@click.option(
+    "-f",
+    "--file",
     help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
     type=click.UNPROCESSED,
     show_default=True,
@@ -677,9 +735,9 @@ def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], pa
 )
 @project_path_single_
 @cli.command("add-shape", help_group="Project")
-def add_shape_cmd(project_dir: str, attach_to: str, name: str, shape: list[str | Path]) -> None:
+def add_shape_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
     """Add attachment shape (GeoJSON)."""
-    add_shape_runner(project_dir, attach_to, name, shape)
+    add_shape_runner(project_dir, attach_to, name, file)
 
 
 def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[str | Path]) -> None:
@@ -693,7 +751,7 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
         Parameter("Project directory", "-p/--project_dir", project_dir),
         Parameter("Attach to", "-a/--attach_to", attach_to),
         Parameter("Name", "-n/--name", name),
-        Parameter("Shape", "-s/--shape", paths),
+        Parameter("Shape files", "-f/--file", paths),
     )
     obj = IWsiReg.from_path(project_dir)
     obj.add_attachment_geojson(attach_to, name, paths)
