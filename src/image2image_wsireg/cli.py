@@ -19,7 +19,7 @@ from koyo.click import (
 from koyo.system import IS_MAC
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
-from koyo.utilities import running_as_pyinstaller_app
+from koyo.utilities import is_installed, running_as_pyinstaller_app
 from loguru import logger
 
 from image2image_wsireg import __version__
@@ -28,6 +28,7 @@ from image2image_wsireg.enums import AVAILABLE_REGISTRATIONS, WriterMode
 if ty.TYPE_CHECKING:
     from image2image_wsireg.models import Preprocessing
 
+valis_is_installed = is_installed("valis")
 
 # declare common options
 ALLOW_EXTRA_ARGS = {"help_option_names": ["-h", "--help"], "ignore_unknown_options": True, "allow_extra_args": True}
@@ -216,13 +217,15 @@ def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> P
 )
 @click.option(
     "--no_color",
-    help="Flag to enable colored logs.",
+    help="Flag to disable colored logs (essential when logging to file).",
     default=False,
     is_flag=True,
     show_default=True,
 )
-@click.option("--quiet", "-q", "verbosity", flag_value=0, help="Minimal output")
-@click.option("--debug", "verbosity", flag_value=0.5, help="Maximum output")
+@click.option(
+    "--quiet", "-q", "verbosity", flag_value=0, help="Minimal output - only errors and exceptions will be shown."
+)
+@click.option("--debug", "verbosity", flag_value=0.5, help="Maximum output - all messages will be shown.")
 @click.option(
     "--verbose",
     "-v",
@@ -234,7 +237,7 @@ def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> P
 )
 @click.option(
     "--log",
-    help="Log CLI output to a log file.",
+    help="Write logs to file (specify log path).",
     type=click.Path(exists=False, resolve_path=True, file_okay=True, dir_okay=False),
     default=None,
     show_default=True,
@@ -320,7 +323,7 @@ def new_runner(output_dir: str, name: str, cache: bool, merge: bool) -> None:
 @project_path_single_
 @cli.command("about", help_group="Project")
 def about_cmd(project_dir: ty.Sequence[str]) -> None:
-    """Add images to the project."""
+    """Print information about the registration project."""
     about_runner(project_dir)
 
 
@@ -335,7 +338,7 @@ def about_runner(project_dir: str) -> None:
 @project_path_multi_
 @cli.command("validate", help_group="Project")
 def validate_cmd(project_dir: ty.Sequence[str]) -> None:
-    """Add images to the project."""
+    """Validate project configuration."""
     validate_runner(project_dir)
 
 
@@ -622,7 +625,7 @@ def add_path_runner(
 @project_path_single_
 @cli.command("add-attachment", help_group="Project")
 def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
-    """Add attachment image."""
+    """Add attachment image to registered modality."""
     add_attachment_runner(project_dir, attach_to, name, image)
 
 
@@ -684,7 +687,7 @@ def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], pa
 @project_path_single_
 @cli.command("add-points", help_group="Project")
 def add_points_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
-    """Add attachment shape (GeoJSON)."""
+    """Add attachment points (csv/tsv/txt) to registered modality."""
     add_points_runner(project_dir, attach_to, name, file)
 
 
@@ -737,7 +740,7 @@ def add_points_runner(project_dir: str, attach_to: str, name: str, paths: list[s
 @project_path_single_
 @cli.command("add-shape", help_group="Project")
 def add_shape_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
-    """Add attachment shape (GeoJSON)."""
+    """Add attachment shape (GeoJSON) to registered modality."""
     add_shape_runner(project_dir, attach_to, name, file)
 
 
@@ -1028,47 +1031,49 @@ def _register(
     return path
 
 
-@click.option(
-    "-r",
-    "--reference",
-    help="Path to the reference image.",
-    type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
-    show_default=True,
-    required=False,
-    default=None,
-)
-@click.option(
-    "-i",
-    "--image",
-    help="Path to the image(s) that should be co-registered.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    multiple=True,
-    required=True,
-    callback=cli_parse_paths_sort,
-)
-@click.option(
-    "-o",
-    "--output_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=False,
-    default=".",
-)
-@click.option(
-    "-n",
-    "--name",
-    help="Name to be given to the specified image (modality).",
-    type=click.STRING,
-    show_default=True,
-    multiple=False,
-    required=True,
-)
-@cli.command("valis-init", help_group="Valis")
-def valis_init(name: str, output_dir: PathLike, image: list[PathLike], reference: PathLike) -> int:
-    """Initialize Valis configuration file."""
-    return valis_init_runner(name, output_dir, image, reference)
+if valis_is_installed:
+
+    @click.option(
+        "-r",
+        "--reference",
+        help="Path to the reference image.",
+        type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
+        show_default=True,
+        required=False,
+        default=None,
+    )
+    @click.option(
+        "-i",
+        "--image",
+        help="Path to the image(s) that should be co-registered.",
+        type=click.UNPROCESSED,
+        show_default=True,
+        multiple=True,
+        required=True,
+        callback=cli_parse_paths_sort,
+    )
+    @click.option(
+        "-o",
+        "--output_dir",
+        help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+        type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+        show_default=True,
+        required=False,
+        default=".",
+    )
+    @click.option(
+        "-n",
+        "--name",
+        help="Name to be given to the specified image (modality).",
+        type=click.STRING,
+        show_default=True,
+        multiple=False,
+        required=True,
+    )
+    @cli.command("valis-init", help_group="Valis")
+    def valis_init(name: str, output_dir: PathLike, image: list[PathLike], reference: PathLike) -> int:
+        """Initialize Valis configuration file."""
+        return valis_init_runner(name, output_dir, image, reference)
 
 
 def valis_init_runner(project_name: str, output_dir: PathLike, path: list[PathLike], reference: PathLike) -> int:
@@ -1084,26 +1089,28 @@ def valis_init_runner(project_name: str, output_dir: PathLike, path: list[PathLi
     valis_init_configuration(project_name, output_dir, path, reference)
 
 
-@click.option(
-    "-o",
-    "--output_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-)
-@click.option(
-    "-c",
-    "--config",
-    help="Path to the configuration file.",
-    type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
-    show_default=True,
-    required=True,
-)
-@cli.command("valis-register", help_group="Valis")
-def valis_register(config: PathLike, output_dir: PathLike) -> int:
-    """Register list of images using Valis algorithm."""
-    valis_register_runner(output_dir, config)
+if valis_is_installed:
+
+    @click.option(
+        "-o",
+        "--output_dir",
+        help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+        type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+        show_default=True,
+        required=True,
+    )
+    @click.option(
+        "-c",
+        "--config",
+        help="Path to the configuration file.",
+        type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
+        show_default=True,
+        required=True,
+    )
+    @cli.command("valis-register", help_group="Valis")
+    def valis_register(config: PathLike, output_dir: PathLike) -> int:
+        """Register images using the Valis algorithm."""
+        valis_register_runner(output_dir, config)
 
 
 def valis_register_runner(output_dir: PathLike, config: PathLike | None):
@@ -1141,7 +1148,7 @@ def valis_register_runner(output_dir: PathLike, config: PathLike | None):
 def clear_cmd(
     project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
 ) -> None:
-    """Preprocess images."""
+    """Clear project data (cache/images/transformations/etc...)."""
     clear_runner(project_dir, no_cache, no_image, no_transformations, no_progress)
 
 
@@ -1415,6 +1422,11 @@ def merge_runner(
             name, list(paths), output_dir, crop_bbox, fmt, as_uint8, channel_ids=channel_ids, override=override
         )
     logger.info(f"Finished processing project in {timer()}.")
+
+
+@cli.command("convert", help_group="Utility")
+def convert_cmd() -> None:
+    """Convert images to pyramidal OME-TIFF."""
 
 
 def main():
