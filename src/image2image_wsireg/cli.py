@@ -347,7 +347,7 @@ def validate_runner(paths: ty.Sequence[str]) -> None:
         obj.validate()
 
 
-@overwrite_
+@override_
 @click.option(
     "-A",
     "--affine",
@@ -417,10 +417,10 @@ def add_modality_cmd(
     mask_bbox: tuple[int, int, int, int] | None,
     preprocessing: ty.Sequence[str],
     affine: ty.Sequence[str] | None,
-    overwrite: bool = False,
+    override: bool = False,
 ) -> None:
     """Add images to the project."""
-    add_modality_runner(project_dir, name, image, mask, mask_bbox, preprocessing, affine, overwrite)
+    add_modality_runner(project_dir, name, image, mask, mask_bbox, preprocessing, affine, override)
 
 
 def add_modality_runner(
@@ -431,7 +431,7 @@ def add_modality_runner(
     mask_bbox: tuple[int, int, int, int] | None = None,
     preprocessings: ty.Sequence[str | None] | None = None,
     affines: ty.Sequence[str] | None = None,
-    overwrite: bool = False,
+    override: bool = False,
 ) -> None:
     """Add images to the project."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
@@ -471,7 +471,7 @@ def add_modality_runner(
         Parameter("Mask bounding box", "-b/--mask_bbox", mask_bbox),
         Parameter("Pre-processing", "-P/--preprocessing", preprocessings),
         Parameter("Affine", "-A/--affine", affines),
-        Parameter("Overwrite", "-W/--overwrite", overwrite),
+        Parameter("Override", "-W/--override", override),
     )
     obj = IWsiReg.from_path(project_dir)
     for name, path, mask, preprocessing, affine in zip(names, paths, masks, preprocessings, affines):
@@ -481,7 +481,7 @@ def add_modality_runner(
             preprocessing=get_preprocessing(preprocessing, affine),
             mask=mask,
             mask_bbox=mask_bbox,
-            overwrite=overwrite,
+            override=override,
         )
     obj.save()
 

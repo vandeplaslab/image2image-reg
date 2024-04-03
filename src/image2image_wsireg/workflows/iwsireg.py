@@ -508,7 +508,7 @@ class IWsiReg:
         mask: PathLike | None = None,
         mask_bbox: tuple[int, int, int, int] | None = None,
         export: Export | dict[str, ty.Any] | None = None,
-        overwrite: bool = False,
+        override: bool = False,
     ) -> Modality:
         """Add modality."""
         from image2image_io.readers import get_simple_reader, is_supported
@@ -518,7 +518,7 @@ class IWsiReg:
             raise ValueError("Path does not exist.")
         if not is_supported(path):
             raise ValueError("Unsupported file format.")
-        if name in self.modalities and not overwrite:
+        if name in self.modalities and not override:
             raise ValueError(f"Modality name '{name}' already exists.")
         reader: BaseReader = get_simple_reader(path, init_pyramid=False)
         if preprocessing:
@@ -534,7 +534,7 @@ class IWsiReg:
             mask_bbox=mask_bbox,
             preprocessing=preprocessing,
             export=export,
-            overwrite=overwrite,
+            override=override,
         )
 
     def add_modality(
