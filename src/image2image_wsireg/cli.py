@@ -1034,6 +1034,30 @@ def _register(
 if valis_is_installed:
 
     @click.option(
+        "-M",
+        "--no_micro_reg",
+        help="Perform non-rigid registration.",
+        is_flag=True,
+        default=None,
+        show_default=True,
+    )
+    @click.option(
+        "-N",
+        "--no_non_rigid_reg",
+        help="Perform non-rigid registration.",
+        is_flag=True,
+        default=False,
+        show_default=True,
+    )
+    @click.option(
+        "-R",
+        "--check_for_reflection",
+        help="Check for reflection.",
+        is_flag=True,
+        default=None,
+        show_default=True,
+    )
+    @click.option(
         "-r",
         "--reference",
         help="Path to the reference image.",
@@ -1071,25 +1095,48 @@ if valis_is_installed:
         required=True,
     )
     @cli.command("valis-init", help_group="Valis")
-    def valis_init(name: str, output_dir: PathLike, image: list[PathLike], reference: PathLike) -> int:
+    def valis_init(
+        name: str,
+        output_dir: PathLike,
+        image: list[PathLike],
+        reference: PathLike,
+        check_for_reflection: bool,
+        no_non_rigid_reg: bool,
+        no_micro_reg: bool,
+    ) -> None:
         """Initialize Valis configuration file."""
-        return valis_init_runner(name, output_dir, image, reference)
+        valis_init_runner(name, output_dir, image, reference)
 
+    def valis_init_runner(
+        project_name: str,
+        output_dir: PathLike,
+        path: list[PathLike],
+        reference: PathLike,
+        check_for_reflection: bool = True,
+        no_non_rigid_reg: bool = False,
+        no_micro_reg: bool = False,
+    ):
+        """Register list of images using Valis algorithm."""
+        from image2image_wsireg.workflows.valis import valis_init_configuration
 
-def valis_init_runner(project_name: str, output_dir: PathLike, path: list[PathLike], reference: PathLike) -> int:
-    """Register list of images using Valis algorithm."""
-    from image2image_wsireg.workflows.valis import valis_init_configuration
-
-    print_parameters(
-        Parameter("Project name", "-n/--name", project_name),
-        Parameter("Output directory", "-o/--output_dir", output_dir),
-        Parameter("Paths", "-i/--image", path),
-        Parameter("Reference", "-r/--reference", reference),
-    )
-    valis_init_configuration(project_name, output_dir, path, reference)
-
-
-if valis_is_installed:
+        print_parameters(
+            Parameter("Project name", "-n/--name", project_name),
+            Parameter("Output directory", "-o/--output_dir", output_dir),
+            Parameter("Paths", "-i/--image", path),
+            Parameter("Reference", "-r/--reference", reference),
+            Parameter("Check for reflection", "-R/--check_for_reflection", check_for_reflection),
+            Parameter("No non-rigid registration", "-N/--no_non_rigid_reg", no_non_rigid_reg),
+            Parameter("No micro registration", "-M/--no_micro_reg", no_micro_reg),
+        )
+        valis_init_configuration(
+            project_name,
+            output_dir,
+            path,
+            reference,
+            check_for_reflection,
+            not no_non_rigid_reg,
+            not no_micro_reg,
+        )
 
     @click.option(
         "-o",
@@ -1109,21 +1156,20 @@ if valis_is_installed:
         required=True,
     )
     @cli.command("valis-register", help_group="Valis")
-    def valis_register(config: PathLike, output_dir: PathLike) -> int:
+    def valis_register(config: PathLike, output_dir: PathLike):
         """Register images using the Valis algorithm."""
         valis_register_runner(output_dir, config)
 
+    def valis_register_runner(output_dir: PathLike, config: PathLike | None):
+        """Register list of images using Valis algorithm."""
+        from image2image_wsireg.workflows.valis import valis_registration_from_config
 
-def valis_register_runner(output_dir: PathLike, config: PathLike | None):
-    """Register list of images using Valis algorithm."""
-    from image2image_wsireg.workflows.valis import valis_registration_from_config
+        print_parameters(
+            Parameter("Output directory", "-o/--output_dir", output_dir),
+            Parameter("Config", "-c/--config", config),
+        )
 
-    print_parameters(
-        Parameter("Output directory", "-o/--output_dir", output_dir),
-        Parameter("Config", "-c/--config", config),
-    )
-
-    valis_registration_from_config(output_dir=output_dir, config=config)
+        valis_registration_from_config(output_dir=output_dir, config=config)
 
 
 @click.option(

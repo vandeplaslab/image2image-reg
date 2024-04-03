@@ -88,6 +88,10 @@ def valis_init_configuration(
     output_dir: PathLike,
     filelist: list[PathLike],
     reference: PathLike | None = None,
+    check_for_reflections: bool = True,
+    micro_reg_fraction: float = 0.125,
+    non_rigid_reg: bool = False,
+    micro_reg: bool = False,
 ):
     """Create Valis configuration."""
     from natsort import natsorted
@@ -119,6 +123,10 @@ def valis_init_configuration(
         "filelist": [str(path) for path in filelist],
         "reference": str(reference),
         "channel_kws": channel_kws,
+        "check_for_reflections": check_for_reflections,
+        "non_rigid_reg": non_rigid_reg,
+        "micro_reg": micro_reg,
+        "micro_reg_fraction": micro_reg_fraction,
     }
 
     filename = output_dir / f"{project_name}.valis.json"
@@ -140,6 +148,9 @@ def valis_registration(
     channel_kws: dict[str, str] | PathLike = None,
     check_for_reflections: bool = True,
     micro_reg_fraction: float = 0.25,
+    non_rigid_reg: bool = False,
+    micro_reg: bool = False,
+    **kwargs,
 ) -> None:
     """Valis-based registration."""
     import numpy as np
@@ -172,8 +183,18 @@ def valis_registration(
     registered_dir = output_dir / project_name / "registered"
     registered_dir.mkdir(exist_ok=True, parents=True)
 
+    kws = {}
+    if not non_rigid_reg:
+        kws["non_rigid_registrar_cls"] = None
+
+    if kwargs:
+        logger.warning(f"Unused keyword arguments: {kwargs}")
+
     try:
-        # Perform high resolution rigid registration using the MicroRigidRegistrar
+        # registrar_path = base_dir / name / "data" / f"{name}_registrar.pickle"
+        # if registrar_path.exists():
+        #     registrar = pickle.load(open(registrar_path, "rb"))
+        # else:
         registrar = registration.Valis(
             str(output_dir),
             str(output_dir),
@@ -185,6 +206,7 @@ def valis_registration(
             align_to_reference=reference is not None,
             check_for_reflections=check_for_reflections,
             feature_detector_cls=SensitiveVggFD,
+            **kws,
         )
 
         with MeasureTimer() as timer:
@@ -193,26 +215,27 @@ def valis_registration(
 
         # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an image that
         # is 25% full resolution.
-        try:
-            img_dims = np.array([slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()])
-            min_max_size = np.min([np.max(d) for d in img_dims])
-            micro_reg_size = np.floor(min_max_size * micro_reg_fraction).astype(int)
-        except Exception:
-            micro_reg_size = 3000
-
-        logger.info(f"Micro-registering using {micro_reg_size} pixels.")
-        # Perform high resolution non-rigid registration
-        with MeasureTimer() as timer:
+        if micro_reg:
             try:
-                registrar.register_micro(
-                    max_non_rigid_registration_dim_px=micro_reg_size,
-                    processor_dict=channel_kws,
-                    reference_img_f=str(reference),
-                    align_to_reference=True,
-                )
-            except Exception as exc:
-                logger.error(f"Error during non-rigid registration: {exc}")
-        logger.info(f"Registered high-res images in {timer()}")
+                img_dims = np.array([slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()])
+                min_max_size = np.min([np.max(d) for d in img_dims])
+                micro_reg_size = np.floor(min_max_size * micro_reg_fraction).astype(int)
+            except Exception:
+                micro_reg_size = 3000
+
+            logger.info(f"Micro-registering using {micro_reg_size} pixels.")
+            # Perform high resolution non-rigid registration
+            with MeasureTimer() as timer:
+                try:
+                    registrar.register_micro(
+                        max_non_rigid_registration_dim_px=micro_reg_size,
+                        processor_dict=channel_kws,
+                        reference_img_f=str(reference) if reference else None,
+                        align_to_reference=True,
+                    )
+                except Exception as exc:
+                    logger.error(f"Error during non-rigid registration: {exc}")
+            logger.info(f"Registered high-res images in {timer()}")
 
         # We can also plot the high resolution matches using `Valis.draw_matches`:
         try:
@@ -222,7 +245,7 @@ def valis_registration(
             logger.error("Failed to export matches.")
 
         # export images to OME-TIFFs
-        transform_registered_image(registrar, registered_dir)
+        transform_registered_image(registrar, registered_dir, non_rigid_reg=non_rigid_reg)
 
     except Exception as exc:
         registration.kill_jvm()
