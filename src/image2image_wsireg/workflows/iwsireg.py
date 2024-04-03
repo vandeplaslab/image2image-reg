@@ -1492,11 +1492,12 @@ class IWsiReg:
             transformations.append(orig_size_rt)
 
         if modality.preprocessing and modality.preprocessing.downsample > 1:
-            if not modality.output_pixel_size:
-                output_spacing_target = self.modalities[final_modality].output_pixel_size
-                transformations.set_output_spacing((output_spacing_target, output_spacing_target))
-            else:
+            if modality.output_pixel_size:
                 transformations.set_output_spacing(modality.output_pixel_size)
+            else:
+                output_spacing_target = self.modalities[final_modality].pixel_size
+                transformations.set_output_spacing((output_spacing_target, output_spacing_target))
+
         elif modality.output_pixel_size:
             transformations.set_output_spacing(modality.output_pixel_size)
         if attachment and modality_key:

@@ -1097,7 +1097,8 @@ if valis_is_installed:
         help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
         type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
         show_default=True,
-        required=True,
+        required=False,
+        default=".",
     )
     @click.option(
         "-c",
