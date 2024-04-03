@@ -30,6 +30,7 @@ if ty.TYPE_CHECKING:
 
 
 # declare common options
+ALLOW_EXTRA_ARGS = {"help_option_names": ["-h", "--help"], "ignore_unknown_options": True, "allow_extra_args": True}
 override_ = click.option(
     "-W",
     "--override",
@@ -814,7 +815,7 @@ def add_merge_runner(
 @parallel_mode_
 @n_parallel_
 @project_path_multi_
-@cli.command("preprocess", help_group="Execute")
+@cli.command("preprocess", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
 def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str, override: bool) -> None:
     """Preprocess images."""
     preprocess_runner(project_dir, n_parallel, parallel_mode, override)
@@ -1022,8 +1023,99 @@ def _register(
             to_original_size=original_size,
             as_uint8=as_uint8,
             n_parallel=n_parallel,
+            override=override,
         )
     return path
+
+
+@click.option(
+    "-r",
+    "--reference",
+    help="Path to the reference image.",
+    type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
+    show_default=True,
+    required=False,
+    default=None,
+)
+@click.option(
+    "-i",
+    "--image",
+    help="Path to the image(s) that should be co-registered.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths_sort,
+)
+@click.option(
+    "-o",
+    "--output_dir",
+    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=False,
+    default=".",
+)
+@click.option(
+    "-n",
+    "--name",
+    help="Name to be given to the specified image (modality).",
+    type=click.STRING,
+    show_default=True,
+    multiple=False,
+    required=True,
+)
+@cli.command("valis-init", help_group="Valis")
+def valis_init(name: str, output_dir: PathLike, image: list[PathLike], reference: PathLike) -> int:
+    """Initialize Valis configuration file."""
+    return valis_init_runner(name, output_dir, image, reference)
+
+
+def valis_init_runner(project_name: str, output_dir: PathLike, path: list[PathLike], reference: PathLike) -> int:
+    """Register list of images using Valis algorithm."""
+    from image2image_wsireg.workflows.valis import valis_init_configuration
+
+    print_parameters(
+        Parameter("Project name", "-n/--name", project_name),
+        Parameter("Output directory", "-o/--output_dir", output_dir),
+        Parameter("Paths", "-i/--image", path),
+        Parameter("Reference", "-r/--reference", reference),
+    )
+    valis_init_configuration(project_name, output_dir, path, reference)
+
+
+@click.option(
+    "-o",
+    "--output_dir",
+    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=True,
+)
+@click.option(
+    "-c",
+    "--config",
+    help="Path to the configuration file.",
+    type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
+    show_default=True,
+    required=True,
+)
+@cli.command("valis-register", help_group="Valis")
+def valis_register(config: PathLike, output_dir: PathLike) -> int:
+    """Register list of images using Valis algorithm."""
+    valis_register_runner(output_dir, config)
+
+
+def valis_register_runner(output_dir: PathLike, config: PathLike | None):
+    """Register list of images using Valis algorithm."""
+    from image2image_wsireg.workflows.valis import valis_registration_from_config
+
+    print_parameters(
+        Parameter("Output directory", "-o/--output_dir", output_dir),
+        Parameter("Config", "-c/--config", config),
+    )
+
+    valis_registration_from_config(output_dir=output_dir, config=config)
 
 
 @click.option(
@@ -1045,7 +1137,7 @@ def _register(
 @click.option("-I", "--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
 @click.option("-C", "--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
 @project_path_multi_
-@cli.command("clear", help_group="Execute")
+@cli.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
 def clear_cmd(
     project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
 ) -> None:
