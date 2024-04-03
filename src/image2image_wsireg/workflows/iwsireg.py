@@ -544,7 +544,7 @@ class IWsiReg:
         output_pixel_size: tuple[float, float] | None = None,
         transform_mask: bool = True,
         export: Export | dict[str, ty.Any] | None = None,
-        overwrite: bool = False,
+        override: bool = False,
         raise_on_error: bool = True,
     ) -> Modality:
         """Add modality."""
@@ -555,7 +555,7 @@ class IWsiReg:
             raise ValueError("Path does not exist.")
         if not is_supported(path, raise_on_error):
             raise ValueError("Unsupported file format.")
-        if name in self.modalities and not overwrite:
+        if name in self.modalities and not override:
             raise ValueError("Modality name already exists.")
         if isinstance(preprocessing, dict):
             preprocessing = Preprocessing(**preprocessing)
@@ -656,7 +656,7 @@ class IWsiReg:
             pixel_size,
             channel_names=channel_names,
             channel_colors=channel_colors,
-            overwrite=True,
+            override=True,
         )
         self.attachment_images[name] = attach_to_modality
         logger.trace(f"Added attachment image '{name}'.")
@@ -859,13 +859,13 @@ class IWsiReg:
         return None
 
     def _preprocess_image(
-        self, modality: Modality, preprocessing: Preprocessing | None = None, overwrite: bool = False
+        self, modality: Modality, preprocessing: Preprocessing | None = None, override: bool = False
     ) -> ImageWrapper:
         """Pre-process images."""
         from image2image_wsireg.wrapper import ImageWrapper
 
         wrapper = ImageWrapper(modality, preprocessing)
-        cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not overwrite else False
+        cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not override else False
         if not cached:
             wrapper.preprocess()
             wrapper.save_cache(self.cache_dir, self.cache_images)
@@ -979,7 +979,7 @@ class IWsiReg:
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
 
-    def preprocess(self, n_parallel: int = 1, overwrite: bool = False) -> None:
+    def preprocess(self, n_parallel: int = 1, override: bool = False) -> None:
         """Pre-process all images."""
         # TODO: add multi-core support
         self.set_logger()
@@ -997,7 +997,7 @@ class IWsiReg:
             #         pool.imap_unordered(self._preprocess_image, to_preprocess)
             for modality in tqdm(self.modalities.values(), desc="Pre-processing images"):
                 logger.trace(f"Pre-processing {modality.name}.")
-                self._preprocess_image(modality, None, overwrite=overwrite)
+                self._preprocess_image(modality, None, override=override)
                 logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
 
     def register(self, n_parallel: int = 1, preprocess_first: bool = True, histogram_match: bool = False) -> None:
@@ -1054,7 +1054,9 @@ class IWsiReg:
         self.save_transformations()
         self.save(registered=True)
 
-    def clear(self) -> None:
+    def clear(
+        self, cache: bool = True, image: bool = True, transformations: bool = True, progress: bool = True
+    ) -> None:
         """Clear existing data."""
         from shutil import rmtree
 
@@ -1075,18 +1077,26 @@ class IWsiReg:
                     logger.error(f"Could not delete {file_}. {e}")
 
         # clear transformations, cache, images
-        for file in self.cache_dir.glob("*"):
-            _safe_delete(file)
-        _safe_delete(self.cache_dir)
-        for file in self.progress_dir.glob("*"):
-            _safe_delete(file)
-        _safe_delete(self.progress_dir)
-        for file in self.image_dir.glob("*"):
-            _safe_delete(file)
-        _safe_delete(self.image_dir)
-        for file in self.transformations_dir.glob("*"):
-            _safe_delete(file)
-        _safe_delete(self.transformations_dir)
+        if cache:
+            for file in self.cache_dir.glob("*"):
+                _safe_delete(file)
+            _safe_delete(self.cache_dir)
+
+        if progress:
+            for file in self.progress_dir.glob("*"):
+                _safe_delete(file)
+            _safe_delete(self.progress_dir)
+
+        if image:
+            for file in self.image_dir.glob("*"):
+                _safe_delete(file)
+            _safe_delete(self.image_dir)
+
+        if transformations:
+            for file in self.transformations_dir.glob("*"):
+                _safe_delete(file)
+            _safe_delete(self.transformations_dir)
+
         # remove config files
         file = self.project_dir / self.REGISTERED_CONFIG_NAME
         _safe_delete(file)
@@ -1529,6 +1539,7 @@ class IWsiReg:
             as_uint8=as_uint8,
             tile_size=tile_size,
             channel_names=channel_names,
+            override=True,
         )
         return path
 

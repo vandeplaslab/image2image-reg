@@ -30,10 +30,10 @@ if ty.TYPE_CHECKING:
 
 
 # declare common options
-overwrite_ = click.option(
+override_ = click.option(
     "-W",
-    "--overwrite",
-    help="Overwrite existing data.",
+    "--override",
+    help="Override existing data.",
     is_flag=True,
     default=None,
     show_default=True,
@@ -752,18 +752,18 @@ def add_merge_runner(
         obj.save()
 
 
-@overwrite_
+@override_
 @parallel_mode_
 @n_parallel_
 @project_path_multi_
 @cli.command("preprocess", help_group="Execute")
-def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str, overwrite: bool) -> None:
+def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str, override: bool) -> None:
     """Preprocess images."""
-    preprocess_runner(project_dir, n_parallel, parallel_mode, overwrite)
+    preprocess_runner(project_dir, n_parallel, parallel_mode, override)
 
 
 def preprocess_runner(
-    paths: ty.Sequence[str], n_parallel: int = 1, parallel_mode: str = "outer", overwrite: bool = False
+    paths: ty.Sequence[str], n_parallel: int = 1, parallel_mode: str = "outer", override: bool = False
 ) -> None:
     """Register images."""
     from mpire import WorkerPool
@@ -772,32 +772,33 @@ def preprocess_runner(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
         Parameter("Parallel mode", "-P/--parallel_mode", parallel_mode),
-        Parameter("Overwrite", "-W/--overwrite", overwrite),
+        Parameter("Override", "-W/--override", override),
     )
 
     with MeasureTimer() as timer:
         if n_parallel > 1 and len(paths) > 1 and parallel_mode == "outer":
             logger.trace(f"Running {n_parallel} actions in parallel.")
             with WorkerPool(n_parallel) as pool:
-                args = [(path, n_parallel, overwrite) for path in paths]
+                args = [(path, n_parallel, override) for path in paths]
                 for path in pool.imap(_preprocess, args):
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
         else:
             for path in paths:
-                _preprocess(path, n_parallel, overwrite)
+                _preprocess(path, n_parallel, override)
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
     logger.info(f"Finished processing all projects in {timer()}.")
 
 
-def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> PathLike:
+def _preprocess(path: PathLike, n_parallel: int, override: bool = False) -> PathLike:
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
-    obj.preprocess(n_parallel, overwrite=overwrite)
+    obj.preprocess(n_parallel, override=override)
     return path
 
 
+@override_
 @parallel_mode_
 @n_parallel_
 @as_uint8_
@@ -837,6 +838,7 @@ def register_cmd(
     as_uint8: bool | None,
     n_parallel: int,
     parallel_mode: str,
+    override: bool,
 ) -> None:
     """Register images."""
     register_runner(
@@ -852,6 +854,7 @@ def register_cmd(
         as_uint8=as_uint8,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
+        override=override,
     )
 
 
@@ -868,6 +871,7 @@ def register_runner(
     as_uint8: bool | None = False,
     n_parallel: int = 1,
     parallel_mode: str = "outer",
+    override: bool = False,
 ) -> None:
     """Register images."""
     from mpire import WorkerPool
@@ -885,6 +889,7 @@ def register_runner(
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
+        Parameter("Override", "-W/--override", override),
     )
 
     with MeasureTimer() as timer:
@@ -904,6 +909,7 @@ def register_runner(
                             remove_merged,
                             original_size,
                             as_uint8,
+                            override,
                         )
                         for path in paths
                     ],
@@ -923,6 +929,7 @@ def register_runner(
                     original_size,
                     as_uint8,
                     n_parallel=n_parallel,
+                    override=override,
                 )
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
     logger.info(f"Finished processing all projects in {timer()}.")
@@ -940,6 +947,7 @@ def _register(
     original_size: bool,
     as_uint8: bool | None,
     n_parallel: int = 1,
+    override: bool = False,
 ) -> PathLike:
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
@@ -960,29 +968,58 @@ def _register(
     return path
 
 
+@click.option(
+    "-R",
+    "--no_progress",
+    help="Clear progress.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "-T",
+    "--no_transformations",
+    help="Clear transformations.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option("-I", "--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
+@click.option("-C", "--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
 @project_path_multi_
 @cli.command("clear", help_group="Execute")
-def clear_cmd(project_dir: ty.Sequence[str]) -> None:
+def clear_cmd(
+    project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
+) -> None:
     """Preprocess images."""
-    clear_runner(project_dir)
+    clear_runner(project_dir, no_cache, no_image, no_transformations, no_progress)
 
 
-def clear_runner(paths: ty.Sequence[str]) -> None:
+def clear_runner(
+    paths: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
+) -> None:
     """Register images."""
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Don't clear cache", "--no_cache", no_cache),
+        Parameter("Don't clear images", "--no_image", no_image),
+        Parameter("Don't clear transformations", "--no_transformations", no_transformations),
+        Parameter("Don't clear progress", "--no_progress", no_progress),
     )
 
     with MeasureTimer() as timer:
         for path in paths:
             pro = IWsiReg.from_path(path)
-            pro.clear()
+            pro.clear(
+                cache=not no_cache, image=not no_image, transformations=not no_transformations, progress=not no_progress
+            )
             logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
     logger.info(f"Finished clearing all projects in {timer()}.")
 
 
+@override_
 @parallel_mode_
 @n_parallel_
 @as_uint8_
@@ -1005,6 +1042,7 @@ def export_cmd(
     as_uint8: bool | None,
     n_parallel: int,
     parallel_mode: str,
+    override: bool,
 ) -> None:
     """Export images."""
     export_runner(
@@ -1018,6 +1056,7 @@ def export_cmd(
         as_uint8=as_uint8,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
+        override=override,
     )
 
 
@@ -1032,6 +1071,7 @@ def export_runner(
     as_uint8: bool | None = False,
     n_parallel: int = 1,
     parallel_mode: str = "outer",
+    override: bool = False,
 ) -> None:
     """Register images."""
     from mpire import WorkerPool
@@ -1051,6 +1091,7 @@ def export_runner(
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
+        Parameter("Override", "-W/--override", override),
     )
 
     with MeasureTimer() as timer:
@@ -1068,6 +1109,7 @@ def export_runner(
                             remove_merged,
                             original_size,
                             as_uint8,
+                            override,
                         )
                         for path in paths
                     ],
@@ -1085,6 +1127,7 @@ def export_runner(
                     original_size,
                     as_uint8,
                     n_parallel=n_parallel,
+                    override=override,
                 )
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
     logger.info(f"Finished processing all projects in {timer()}.")
@@ -1100,6 +1143,7 @@ def _export(
     original_size: bool,
     as_uint8: bool | None,
     n_parallel: int = 1,
+    override: bool = False,
 ) -> PathLike:
     from image2image_wsireg.workflows.iwsireg import IWsiReg
 
@@ -1117,10 +1161,12 @@ def _export(
         to_original_size=original_size,
         as_uint8=as_uint8,
         n_parallel=n_parallel,
+        override=override,
     )
     return path
 
 
+@override_
 @as_uint8_
 @fmt_
 @click.option(
@@ -1180,9 +1226,10 @@ def merge_cmd(
     channel_ids: ty.Sequence[tuple] | None,
     fmt: WriterMode,
     as_uint8: bool | None,
+    override: bool,
 ) -> None:
     """Export images."""
-    merge_runner(name, path, output_dir, crop_bbox, channel_ids, fmt, as_uint8)
+    merge_runner(name, path, output_dir, crop_bbox, channel_ids, fmt, as_uint8, override)
 
 
 def merge_runner(
@@ -1193,6 +1240,7 @@ def merge_runner(
     channel_ids: ty.Sequence[tuple] | None,
     fmt: WriterMode = "ome-tiff",
     as_uint8: bool | None = False,
+    override: bool = False,
 ) -> None:
     """Register images."""
     from image2image_wsireg.workflows.merge import merge as merge_images
@@ -1205,6 +1253,7 @@ def merge_runner(
         Parameter("Channel ids", "-C/--channel_ids", channel_ids),
         Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
+        Parameter("Override", "-W/--override", override),
     )
 
     if channel_ids:
@@ -1212,7 +1261,9 @@ def merge_runner(
             raise ValueError("Number of channel ids must match number of images.")
 
     with MeasureTimer() as timer:
-        merge_images(name, list(paths), output_dir, crop_bbox, fmt, as_uint8, channel_ids=channel_ids)
+        merge_images(
+            name, list(paths), output_dir, crop_bbox, fmt, as_uint8, channel_ids=channel_ids, override=override
+        )
     logger.info(f"Finished processing project in {timer()}.")
 
 
