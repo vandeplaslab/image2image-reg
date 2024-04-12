@@ -856,7 +856,7 @@ def _preprocess(path: PathLike, n_parallel: int, override: bool = False) -> Path
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
-    obj.preprocess(n_parallel, override=override)
+    obj.preprocess(n_parallel, override=override, quick=True)
     return path
 
 
@@ -978,22 +978,30 @@ def register_runner(
                 ):
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
         else:
+            errors = []
             for path in paths:
-                _register(
-                    path,
-                    histogram_match,
-                    write_images,
-                    fmt,
-                    write_registered,
-                    write_not_registered,
-                    write_merged,
-                    remove_merged,
-                    original_size,
-                    as_uint8,
-                    n_parallel=n_parallel,
-                    override=override,
-                )
-                logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+                try:
+                    _register(
+                        path,
+                        histogram_match,
+                        write_images,
+                        fmt,
+                        write_registered,
+                        write_not_registered,
+                        write_merged,
+                        remove_merged,
+                        original_size,
+                        as_uint8,
+                        n_parallel=n_parallel,
+                        override=override,
+                    )
+                    logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+                except Exception:
+                    logger.exception(f"Failed to process {path}.")
+                    errors.append(path)
+            if errors:
+                errors = "\n- ".join(errors)
+                logger.error(f"Failed to register the following projects: {errors}")
     logger.info(f"Finished processing all projects in {timer()}.")
 
 

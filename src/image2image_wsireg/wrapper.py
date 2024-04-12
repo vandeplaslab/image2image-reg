@@ -44,10 +44,6 @@ class ImageWrapper:
             if raise_on_error:
                 raise e
             self.reader = None
-        # if modality.channel_names:
-        #     self.reader._channel_names = modality.channel_names
-        # if modality.channel_colors:
-        #     self.reader._channel_colors = modality.channel_colors
 
         self.image: sitk.Image | None = None
         self._mask: sitk.Image | None = None
@@ -155,21 +151,23 @@ class ImageWrapper:
         """Load data from cache."""
         if not use_cache:
             return
-        filename = self.get_cache_path(self.modality, cache_dir, extra=extra, preprocessing=self.preprocessing)
-        if filename.exists():
-            self.image = sitk.ReadImage(str(filename))
-            self.initial_transforms = read_json_data(filename_with_suffix(filename, "initial", ".json"))
-        logger.trace(f"Loaded image from cache: {filename} for {self.modality.name}")
-        if filename_with_suffix(filename, "preprocessing", ".json").exists():
-            self.preprocessing = Preprocessing(
-                **read_json_data(filename_with_suffix(filename, "preprocessing", ".json"))
-            )
-        if filename_with_suffix(filename, "original_size_transform", ".json").exists():
-            self.original_size_transform = read_json_data(
-                filename_with_suffix(filename, "original_size_transform", ".json")
-            )
-        if filename_with_suffix(filename, "mask", ".tiff").exists():
-            self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
+        with MeasureTimer() as timer:
+            filename = self.get_cache_path(self.modality, cache_dir, extra=extra, preprocessing=self.preprocessing)
+            if filename.exists():
+                self.image = sitk.ReadImage(str(filename))
+                self.initial_transforms = read_json_data(filename_with_suffix(filename, "initial", ".json"))
+            logger.trace(f"Loaded image from cache: {filename} for {self.modality.name}")
+            if filename_with_suffix(filename, "preprocessing", ".json").exists():
+                self.preprocessing = Preprocessing(
+                    **read_json_data(filename_with_suffix(filename, "preprocessing", ".json"))
+                )
+            if filename_with_suffix(filename, "original_size_transform", ".json").exists():
+                self.original_size_transform = read_json_data(
+                    filename_with_suffix(filename, "original_size_transform", ".json")
+                )
+            if filename_with_suffix(filename, "mask", ".tiff").exists():
+                self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
+        logger.trace(f"Loaded data from cache in {timer()}")
 
     @classmethod
     def load_initial_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:

@@ -973,7 +973,11 @@ class IWsiReg:
         return None
 
     def _preprocess_image(
-        self, modality: Modality, preprocessing: Preprocessing | None = None, override: bool = False
+        self,
+        modality: Modality,
+        preprocessing: Preprocessing | None = None,
+        override: bool = False,
+        quick: bool = False,
     ) -> ImageWrapper:
         """Pre-process images."""
         from image2image_wsireg.wrapper import ImageWrapper
@@ -984,13 +988,16 @@ class IWsiReg:
             wrapper.preprocess()
             wrapper.save_cache(self.cache_dir, self.cache_images)
         else:
-            wrapper.load_cache(self.cache_dir, self.cache_images)
-        if wrapper.image is None:
-            raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
-
-        # update caches
-        self.preprocessed_cache["image_spacing"][modality.name] = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
-        self.preprocessed_cache["image_sizes"][modality.name] = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
+            if not quick:
+                wrapper.load_cache(self.cache_dir, self.cache_images)
+        if not quick:
+            if wrapper.image is None:
+                raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
+            # update caches
+            spacing = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
+            self.preprocessed_cache["image_spacing"][modality.name] = spacing
+            size = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
+            self.preprocessed_cache["image_sizes"][modality.name] = size
         return wrapper
 
     @staticmethod
@@ -1093,7 +1100,7 @@ class IWsiReg:
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
 
-    def preprocess(self, n_parallel: int = 1, override: bool = False) -> None:
+    def preprocess(self, n_parallel: int = 1, override: bool = False, quick: bool = False) -> None:
         """Pre-process all images."""
         # TODO: add multi-core support
         self.set_logger()
@@ -1111,8 +1118,9 @@ class IWsiReg:
             #         pool.imap_unordered(self._preprocess_image, to_preprocess)
             for modality in tqdm(self.modalities.values(), desc="Pre-processing images"):
                 logger.trace(f"Pre-processing {modality.name}.")
-                self._preprocess_image(modality, None, override=override)
-                logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
+                # TODO: allow extra pre-processing specification
+                self._preprocess_image(modality, None, override=override, quick=quick)
+        logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
 
     def register(self, n_parallel: int = 1, preprocess_first: bool = True, histogram_match: bool = False) -> None:
         """Co-register images."""
