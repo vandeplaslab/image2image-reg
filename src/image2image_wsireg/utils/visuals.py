@@ -39,7 +39,7 @@ def get_n_colors(rgb, n):
 
 
 @nb.njit(fastmath=True, cache=True)
-def blend_colors(img, colors, scale_by):
+def blend_colors(img: np.ndarray, colors: np.ndarray, scale_by: str):
     """Color an image by blending.
 
     Parameters
