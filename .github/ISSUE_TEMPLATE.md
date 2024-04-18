@@ -1,4 +1,4 @@
-* image2image-wsireg version:
+* image2image-reg version:
 * Python version:
 * Operating System:
 
