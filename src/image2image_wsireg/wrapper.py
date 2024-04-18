@@ -13,8 +13,8 @@ from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
 
-from image2image_wsireg.models import BoundingBox, Modality, Polygon, Preprocessing
-from image2image_wsireg.preprocessing.convert import sitk_image_to_itk_image
+from image2image_reg.models import BoundingBox, Modality, Polygon, Preprocessing
+from image2image_reg.preprocessing.convert import sitk_image_to_itk_image
 
 
 def filename_with_suffix(filename: Path, extra: str, suffix: str) -> Path:
@@ -142,7 +142,7 @@ class ImageWrapper:
     @staticmethod
     def write_thumbnail(image: sitk.Image, filename: PathLike, size: int = 512) -> None:
         """Write thumbnail."""
-        from image2image_wsireg.utils.preprocessing import create_thumbnail
+        from image2image_reg.utils.preprocessing import create_thumbnail
 
         thumbnail = create_thumbnail(image, size)
         sitk.WriteImage(thumbnail, str(filename), useCompression=True)
@@ -193,7 +193,7 @@ class ImageWrapper:
 
     def preprocess(self) -> None:
         """Pre-process image."""
-        from image2image_wsireg.utils.preprocessing import convert_and_cast, preprocess, preprocess_dask_array
+        from image2image_reg.utils.preprocessing import convert_and_cast, preprocess, preprocess_dask_array
 
         preprocessing = self.preprocessing or self.modality.preprocessing
 

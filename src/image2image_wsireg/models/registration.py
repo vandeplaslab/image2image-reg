@@ -6,7 +6,7 @@ from pathlib import Path
 
 from koyo.typing import PathLike
 
-from image2image_wsireg.parameters.registration import DEFAULT_REGISTRATION_PARAMETERS_MAP
+from image2image_reg.parameters.registration import DEFAULT_REGISTRATION_PARAMETERS_MAP
 
 
 def _elx_lineparser(

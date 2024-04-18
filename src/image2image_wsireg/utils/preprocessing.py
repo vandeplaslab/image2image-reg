@@ -11,10 +11,10 @@ import SimpleITK as sitk
 from image2image_io.readers.utilities import grayscale, guess_rgb
 from loguru import logger
 
-from image2image_wsireg.enums import ImageType
-from image2image_wsireg.models import Preprocessing
-from image2image_wsireg.models.bbox import BoundingBox
-from image2image_wsireg.utils.transformation import (
+from image2image_reg.enums import ImageType
+from image2image_reg.models import Preprocessing
+from image2image_reg.models.bbox import BoundingBox
+from image2image_reg.utils.transformation import (
     affine_to_itk_affine,
     generate_affine_flip_transform,
     generate_rigid_original_transform,

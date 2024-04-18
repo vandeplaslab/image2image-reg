@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 if ty.TYPE_CHECKING:
-    from image2image_wsireg.models.transform_sequence import TransformSequence
+    from image2image_reg.models.transform_sequence import TransformSequence
 
 
 def transform_points(

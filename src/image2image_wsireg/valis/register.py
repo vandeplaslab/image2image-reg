@@ -8,8 +8,8 @@ from skimage.transform import SimilarityTransform
 from valis.non_rigid_registrars import OpticalFlowWarper
 from valis.preprocessing import DEFAULT_COLOR_STD_C, ChannelGetter, ColorfulStandardizer
 
-from image2image_wsireg.valis.detect import VggFD
-from image2image_wsireg.valis.matcher import RANSAC_NAME, Matcher
+from image2image_reg.valis.detect import VggFD
+from image2image_reg.valis.matcher import RANSAC_NAME, Matcher
 
 # Default image processing
 DEFAULT_BRIGHTFIELD_CLASS = ColorfulStandardizer

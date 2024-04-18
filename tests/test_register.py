@@ -3,9 +3,9 @@ from pathlib import Path
 
 import numpy as np
 
-from image2image_wsireg.models import Preprocessing
-from image2image_wsireg.utils._test import get_test_file
-from image2image_wsireg.workflows import IWsiReg
+from image2image_reg.models import Preprocessing
+from image2image_reg.utils._test import get_test_file
+from image2image_reg.workflows import IWsiReg
 
 
 def _make_ellipse_project(

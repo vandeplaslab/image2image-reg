@@ -4,8 +4,8 @@ from __future__ import annotations
 import numpy as np
 import SimpleITK as sitk
 
-from image2image_wsireg.preprocessing.mixin import PreprocessorMixin
-from image2image_wsireg.preprocessing.step import Preprocessor, get_preprocessor
+from image2image_reg.preprocessing.mixin import PreprocessorMixin
+from image2image_reg.preprocessing.step import Preprocessor, get_preprocessor
 
 
 class Workflow(PreprocessorMixin):

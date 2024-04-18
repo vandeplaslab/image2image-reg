@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from image2image_wsireg.models import BoundingBox, Export, Polygon, Preprocessing
+from image2image_reg.models import BoundingBox, Export, Polygon, Preprocessing
 
 
 def test_polygon():

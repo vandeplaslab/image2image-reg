@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
-from image2image_wsireg.preprocessing.convert import numpy_to_sitk_image
-from image2image_wsireg.preprocessing.step import (
+from image2image_reg.preprocessing.convert import numpy_to_sitk_image
+from image2image_reg.preprocessing.step import (
     PREPROCESSOR_REGISTER,
     BackgroundColorDistancePreprocessor,
     ContrastEnhancePreprocessor,
@@ -20,7 +20,7 @@ from image2image_wsireg.preprocessing.step import (
     StainFlattenerPreprocessor,
     get_preprocessor,
 )
-from image2image_wsireg.preprocessing.workflow import Workflow
+from image2image_reg.preprocessing.workflow import Workflow
 
 
 def single_channel_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:

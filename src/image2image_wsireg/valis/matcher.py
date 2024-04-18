@@ -10,7 +10,7 @@ from skimage import transform
 from sklearn import metrics
 from sklearn.metrics.pairwise import pairwise_kernels
 
-from image2image_wsireg.feature.warp import calc_d, warp_xy
+from image2image_reg.feature.warp import calc_d, warp_xy
 
 logger = logger.bind(src="Matcher")
 

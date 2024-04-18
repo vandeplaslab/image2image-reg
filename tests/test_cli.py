@@ -1,8 +1,8 @@
 """Test CLI."""
 import os
 
-from image2image_wsireg.utils._test import get_test_file
-from image2image_wsireg.workflows import IWsiReg
+from image2image_reg.utils._test import get_test_file
+from image2image_reg.workflows import IWsiReg
 
 
 def test_cli_entrypoint():

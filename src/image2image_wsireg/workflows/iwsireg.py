@@ -18,14 +18,14 @@ from loguru import logger
 from mpire import WorkerPool
 from tqdm import tqdm
 
-from image2image_wsireg.enums import ArrayLike, WriterMode
-from image2image_wsireg.models import Export, Modality, Preprocessing, Registration, Transform, TransformSequence
-from image2image_wsireg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
+from image2image_reg.enums import ArrayLike, WriterMode
+from image2image_reg.models import Export, Modality, Preprocessing, Registration, Transform, TransformSequence
+from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 
 if ty.TYPE_CHECKING:
     from image2image_io.readers import BaseReader
 
-    from image2image_wsireg.wrapper import ImageWrapper
+    from image2image_reg.wrapper import ImageWrapper
 
 # override certain parameters
 CONFIG.init_pyramid = False
@@ -441,7 +441,7 @@ class IWsiReg:
         raise_on_error: bool = True,
     ) -> dict[str, TransformSequence | None] | None:
         """Load registered transform and make sure all attributes are correctly set-up."""
-        from image2image_wsireg.wrapper import ImageWrapper
+        from image2image_reg.wrapper import ImageWrapper
 
         edge_ = self._find_edge_by_edge(edge)
         if not edge_:
@@ -980,7 +980,7 @@ class IWsiReg:
         quick: bool = False,
     ) -> ImageWrapper:
         """Pre-process images."""
-        from image2image_wsireg.wrapper import ImageWrapper
+        from image2image_reg.wrapper import ImageWrapper
 
         wrapper = ImageWrapper(modality, preprocessing)
         cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not override else False
@@ -1005,7 +1005,7 @@ class IWsiReg:
         cache_dir: Path, cache_images: bool, modality: Modality, preprocessing: Preprocessing | None = None
     ) -> ImageWrapper:
         """Pre-process image."""
-        from image2image_wsireg.wrapper import ImageWrapper
+        from image2image_reg.wrapper import ImageWrapper
 
         wrapper = ImageWrapper(modality, preprocessing)
         cached = wrapper.check_cache(cache_dir, cache_images)
@@ -1027,7 +1027,7 @@ class IWsiReg:
         histogram_match: bool = False,
     ) -> tuple[TransformSequence, TransformSequence | None]:
         """Co-register images."""
-        from image2image_wsireg.utils.registration import _prepare_reg_models, register_2d_images, sitk_pmap_to_dict
+        from image2image_reg.utils.registration import _prepare_reg_models, register_2d_images, sitk_pmap_to_dict
 
         with MeasureTimer() as timer:
             logger.trace(f"Co-registering {source_wrapper.name} to {target_wrapper.name} using {parameters}.")
@@ -1056,7 +1056,7 @@ class IWsiReg:
 
     def _generate_figures(self, source: str, target: str, output_dir: Path) -> None:
         """Generate figures."""
-        from image2image_wsireg.utils.figures import (
+        from image2image_reg.utils.figures import (
             read_elastix_iteration_dir,
             read_elastix_transform_dir,
             write_iteration_plots,
@@ -1519,8 +1519,8 @@ class IWsiReg:
         attachment_modality: Modality | None = None,
         to_original_size: bool = True,
     ):
-        from image2image_wsireg.utils.transformation import identity_elx_transform
-        from image2image_wsireg.wrapper import ImageWrapper
+        from image2image_reg.utils.transformation import identity_elx_transform
+        from image2image_reg.wrapper import ImageWrapper
 
         logger.trace(f"Preparing transforms for non-registered modality : {modality_key} ")
         output_path = self.image_dir / f"{self.name}-{modality_key}_registered"
@@ -1615,7 +1615,7 @@ class IWsiReg:
         """Transform and write image."""
         from image2image_io.writers import OmeTiffWriter
 
-        from image2image_wsireg.wrapper import ImageWrapper
+        from image2image_reg.wrapper import ImageWrapper
 
         if not modality and not prep_func:
             raise ValueError("Either modality or prep_func must be specified.")
@@ -1874,7 +1874,7 @@ class IWsiReg:
     #     """Create image showing how images overlap before registration"""
     #     from itertools import combinations
     #
-    #     from image2image_wsireg.utils.visuals import color_multichannel, get_n_colors, jzazbz_cmap
+    #     from image2image_reg.utils.visuals import color_multichannel, get_n_colors, jzazbz_cmap
     #
     #     min_r = np.inf
     #     max_r = 0

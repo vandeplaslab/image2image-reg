@@ -11,4 +11,4 @@ except PackageNotFoundError:
 __author__ = "Lukasz G. Migas"
 __email__ = "lukas.migas@yahoo.com"
 
-logger.disable("image2image_wsireg")
+logger.disable("image2image_reg")

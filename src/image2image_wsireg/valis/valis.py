@@ -10,7 +10,7 @@ from valis.registration import (
 )
 from valis.registration import Valis as _Valis
 
-from image2image_wsireg.valis.slide_io import Image2ImageSlideReader
+from image2image_reg.valis.slide_io import Image2ImageSlideReader
 
 logger = logger.bind(src="ValisRegistration")
 

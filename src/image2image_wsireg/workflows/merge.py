@@ -7,7 +7,7 @@ from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
 
-from image2image_wsireg.models import BoundingBox, Modality
+from image2image_reg.models import BoundingBox, Modality
 
 
 def merge(
@@ -24,7 +24,7 @@ def merge(
     from image2image_io.models.merge import MergeImages
     from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
 
-    from image2image_wsireg.wrapper import ImageWrapper
+    from image2image_reg.wrapper import ImageWrapper
 
     paths = [Path(path) for path in paths]
     output_dir = Path(output_dir)

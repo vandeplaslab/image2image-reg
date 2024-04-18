@@ -12,16 +12,16 @@ from skimage import io
 from skimage.transform import EuclideanTransform, SimilarityTransform
 from tqdm import tqdm, trange
 
-from image2image_wsireg.valis.detect import VggFD
-from image2image_wsireg.valis.image import Image
-from image2image_wsireg.valis.matcher import GMS_NAME, Matcher, convert_distance_to_similarity
-from image2image_wsireg.valis.utilities import (
+from image2image_reg.valis.detect import VggFD
+from image2image_reg.valis.image import Image
+from image2image_reg.valis.matcher import GMS_NAME, Matcher, convert_distance_to_similarity
+from image2image_reg.valis.utilities import (
     get_image_files,
     get_image_name,
     get_max_image_dimensions,
     order_distance_matrix,
 )
-from image2image_wsireg.valis.warp import (
+from image2image_reg.valis.warp import (
     calc_d,
     calc_total_error,
     get_alignment_indices,

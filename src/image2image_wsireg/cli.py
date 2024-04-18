@@ -22,11 +22,11 @@ from koyo.typing import PathLike
 from koyo.utilities import is_installed, running_as_pyinstaller_app
 from loguru import logger
 
-from image2image_wsireg import __version__
-from image2image_wsireg.enums import AVAILABLE_REGISTRATIONS, WriterMode
+from image2image_reg import __version__
+from image2image_reg.enums import AVAILABLE_REGISTRATIONS, WriterMode
 
 if ty.TYPE_CHECKING:
-    from image2image_wsireg.models import Preprocessing
+    from image2image_reg.models import Preprocessing
 
 valis_is_installed = is_installed("valis")
 
@@ -126,7 +126,7 @@ parallel_mode_ = click.option(
 project_path_multi_ = click.option(
     "-p",
     "--project_dir",
-    help="Path to the project directory. It usually ends in .wsireg extension.",
+    help="Path to the project directory. It usually ends in .i2reg extension.",
     type=click.UNPROCESSED,
     show_default=True,
     required=True,
@@ -136,7 +136,7 @@ project_path_multi_ = click.option(
 project_path_single_ = click.option(
     "-p",
     "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+    help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
     type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
     show_default=True,
     required=True,
@@ -161,7 +161,7 @@ def set_logger(verbosity: float, no_color: bool, log: PathLike | None = None) ->
     level, fmt, colorize, enqueue = get_loguru_config(level, no_color=no_color)  # type: ignore[assignment]
     set_loguru_env(fmt, level, colorize, enqueue)  # type: ignore[arg-type]
     set_loguru_log(level=level.upper(), no_color=no_color, logger=logger)  # type: ignore[attr-defined]
-    logger.enable("image2image_wsireg")
+    logger.enable("image2image_reg")
     logger.enable("image2image_io")
     logger.enable("koyo")
     # override koyo logger
@@ -184,7 +184,7 @@ def set_logger(verbosity: float, no_color: bool, log: PathLike | None = None) ->
 
 def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> Preprocessing | None:
     """Get a pre-processing object."""
-    from image2image_wsireg.models import Preprocessing
+    from image2image_reg.models import Preprocessing
 
     if preprocessing in ["dark", "fluorescence"]:
         pre = Preprocessing.fluorescence()
@@ -295,7 +295,7 @@ def cli(
 @click.option(
     "-o",
     "--output_dir",
-    help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+    help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
     type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
     show_default=True,
     required=True,
@@ -308,7 +308,7 @@ def new_cmd(output_dir: str, name: str, cache: bool, merge: bool) -> None:
 
 def new_runner(output_dir: str, name: str, cache: bool, merge: bool) -> None:
     """Create a new project."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     print_parameters(
         Parameter("Output directory", "-o/--output_dir", output_dir),
@@ -329,7 +329,7 @@ def about_cmd(project_dir: ty.Sequence[str]) -> None:
 
 def about_runner(project_dir: str) -> None:
     """Add images to the project."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     obj = IWsiReg.from_path(project_dir)
     obj.print_summary()
@@ -344,7 +344,7 @@ def validate_cmd(project_dir: ty.Sequence[str]) -> None:
 
 def validate_runner(paths: ty.Sequence[str]) -> None:
     """Add images to the project."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     for project_dir in paths:
         obj = IWsiReg.from_path(project_dir)
@@ -438,7 +438,7 @@ def add_modality_runner(
     override: bool = False,
 ) -> None:
     """Add images to the project."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     if not isinstance(names, (list, tuple)):
         names = [names]  # type: ignore[list-item]
@@ -572,7 +572,7 @@ def add_path_runner(
     target_preprocessing: str | None = None,
 ) -> None:
     """Add images to the project."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", project_dir),
@@ -631,7 +631,7 @@ def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image:
 
 def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], paths: list[str]) -> None:
     """Add attachment modality."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     if not isinstance(paths, (list, tuple)):
         names = [names]
@@ -693,7 +693,7 @@ def add_points_cmd(project_dir: str, attach_to: str, name: str, file: list[str |
 
 def add_points_runner(project_dir: str, attach_to: str, name: str, paths: list[str | Path]) -> None:
     """Add attachment modality."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
@@ -746,7 +746,7 @@ def add_shape_cmd(project_dir: str, attach_to: str, name: str, file: list[str | 
 
 def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[str | Path]) -> None:
     """Add attachment modality."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
@@ -798,7 +798,7 @@ def add_merge_runner(
     paths: ty.Sequence[str], name: str, modalities: ty.Iterable[str] | None, auto: bool = False
 ) -> None:
     """Add attachment modality."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
@@ -852,7 +852,7 @@ def preprocess_runner(
 
 
 def _preprocess(path: PathLike, n_parallel: int, override: bool = False) -> PathLike:
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
@@ -1019,7 +1019,7 @@ def _register(
     n_parallel: int = 1,
     override: bool = False,
 ) -> PathLike:
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
@@ -1087,7 +1087,7 @@ if valis_is_installed:
     @click.option(
         "-o",
         "--output_dir",
-        help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+        help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
         type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
         show_default=True,
         required=False,
@@ -1125,7 +1125,7 @@ if valis_is_installed:
         no_micro_reg: bool = False,
     ):
         """Register list of images using Valis algorithm."""
-        from image2image_wsireg.workflows.valis import valis_init_configuration
+        from image2image_reg.workflows.valis import valis_init_configuration
 
         print_parameters(
             Parameter("Project name", "-n/--name", project_name),
@@ -1149,7 +1149,7 @@ if valis_is_installed:
     @click.option(
         "-o",
         "--output_dir",
-        help="Path to the WsiReg project directory. It usually ends in .wsireg extension.",
+        help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
         type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
         show_default=True,
         required=False,
@@ -1170,7 +1170,7 @@ if valis_is_installed:
 
     def valis_register_runner(output_dir: PathLike, config: PathLike | None):
         """Register list of images using Valis algorithm."""
-        from image2image_wsireg.workflows.valis import valis_registration_from_config
+        from image2image_reg.workflows.valis import valis_registration_from_config
 
         print_parameters(
             Parameter("Output directory", "-o/--output_dir", output_dir),
@@ -1211,7 +1211,7 @@ def clear_runner(
     paths: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
 ) -> None:
     """Register images."""
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
@@ -1357,7 +1357,7 @@ def _export(
     n_parallel: int = 1,
     override: bool = False,
 ) -> PathLike:
-    from image2image_wsireg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.iwsireg import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
@@ -1455,7 +1455,7 @@ def merge_runner(
     override: bool = False,
 ) -> None:
     """Register images."""
-    from image2image_wsireg.workflows.merge import merge as merge_images
+    from image2image_reg.workflows.merge import merge as merge_images
 
     print_parameters(
         Parameter("Name", "-n/--name", name),

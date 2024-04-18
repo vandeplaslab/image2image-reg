@@ -8,7 +8,7 @@ import SimpleITK as sitk
 from koyo.json import read_json_data
 from koyo.typing import PathLike
 
-from image2image_wsireg.models.transform import Transform, TransformMixin
+from image2image_reg.models.transform import Transform, TransformMixin
 
 
 class TransformSequence(TransformMixin):

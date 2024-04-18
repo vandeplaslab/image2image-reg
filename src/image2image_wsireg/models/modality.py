@@ -7,10 +7,10 @@ import zarr
 from koyo.typing import PathLike
 from pydantic import BaseModel, validator
 
-from image2image_wsireg.enums import ArrayLike
-from image2image_wsireg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
-from image2image_wsireg.models.export import Export
-from image2image_wsireg.models.preprocessing import Preprocessing
+from image2image_reg.enums import ArrayLike
+from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
+from image2image_reg.models.export import Export
+from image2image_reg.models.preprocessing import Preprocessing
 
 
 class Modality(BaseModel):
@@ -79,6 +79,6 @@ class Modality(BaseModel):
 
     def to_wrapper(self):
         """Convert to ImageWrapper."""
-        from image2image_wsireg.wrapper import ImageWrapper
+        from image2image_reg.wrapper import ImageWrapper
 
         return ImageWrapper(self)

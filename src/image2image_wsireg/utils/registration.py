@@ -10,11 +10,11 @@ import SimpleITK as sitk
 from koyo.timer import MeasureTimer
 from loguru import logger
 
-from image2image_wsireg.models import Registration
-from image2image_wsireg.preprocessing.convert import itk_image_to_sitk_image
+from image2image_reg.models import Registration
+from image2image_reg.preprocessing.convert import itk_image_to_sitk_image
 
 if ty.TYPE_CHECKING:
-    from image2image_wsireg.wrapper import ImageWrapper
+    from image2image_reg.wrapper import ImageWrapper
 
 
 def sitk_pmap_to_dict(pmap: sitk.ParameterMap) -> dict[str, ty.Any]:

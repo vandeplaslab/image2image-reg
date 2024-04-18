@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import SimpleITK as sitk
 
-from image2image_wsireg.preprocessing.convert import numpy_to_sitk_image, numpy_view_to_sitk_image, sitk_image_to_numpy
+from image2image_reg.preprocessing.convert import numpy_to_sitk_image, numpy_view_to_sitk_image, sitk_image_to_numpy
 
 
 class PreprocessorMixin:

@@ -57,7 +57,7 @@ def get_preprocessor(preprocessor: str | type) -> type:
     """Get pre-processor."""
     import valis.preprocessing as pre_valis
 
-    import image2image_wsireg.valis.preprocessing as pre_wsireg
+    import image2image_reg.valis.preprocessing as pre_wsireg
 
     if isinstance(preprocessor, str):
         if hasattr(pre_wsireg, preprocessor):
@@ -158,8 +158,8 @@ def valis_registration(
     from natsort import natsorted
     from valis import registration, valtils
 
-    from image2image_wsireg.valis.detect import SensitiveVggFD
-    from image2image_wsireg.valis.utilities import transform_registered_image
+    from image2image_reg.valis.detect import SensitiveVggFD
+    from image2image_reg.valis.utilities import transform_registered_image
 
     output_dir = Path(output_dir)
 

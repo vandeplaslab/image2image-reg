@@ -9,9 +9,9 @@ import numpy as np
 import SimpleITK as sitk
 from skimage import exposure
 
-from image2image_wsireg.preprocessing.convert import numpy_to_sitk_image, sitk_image_to_numpy
-from image2image_wsireg.preprocessing.mixin import PreprocessorMixin
-from image2image_wsireg.preprocessing.utilities import (
+from image2image_reg.preprocessing.convert import numpy_to_sitk_image, sitk_image_to_numpy
+from image2image_reg.preprocessing.mixin import PreprocessorMixin
+from image2image_reg.preprocessing.utilities import (
     calc_background_color_dist,
     deconvolution_he,
     deconvolve_img,
