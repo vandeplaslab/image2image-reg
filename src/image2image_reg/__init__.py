@@ -4,7 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 from loguru import logger
 
 try:
-    __version__ = version("image2image-wsireg")
+    __version__ = version("image2image-reg")
 except PackageNotFoundError:
     __version__ = "uninstalled"
 

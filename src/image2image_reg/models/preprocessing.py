@@ -5,11 +5,10 @@ from enum import Enum
 from pathlib import Path
 
 import numpy as np
-from koyo.json import read_json_data
-from pydantic import BaseModel, validator
-
 from image2image_reg.enums import CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
+from koyo.json import read_json_data
+from pydantic import BaseModel, validator
 
 
 def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:

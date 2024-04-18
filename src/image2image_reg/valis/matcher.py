@@ -5,12 +5,11 @@ import traceback
 
 import cv2
 import numpy as np
+from image2image_reg.feature.warp import calc_d, warp_xy
 from loguru import logger
 from skimage import transform
 from sklearn import metrics
 from sklearn.metrics.pairwise import pairwise_kernels
-
-from image2image_reg.feature.warp import calc_d, warp_xy
 
 logger = logger.bind(src="Matcher")
 

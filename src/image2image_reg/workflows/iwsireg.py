@@ -368,7 +368,7 @@ class IWsiReg:
         return is_valid
 
     def load_from_i2i_wsireg(self, raise_on_error: bool = True) -> None:
-        """Load data from image2image-wsireg project file."""
+        """Load data from image2image-reg project file."""
         config: Config = read_json_data(self.project_dir / self.CONFIG_NAME)
         self.name = config["name"]
         self.cache_images = config["cache_images"]

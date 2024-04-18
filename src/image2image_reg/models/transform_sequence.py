@@ -5,10 +5,9 @@ from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
+from image2image_reg.models.transform import Transform, TransformMixin
 from koyo.json import read_json_data
 from koyo.typing import PathLike
-
-from image2image_reg.models.transform import Transform, TransformMixin
 
 
 class TransformSequence(TransformMixin):

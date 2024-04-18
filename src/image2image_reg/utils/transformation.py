@@ -10,7 +10,6 @@ from pathlib import Path
 import itk
 import numpy as np
 import SimpleITK as sitk
-
 from image2image_reg.enums import ELX_TO_ITK_INTERPOLATORS
 from image2image_reg.models import Transform
 from image2image_reg.parameters.transformations import BASE_AFFINE_TRANSFORM, BASE_RIGID_TRANSFORM

@@ -7,14 +7,13 @@ from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 from image2image_io.readers import BaseReader, ShapesReader, get_simple_reader
+from image2image_reg.models import BoundingBox, Modality, Polygon, Preprocessing
+from image2image_reg.preprocessing.convert import sitk_image_to_itk_image
 from koyo.json import read_json_data, write_json_data
 from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
-
-from image2image_reg.models import BoundingBox, Modality, Polygon, Preprocessing
-from image2image_reg.preprocessing.convert import sitk_image_to_itk_image
 
 
 def filename_with_suffix(filename: Path, extra: str, suffix: str) -> Path:

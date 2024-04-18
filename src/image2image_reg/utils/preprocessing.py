@@ -9,8 +9,6 @@ import dask.array as da
 import numpy as np
 import SimpleITK as sitk
 from image2image_io.readers.utilities import grayscale, guess_rgb
-from loguru import logger
-
 from image2image_reg.enums import ImageType
 from image2image_reg.models import Preprocessing
 from image2image_reg.models.bbox import BoundingBox
@@ -24,6 +22,7 @@ from image2image_reg.utils.transformation import (
     prepare_wsireg_transform_data,
     transform_plane,
 )
+from loguru import logger
 
 
 def get_channel_indices_from_names(channel_names: list[str], channel_names_to_select: list[str]) -> list[int]:

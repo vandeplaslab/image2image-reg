@@ -4,7 +4,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import SimpleITK as sitk
-
 from image2image_reg.preprocessing.convert import numpy_to_sitk_image
 from image2image_reg.preprocessing.step import (
     PREPROCESSOR_REGISTER,

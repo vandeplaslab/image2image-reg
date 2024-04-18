@@ -95,5 +95,3 @@ def get_elastix_transforms(transformations):
         elastix_transforms.update({k: [t.elastix_transform for t in v]})
 
     return elastix_transforms
-
-

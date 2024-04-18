@@ -6,7 +6,6 @@ import dask.array as da
 import numpy as np
 import SimpleITK as sitk
 import zarr
-
 from image2image_reg.parameters.registration import AVAILABLE_REGISTRATIONS
 
 

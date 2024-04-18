@@ -4,9 +4,8 @@ from __future__ import annotations
 from enum import Enum, EnumMeta
 from pathlib import Path
 
-from koyo.typing import PathLike
-
 from image2image_reg.parameters.registration import DEFAULT_REGISTRATION_PARAMETERS_MAP
+from koyo.typing import PathLike
 
 
 def _elx_lineparser(

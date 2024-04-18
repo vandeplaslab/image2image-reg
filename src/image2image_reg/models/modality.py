@@ -4,13 +4,12 @@ import typing as ty
 import dask.array as da
 import numpy as np
 import zarr
-from koyo.typing import PathLike
-from pydantic import BaseModel, validator
-
 from image2image_reg.enums import ArrayLike
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 from image2image_reg.models.export import Export
 from image2image_reg.models.preprocessing import Preprocessing
+from koyo.typing import PathLike
+from pydantic import BaseModel, validator
 
 
 class Modality(BaseModel):

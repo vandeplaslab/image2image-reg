@@ -1,6 +1,7 @@
 """Valis registration with some overrides."""
 from pathlib import Path
 
+from image2image_reg.valis.slide_io import Image2ImageSlideReader
 from loguru import logger
 from valis.registration import (
     DEFAULT_BRIGHTFIELD_CLASS,
@@ -9,8 +10,6 @@ from valis.registration import (
     DEFAULT_FLOURESCENCE_PROCESSING_ARGS,
 )
 from valis.registration import Valis as _Valis
-
-from image2image_reg.valis.slide_io import Image2ImageSlideReader
 
 logger = logger.bind(src="ValisRegistration")
 

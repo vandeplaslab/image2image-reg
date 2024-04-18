@@ -8,6 +8,8 @@ from pathlib import Path
 
 import click
 from click_groups import GroupedGroup
+from image2image_reg import __version__
+from image2image_reg.enums import AVAILABLE_REGISTRATIONS, WriterMode
 from koyo.click import (
     Parameter,
     arg_parse_framelist_multi,
@@ -21,9 +23,6 @@ from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from koyo.utilities import is_installed, running_as_pyinstaller_app
 from loguru import logger
-
-from image2image_reg import __version__
-from image2image_reg.enums import AVAILABLE_REGISTRATIONS, WriterMode
 
 if ty.TYPE_CHECKING:
     from image2image_reg.models import Preprocessing

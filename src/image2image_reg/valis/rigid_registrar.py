@@ -3,15 +3,6 @@ import warnings
 from pathlib import Path
 
 import numpy as np
-from koyo.context import hide_stdout
-from koyo.multicore import get_cpu_count
-from koyo.timer import MeasureTimer
-from loguru import logger
-from pqdm.threads import pqdm
-from skimage import io
-from skimage.transform import EuclideanTransform, SimilarityTransform
-from tqdm import tqdm, trange
-
 from image2image_reg.valis.detect import VggFD
 from image2image_reg.valis.image import Image
 from image2image_reg.valis.matcher import GMS_NAME, Matcher, convert_distance_to_similarity
@@ -35,6 +26,14 @@ from image2image_reg.valis.warp import (
     warp_img,
     warp_xy,
 )
+from koyo.context import hide_stdout
+from koyo.multicore import get_cpu_count
+from koyo.timer import MeasureTimer
+from loguru import logger
+from pqdm.threads import pqdm
+from skimage import io
+from skimage.transform import EuclideanTransform, SimilarityTransform
+from tqdm import tqdm, trange
 
 logger = logger.bind(src="RigidRegistrar")
 

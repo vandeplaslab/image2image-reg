@@ -7,8 +7,6 @@ import warnings
 import cv2
 import numpy as np
 import SimpleITK as sitk
-from skimage import exposure
-
 from image2image_reg.preprocessing.convert import numpy_to_sitk_image, sitk_image_to_numpy
 from image2image_reg.preprocessing.mixin import PreprocessorMixin
 from image2image_reg.preprocessing.utilities import (
@@ -24,6 +22,7 @@ from image2image_reg.preprocessing.utilities import (
     stainmat2decon,
     standardize_colorfulness,
 )
+from skimage import exposure
 
 if ty.TYPE_CHECKING:
     from sklearn.cluster import MiniBatchKMeans

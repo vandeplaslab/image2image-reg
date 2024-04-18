@@ -5,7 +5,6 @@ from warnings import warn
 
 import numpy as np
 import SimpleITK as sitk
-
 from image2image_reg.utils.convert import convert_to_itk
 
 

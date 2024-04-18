@@ -1,9 +1,8 @@
 """Test bbox."""
 import numpy as np
 import pytest
-from pydantic import ValidationError
-
 from image2image_reg.models import BoundingBox, Export, Polygon, Preprocessing
+from pydantic import ValidationError
 
 
 def test_polygon():
