@@ -80,6 +80,14 @@ class SerializedRegisteredRegistrationNode(ty.TypedDict):
     target_preprocessing: Preprocessing | None
 
 
+class AttachedShapeOrPointDict(ty.TypedDict):
+    """Attached shape dictionary."""
+
+    shape_files: list[str]
+    pixel_size: float
+    attach_to: str
+
+
 class Config(ty.TypedDict):
     """Configuration."""
 
@@ -92,8 +100,9 @@ class Config(ty.TypedDict):
     registration_paths: dict[str, SerializedRegistrationNode]
     registration_graph_edges: list[SerializedRegisteredRegistrationNode]
     modalities: dict[str, dict]
-    attachment_images: dict[str, dict]
-    attachment_geojsons: dict[str, dict]
+    attachment_images: dict[str, str]
+    attachment_shapes: dict[str, AttachedShapeOrPointDict]
+    attachment_points: dict[str, AttachedShapeOrPointDict]
     merge: bool
     merge_images: dict[str, list[str]]
 
@@ -137,10 +146,10 @@ class IWsiReg:
 
         # setup modalities
         self.modalities: dict[str, Modality] = {}
+        self.shape_modalities: dict[str, Modality] = {}
         self.attachment_images: dict[str, str] = {}
-        self.attachment_shapes: dict[str, Modality] = {}
-        self.attachment_geojsons: dict[str, dict] = {}
-        self.attachment_points: dict[str, dict] = {}
+        self.attachment_shapes: dict[str, AttachedShapeOrPointDict] = {}
+        self.attachment_points: dict[str, AttachedShapeOrPointDict] = {}
         self.merge_modalities: dict[str, list[str]] = {}  # TODO
 
         # setup registration paths
@@ -297,9 +306,9 @@ class IWsiReg:
         n = len(self.attachment_images) - 1
         for i, (name, attach_to) in enumerate(self.attachment_images.items()):
             func(f" {elbow if i == n else tee}{name} ({attach_to})")
-        func(f"Number of attachment shapes: {len(self.attachment_shapes)}")
-        n = len(self.attachment_shapes) - 1
-        for i, (name, modality) in enumerate(self.attachment_shapes.items()):
+        func(f"Number of attachment shapes: {len(self.shape_modalities)}")
+        n = len(self.shape_modalities) - 1
+        for i, (name, modality) in enumerate(self.shape_modalities.items()):
             func(f" {elbow if i == n else tee}{name} ({modality.path})")
 
         # func information about merge modalities
@@ -395,6 +404,7 @@ class IWsiReg:
                     raise_on_error=raise_on_error,
                 )
             logger.trace(f"Loaded modalities in {timer()}")
+
             # add registration paths
             for _key, edge in config["registration_paths"].items():
                 self.add_registration_path(
@@ -408,6 +418,29 @@ class IWsiReg:
                     },
                 )
             logger.trace(f"Loaded registration paths in {timer(since_last=True)}")
+
+            # load attachment images
+            if config.get("attachment_images"):
+                for name, attach_to in config["attachment_images"].items():
+                    self.attachment_images[name] = attach_to
+                    logger.trace(f"Added attachment image '{name}' attached to '{attach_to}'")
+                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
+
+            if config.get("attachment_shapes"):
+                for name, shape_dict in config["attachment_shapes"].items():
+                    assert "shape_files" in shape_dict, "Shape dict missing 'shape_files' key."
+                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
+                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    self.attachment_shapes[name] = shape_dict
+                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
+
+            if config.get("attachment_points"):
+                for name, shape_dict in config["attachment_points"].items():
+                    assert "shape_files" in shape_dict, "Shape dict missing 'shape_files' key."
+                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
+                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    self.attachment_points[name] = shape_dict
+                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
 
             # check whether the registered version of the config exists
             if (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
@@ -690,7 +723,7 @@ class IWsiReg:
 
     def add_attachment_geojson(
         self,
-        attach_to_modality: str,
+        attach_to: str,
         name: str,
         paths: list[PathLike],
     ) -> None:
@@ -699,7 +732,7 @@ class IWsiReg:
 
         Parameters
         ----------
-        attach_to_modality : str
+        attach_to : str
             image modality to which the shapes are attached
         name : str
             Unique name identifier for the shape set
@@ -708,9 +741,9 @@ class IWsiReg:
             "array" = np.ndarray of xy coordinates, "shape_type" = geojson shape type (Polygon, MultiPolygon, etc.),
             "shape_name" = class of the shape("tumor","normal",etc.)
         """
-        if attach_to_modality not in self.modalities:
+        if attach_to not in self.modalities:
             raise ValueError(
-                f"The specified modality '{attach_to_modality}' does not exist. Please add it before adding attachment"
+                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment"
                 f" images."
             )
         paths_: list[Path] = []
@@ -720,12 +753,12 @@ class IWsiReg:
                 raise ValueError(f"Path '{path}' does not exist.")
             paths_.append(path.resolve())
 
-        pixel_size = self.modalities[attach_to_modality].pixel_size
-        self._add_geojson_set(attach_to_modality, name, paths_, pixel_size)
+        pixel_size = self.modalities[attach_to].pixel_size
+        self._add_geojson_set(attach_to, name, paths_, pixel_size)
 
     def _add_geojson_set(
         self,
-        attach_to_modality: str,
+        attach_to: str,
         name: str,
         paths: list[Path],
         pixel_size: float,
@@ -735,7 +768,7 @@ class IWsiReg:
 
         Parameters
         ----------
-        attach_to_modality : str
+        attach_to : str
             image modality to which the shapes are attached
         name : str
             Unique name identifier for the shape set
@@ -746,12 +779,12 @@ class IWsiReg:
         pixel_size : float
             spatial resolution of shape data's associated image in units per px (i.e. 0.9 um / px)
         """
-        if name in self.attachment_geojsons:
+        if name in self.attachment_shapes:
             raise ValueError(f"Shape set with name '{name}' already exists. Please use a different name.")
-        self.attachment_geojsons[name] = {
-            "shape_files": paths,
+        self.attachment_shapes[name] = {
+            "shape_files": [str(p) for p in paths],
             "pixel_size": pixel_size,
-            "attach_to_modality": attach_to_modality,
+            "attach_to": attach_to,
         }
         logger.trace(f"Added shape set '{name}'.")
 
@@ -1100,14 +1133,17 @@ class IWsiReg:
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
 
+    def _is_being_registered(self, modality: Modality):
+        """Check whether the modality will be registered or is simply an attachment."""
+        if modality.name in self.attachment_images:
+            return False
+        return True
+
     def preprocess(self, n_parallel: int = 1, override: bool = False, quick: bool = False) -> None:
         """Pre-process all images."""
         # TODO: add multi-core support
         self.set_logger()
-        # if not self.registration_nodes:
-        #     raise ValueError("No registration paths have been defined.")
 
-        # compute transformation information
         with MeasureTimer() as timer:
             # to_preprocess = []
             # for modality in self.modalities.values():
@@ -1117,6 +1153,9 @@ class IWsiReg:
             #     with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
             #         pool.imap_unordered(self._preprocess_image, to_preprocess)
             for modality in tqdm(self.modalities.values(), desc="Pre-processing images"):
+                if not self._is_being_registered(modality):
+                    logger.trace(f"Skipping pre-processing for {modality.name}.")
+                    continue
                 logger.trace(f"Pre-processing {modality.name}.")
                 # TODO: allow extra pre-processing specification
                 self._preprocess_image(modality, None, override=override, quick=quick)
@@ -1228,7 +1267,7 @@ class IWsiReg:
         self.set_logger()
         self.register()
         # write images
-        self.write_images()
+        self.write()
 
     @staticmethod
     def _transforms_to_txt(transformations: dict[str, TransformSequence]) -> dict[str, list[str]]:
@@ -1273,10 +1312,12 @@ class IWsiReg:
     def save_transformations(self) -> list[Path] | None:
         """Save all transformations for a given modality as JSON."""
         if not self._check_if_all_registered():
+            logger.warning("Cannot save transformation as not all modalities have been registered.")
             return None
 
         out = []
         for source_modality in self.registration_paths:
+            logger.trace(f"Saving transformations for {source_modality}...")
             target_modalities = self.registration_paths[source_modality]
             target_modality = target_modalities[-1]
             output_path = (
@@ -1289,22 +1330,22 @@ class IWsiReg:
                 f"Saved transformations to '{output_path}'. source={source_modality}; target={target_modalities}."
             )
 
-        for source_modality, attachment_modality in self.attachment_images.items():
-            if attachment_modality not in self._find_not_registered_modalities():
-                target_modalities = self.registration_paths[attachment_modality]
+        for attached_modality, attached_to_modality in self.attachment_images.items():
+            if attached_modality not in self._find_not_registered_modalities():
+                target_modalities = self.registration_paths[attached_to_modality]
                 target_modality = target_modalities[-1]
                 output_path = (
                     self.transformations_dir
-                    / f"{self.name}-{source_modality}_to_{target_modality}_transformations.json"
+                    / f"{self.name}-{attached_modality}_to_{target_modality}_transformations.json"
                 )
-                tform_txt = self._transforms_to_txt(self.transformations[source_modality])
+                tform_txt = self._transforms_to_txt(self.transformations[attached_to_modality])
                 write_json_data(output_path, tform_txt)
                 logger.trace(
-                    f"Saved transformations to '{output_path}'. source={source_modality}; target={target_modalities}."
+                    f"Saved transformations to '{output_path}'. source={attached_to_modality}; target={target_modalities}."
                 )
         return out
 
-    def write_images(
+    def write(
         self,
         n_parallel: int = 1,
         fmt: WriterMode = "ome-tiff",
@@ -1321,6 +1362,7 @@ class IWsiReg:
         # TODO add multi-core support
         self.set_logger()
         if not self._check_if_all_registered():
+            logger.warning("Cannot write images as not all modalities have been registered.")
             return None
 
         def _get_with_suffix(p: Path) -> Path:
@@ -1367,7 +1409,7 @@ class IWsiReg:
                     if _get_with_suffix(output_path).exists() and not override:
                         logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
                         continue
-                    logger.trace(f"Exporting {modality} to {output_path}...")
+                    logger.trace(f"Exporting {modality} to {output_path}... (registered)")
                     to_write.append((image_modality, transformations, output_path, fmt, tile_size, as_uint8))
                 except KeyError:
                     logger.warning(f"Could not find transformation data for {modality}.")
@@ -1377,7 +1419,7 @@ class IWsiReg:
                         res = pool.imap(self._transform_write_image, to_write)
                     paths.extend(list(res))
                 else:
-                    for args in tqdm(to_write, desc="Exporting attachment modalities..."):
+                    for args in tqdm(to_write, desc="Exporting not-registered modalities..."):
                         path = self._transform_write_image(*args)
                         paths.append(path)
 
@@ -1392,7 +1434,7 @@ class IWsiReg:
                 if _get_with_suffix(output_path).exists() and not override:
                     logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
                     continue
-                logger.trace(f"Exporting {modality} to {output_path}...")
+                logger.trace(f"Exporting {modality} to {output_path}... (registered)")
                 to_write.append(
                     (
                         image_modality.name,
@@ -1401,7 +1443,7 @@ class IWsiReg:
                         fmt,
                         tile_size,
                         as_uint8,
-                        lambda: (False, to_original_size),
+                        lambda: (False, None, to_original_size),
                     )
                 )
             if to_write:
@@ -1410,36 +1452,52 @@ class IWsiReg:
                         res = pool.imap(self._transform_write_image, to_write)
                     paths.extend(list(res))
                 else:
-                    for args in tqdm(to_write, desc="Exporting attachment modalities..."):
+                    for args in tqdm(to_write, desc="Exporting registered modalities (registered)..."):
                         path = self._transform_write_image(*args)
                         paths.append(path)
 
-            # export attachment modalities
+            # # export attachment modalities
+            # for attach_to_modality_key, attached_shape_dict in tqdm(
+            #     self.attachment_shapes.items(), desc="Exporting attachment shapes..."
+            # ):
+            #     attach_to_modality = self.modalities[attach_to_modality_key]
+            #     for shape_file in attached_shape_dict["shape_files"]:
+            #         attached_modality_key = Path(shape_file).stem
+            #         suffix = Path(shape_file).suffix
+            #         output_path = (
+            #             self.image_dir
+            #             / f"{self.name}-{attached_modality_key}_to_{attach_to_modality_key}_registered{suffix}"
+            #         )
+            #         if _get_with_suffix(output_path).exists() and not override:
+            #             logger.trace(f"Skipping {attach_to_modality_key} as it already exists ({output_path}).")
+
+            # attachment images
             to_write = []
-            for modality, attach_to_modality in tqdm(
-                self.attachment_images.items(), desc="Exporting attachment modalities..."
+            # keys are: attached image - attached to image (the one that was registered)
+            for attached_modality_key, attach_to_modality_key in tqdm(
+                self.attachment_images.items(), desc="Exporting attachment images..."
             ):
-                if modality in merge_modalities and remove_merged:
+                if attached_modality_key in merge_modalities and remove_merged:
                     continue
-                attach_modality = self.modalities[attach_to_modality]
-                if attach_to_modality in self._find_not_registered_modalities():
+                attached_modality = self.modalities[attached_modality_key]
+                if attach_to_modality_key in self._find_not_registered_modalities():
                     image_modality, _, output_path = self._prepare_not_registered_image_transform(
-                        modality,
+                        attach_to_modality_key,
                         attachment=True,
-                        attachment_modality=attach_modality,
+                        attachment_modality=attached_modality,
                         to_original_size=to_original_size,
                     )
                 else:
                     image_modality, _, output_path = self._prepare_registered_image_transform(
-                        modality,
+                        attach_to_modality_key,
                         attachment=True,
-                        attachment_modality=attach_modality,
+                        attachment_modality=attached_modality,
                         to_original_size=to_original_size,
                     )
                 if _get_with_suffix(output_path).exists() and not override:
-                    logger.trace(f"Skipping {attach_to_modality} as it already exists ({output_path}).")
+                    logger.trace(f"Skipping {attach_to_modality_key} as it already exists ({output_path}).")
                     continue
-                logger.trace(f"Exporting {attach_modality} to {output_path}...")
+                logger.trace(f"Exporting {attached_modality} to {output_path}... (attached)")
                 to_write.append(
                     (
                         image_modality.name,
@@ -1448,7 +1506,7 @@ class IWsiReg:
                         fmt,
                         tile_size,
                         as_uint8,
-                        lambda: (True, to_original_size),
+                        lambda: (True, attach_to_modality_key, to_original_size),
                     )
                 )
             if to_write:
@@ -1467,7 +1525,6 @@ class IWsiReg:
                 to_original_size=to_original_size, as_uint8=as_uint8, override=override
             )
             paths.append(path)
-
         return paths
 
     def _prepare_registered_image_transform(
@@ -1477,18 +1534,18 @@ class IWsiReg:
         attachment_modality: Modality | None = None,
         to_original_size: bool = True,
     ) -> tuple[Modality, TransformSequence, Path]:
-        if attachment and attachment_modality:
-            final_modality = self.registration_paths[attachment_modality.name][-1]
-            transformations = copy(self.transformations[attachment_modality.name]["full-transform-seq"])
-        else:
-            final_modality = self.registration_paths[edge_key][-1]
-            transformations = copy(self.transformations[edge_key]["full-transform-seq"])
+        # if attachment and attachment_modality:
+        #     final_modality = self.registration_paths[attachment_modality.name][-1]
+        #     transformations = copy(self.transformations[attachment_modality.name]["full-transform-seq"])
+        # else:
+        final_modality = self.registration_paths[edge_key][-1]
+        transformations = copy(self.transformations[edge_key]["full-transform-seq"])
 
-        output_path = self.image_dir / f"{self.name}-{edge_key}_to_{final_modality}_registered"
-        modality_key = None
+        # modality_key = None
         if attachment and attachment_modality:
-            modality_key = copy(edge_key)
+            # modality_key = copy(edge_key)
             edge_key = attachment_modality.name
+        output_path = self.image_dir / f"{self.name}-{edge_key}_to_{final_modality}_registered"
 
         modality = self.modalities[edge_key]
         if self.original_size_transforms.get(final_modality) and to_original_size:
@@ -1508,8 +1565,9 @@ class IWsiReg:
 
         elif modality.output_pixel_size:
             transformations.set_output_spacing(modality.output_pixel_size)
-        if attachment and modality_key:
-            modality = self.modalities[modality_key]
+        if attachment:  # and modality_key:
+            modality = attachment_modality
+        #     modality = self.modalities[modality_key]
         return modality, transformations, output_path
 
     def _prepare_not_registered_image_transform(
@@ -1620,10 +1678,16 @@ class IWsiReg:
         if not modality and not prep_func:
             raise ValueError("Either modality or prep_func must be specified.")
         if prep_func:
-            attachment, to_original_size = prep_func()
+            attachment, attach_to_modality, to_original_size = prep_func()
+            if attach_to_modality is None:
+                attach_to_modality = modality
             modality_name = modality
+            modality_for_name = self.modalities[modality_name] if isinstance(modality_name, str) else modality_name
             modality, transformations, filename = self._prepare_registered_image_transform(
-                modality_name, attachment=attachment, to_original_size=to_original_size
+                attach_to_modality,
+                attachment=attachment,
+                attachment_modality=modality_for_name,
+                to_original_size=to_original_size,
             )
 
         as_uint8_ = as_uint8
@@ -1802,7 +1866,7 @@ class IWsiReg:
             "registration_paths": registration_paths,
             "registration_graph_edges": reg_graph_edges if registered else None,
             "original_size_transforms": self.original_size_transforms if registered else None,
-            "attachment_geojsons": self.attachment_geojsons if len(self.attachment_geojsons) > 0 else None,
+            "attachment_geojsons": self.attachment_shapes if len(self.attachment_shapes) > 0 else None,
             "attachment_images": self.attachment_images if len(self.attachment_images) > 0 else None,
             "merge": self.merge_images,
             "merge_images": self.merge_modalities if len(self.merge_modalities) > 0 else None,
@@ -1858,7 +1922,7 @@ class IWsiReg:
             "reg_paths": registration_paths,
             "reg_graph_edges": reg_graph_edges if status == "registered" else None,
             "original_size_transforms": self.original_size_transforms if status == "registered" else None,
-            "attachment_shapes": self.attachment_geojsons if len(self.attachment_geojsons) > 0 else None,
+            "attachment_shapes": self.attachment_shapes if len(self.attachment_shapes) > 0 else None,
             "attachment_images": self.attachment_images if len(self.attachment_images) > 0 else None,
             "merge_modalities": self.merge_modalities if len(self.merge_modalities) > 0 else None,
         }

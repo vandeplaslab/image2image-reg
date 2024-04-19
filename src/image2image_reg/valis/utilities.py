@@ -86,6 +86,12 @@ def _transform_points_df(
     return df
 
 
+def get_slide_path(registrar: Valis, name: str) -> Path:
+    """Find slide path by it's name."""
+    slide = registrar.get_slide(name)
+    return Path(slide.src_f)
+
+
 def transform_attached_image(
     registrar: Valis,
     source_path: PathLike,

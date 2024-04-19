@@ -8,8 +8,6 @@ from pathlib import Path
 
 import click
 from click_groups import GroupedGroup
-from image2image_reg import __version__
-from image2image_reg.enums import AVAILABLE_REGISTRATIONS, WriterMode
 from koyo.click import (
     Parameter,
     arg_parse_framelist_multi,
@@ -21,8 +19,11 @@ from koyo.click import (
 from koyo.system import IS_MAC
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
-from koyo.utilities import is_installed, running_as_pyinstaller_app
+from koyo.utilities import is_installed, reraise_exception_if_debug, running_as_pyinstaller_app
 from loguru import logger
+
+from image2image_reg import __version__
+from image2image_reg.enums import AVAILABLE_REGISTRATIONS, WriterMode
 
 if ty.TYPE_CHECKING:
     from image2image_reg.models import Preprocessing
@@ -247,7 +248,7 @@ def cli(
     dev: bool = False,
     log: PathLike | None = None,
 ) -> None:
-    r"""Launch registration app."""
+    """Launch registration app."""
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
 
     if IS_MAC:
@@ -995,9 +996,10 @@ def register_runner(
                         override=override,
                     )
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
-                except Exception:
+                except Exception as exc:
                     logger.exception(f"Failed to process {path}.")
                     errors.append(path)
+                    reraise_exception_if_debug(exc)
             if errors:
                 errors = "\n- ".join(errors)
                 logger.error(f"Failed to register the following projects: {errors}")
@@ -1024,7 +1026,7 @@ def _register(
     obj.set_logger()
     obj.register(histogram_match=histogram_match)
     if write_images:
-        obj.write_images(
+        obj.write(
             fmt=fmt,
             write_registered=write_registered,
             write_not_registered=write_not_registered,
@@ -1112,7 +1114,7 @@ if valis_is_installed:
         no_micro_reg: bool,
     ) -> None:
         """Initialize Valis configuration file."""
-        valis_init_runner(name, output_dir, image, reference)
+        valis_init_runner(name, output_dir, image, reference, check_for_reflection, no_non_rigid_reg, no_micro_reg)
 
     def valis_init_runner(
         project_name: str,
@@ -1140,9 +1142,9 @@ if valis_is_installed:
             output_dir,
             path,
             reference,
-            check_for_reflection,
-            not no_non_rigid_reg,
-            not no_micro_reg,
+            check_for_reflections=check_for_reflection,
+            non_rigid_reg=not no_non_rigid_reg,
+            micro_reg=not no_micro_reg,
         )
 
     @click.option(
@@ -1363,7 +1365,7 @@ def _export(
     if not obj.is_registered:
         warning_msg(f"Project {obj.name} is not registered.")
         return path
-    obj.write_images(
+    obj.write(
         fmt=fmt,
         write_registered=write_registered,
         write_not_registered=write_not_registered,

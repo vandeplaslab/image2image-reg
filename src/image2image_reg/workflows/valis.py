@@ -55,8 +55,9 @@ def parse_config(config: dict[str, ty.Any]) -> dict[str, ty.Any]:
 
 def get_preprocessor(preprocessor: str | type) -> type:
     """Get pre-processor."""
-    import image2image_reg.valis.preprocessing as pre_wsireg
     import valis.preprocessing as pre_valis
+
+    import image2image_reg.valis.preprocessing as pre_wsireg
 
     if isinstance(preprocessor, str):
         if hasattr(pre_wsireg, preprocessor):
@@ -82,6 +83,44 @@ def get_preprocessing_for_path(path: PathLike) -> list[str, dict]:
     return kws
 
 
+def get_feature_detector_str(feature_detector: str) -> str:
+    """Get feature detector."""
+    available = {
+        "vgg": "VggFD",
+        "orb_vgg": "OrbVggFD",
+        "boost": "BoostFD",
+        "latch": "LatchFD",
+        "daisy": "DaisyFD",
+        "kaze": "KazeFD",
+        "akaze": "AkazeFD",
+        "brisk": "BriskFD",
+        "orb": "OrbFD",
+        # custom
+        "sensitive_vgg": "SensitiveVggFD",
+    }
+    all_available = list(available.values()) + list(available.keys())
+    if feature_detector not in all_available:
+        raise ValueError(f"Feature detector {feature_detector} not found. Please one of use: {all_available}")
+    return available[feature_detector] if feature_detector in available else feature_detector
+
+
+def get_feature_detector(feature_detector: str) -> type:
+    """Get feature detector object."""
+    import valis.feature_detectors as fd_valis
+
+    import image2image_reg.valis.detect as fd_wsireg
+
+    feature_detector = get_feature_detector_str(feature_detector)
+    if isinstance(feature_detector, str):
+        if hasattr(fd_wsireg, feature_detector):
+            feature_detector = getattr(fd_wsireg, feature_detector)
+        elif hasattr(fd_valis, feature_detector):
+            feature_detector = getattr(fd_valis, feature_detector)
+        else:
+            raise ValueError(f"Feature detector {feature_detector} not found.")
+    return feature_detector
+
+
 def valis_init_configuration(
     project_name: str,
     output_dir: PathLike,
@@ -91,6 +130,7 @@ def valis_init_configuration(
     micro_reg_fraction: float = 0.125,
     non_rigid_reg: bool = False,
     micro_reg: bool = False,
+    feature_detector: str = "sensitive_vgg",
 ):
     """Create Valis configuration."""
     from natsort import natsorted
@@ -111,11 +151,22 @@ def valis_init_configuration(
         assert reference in filelist, f"{reference} not in filelist."
     logger.info(f"Reference image: {reference}")
 
+    feature_detector = get_feature_detector_str(feature_detector)
+
     channel_kws = {}
     for path in filelist:
         name = valtils.get_name(str(path))
         channel_kws[name] = get_preprocessing_for_path(path)
         logger.trace(f"Preprocessing for {name}: {channel_kws[name]}")
+
+    attachment_images = {}
+    attachment_shapes = {}
+    attachment_points = {}
+    for path in filelist:
+        name = valtils.get_name(str(path))
+        attachment_images[name] = []
+        attachment_shapes[name] = []
+        attachment_points[name] = []
 
     config = {
         "project_name": project_name,
@@ -126,6 +177,10 @@ def valis_init_configuration(
         "non_rigid_reg": non_rigid_reg,
         "micro_reg": micro_reg,
         "micro_reg_fraction": micro_reg_fraction,
+        "feature_detector": feature_detector,
+        "attachment_images": attachment_images,
+        "attachment_shapes": attachment_shapes,
+        "attachment_points": attachment_points,
     }
 
     filename = output_dir / f"{project_name}.valis.json"
@@ -149,15 +204,16 @@ def valis_registration(
     micro_reg_fraction: float = 0.25,
     non_rigid_reg: bool = False,
     micro_reg: bool = False,
+    feature_detector: str = "sensitive_vgg",
     **kwargs,
 ) -> None:
     """Valis-based registration."""
     import numpy as np
-    from image2image_reg.valis.detect import SensitiveVggFD
-    from image2image_reg.valis.utilities import transform_registered_image
     from koyo.timer import MeasureTimer
     from natsort import natsorted
     from valis import registration, valtils
+
+    from image2image_reg.valis.utilities import get_slide_path, transform_attached_image, transform_registered_image
 
     output_dir = Path(output_dir)
 
@@ -173,13 +229,13 @@ def valis_registration(
         assert reference in filelist, f"{reference} not in filelist."
     logger.info(f"Reference image: {reference}")
 
+    feature_detector_cls = get_feature_detector(feature_detector)
+    logger.info(f"Feature detector: {feature_detector_cls}")
+
     # initialize java
     registration.init_jvm()
 
     filelist = [str(s) for s in filelist]
-
-    registered_dir = output_dir / project_name / "registered"
-    registered_dir.mkdir(exist_ok=True, parents=True)
 
     kws = {}
     if not non_rigid_reg:
@@ -189,61 +245,81 @@ def valis_registration(
         logger.warning(f"Unused keyword arguments: {kwargs}")
 
     try:
-        # registrar_path = base_dir / name / "data" / f"{name}_registrar.pickle"
-        # if registrar_path.exists():
-        #     registrar = pickle.load(open(registrar_path, "rb"))
-        # else:
-        registrar = registration.Valis(
-            str(output_dir),
-            str(output_dir),
-            name=project_name,
-            image_type="fluorescence",
-            imgs_ordered=True,
-            img_list=filelist,
-            reference_img_f=str(reference) if reference else None,
-            align_to_reference=reference is not None,
-            check_for_reflections=check_for_reflections,
-            feature_detector_cls=SensitiveVggFD,
-            **kws,
-        )
+        registrar_path = output_dir / project_name / "data" / f"{project_name}_registrar.pickle"
+        if registrar_path.exists():
+            import pickle
 
-        with MeasureTimer() as timer:
-            registrar.register(processor_dict=channel_kws)
-        logger.info(f"Registered low-res images in {timer()}")
+            with open(registrar_path, "rb") as f:
+                registrar = pickle.load(f)
+        else:
+            registrar = registration.Valis(
+                str(output_dir),
+                str(output_dir),
+                name=project_name,
+                image_type="fluorescence",
+                imgs_ordered=True,
+                img_list=filelist,
+                reference_img_f=str(reference) if reference else None,
+                align_to_reference=reference is not None,
+                check_for_reflections=check_for_reflections,
+                feature_detector_cls=feature_detector_cls,
+                **kws,
+            )
 
-        # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an image that
-        # is 25% full resolution.
-        if micro_reg:
-            try:
-                img_dims = np.array([slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()])
-                min_max_size = np.min([np.max(d) for d in img_dims])
-                micro_reg_size = np.floor(min_max_size * micro_reg_fraction).astype(int)
-            except Exception:
-                micro_reg_size = 3000
-
-            logger.info(f"Micro-registering using {micro_reg_size} pixels.")
-            # Perform high resolution non-rigid registration
             with MeasureTimer() as timer:
-                try:
-                    registrar.register_micro(
-                        max_non_rigid_registration_dim_px=micro_reg_size,
-                        processor_dict=channel_kws,
-                        reference_img_f=str(reference) if reference else None,
-                        align_to_reference=True,
-                    )
-                except Exception as exc:
-                    logger.error(f"Error during non-rigid registration: {exc}")
-            logger.info(f"Registered high-res images in {timer()}")
+                registrar.register(processor_dict=channel_kws)
+            logger.info(f"Registered low-res images in {timer()}")
 
-        # We can also plot the high resolution matches using `Valis.draw_matches`:
-        try:
-            matches_dst_dir = Path(registrar.dst_dir) / "matches"
-            registrar.draw_matches(matches_dst_dir)
-        except Exception:
-            logger.error("Failed to export matches.")
+            # We can also plot the high resolution matches using `Valis.draw_matches`:
+            try:
+                matches_dst_dir = Path(registrar.dst_dir) / "matches-initial"
+                registrar.draw_matches(matches_dst_dir)
+            except Exception:
+                logger.error("Failed to export matches.")
+
+            # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an image that
+            # is 25% full resolution.
+            if micro_reg:
+                try:
+                    img_dims = np.array(
+                        [slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()]
+                    )
+                    min_max_size = np.min([np.max(d) for d in img_dims])
+                    micro_reg_size = np.floor(min_max_size * micro_reg_fraction).astype(int)
+                except Exception:
+                    micro_reg_size = 3000
+
+                logger.info(f"Micro-registering using {micro_reg_size} pixels.")
+                # Perform high resolution non-rigid registration
+                with MeasureTimer() as timer:
+                    try:
+                        registrar.register_micro(
+                            max_non_rigid_registration_dim_px=micro_reg_size,
+                            processor_dict=channel_kws,
+                            reference_img_f=str(reference) if reference else None,
+                            align_to_reference=True,
+                        )
+                    except Exception as exc:
+                        logger.error(f"Error during non-rigid registration: {exc}")
+                logger.info(f"Registered high-res images in {timer()}")
+
+            # We can also plot the high resolution matches using `Valis.draw_matches`:
+            try:
+                matches_dst_dir = Path(registrar.dst_dir) / "matches-final"
+                registrar.draw_matches(matches_dst_dir)
+            except Exception:
+                logger.error("Failed to export matches.")
 
         # export images to OME-TIFFs
+        registered_dir = output_dir / project_name / "registered"
+        registered_dir.mkdir(exist_ok=True, parents=True)
         transform_registered_image(registrar, registered_dir, non_rigid_reg=non_rigid_reg)
+
+        # export attached images to OME-TIFFs
+        attached_images = kwargs.get("attachment_images", {})
+        for src_name, attachments in attached_images.items():
+            src_path = get_slide_path(registrar, src_name)
+            transform_attached_image(registrar, src_path, attachments, registered_dir)
 
     except Exception as exc:
         registration.kill_jvm()
