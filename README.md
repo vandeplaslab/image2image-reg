@@ -29,6 +29,14 @@ it's not as straightforward as it should be.
 - [DONE] Reusable registrations - since all registration data is contained within the project, it's much easier to re-run
 certain tasks (such as export images) without having to re-run the registration process.
 
+## Planned features:
+
+- [WIP] Better support for `Valis` registrations.
+- [WIP] Better support for masks.
+- Add better measures and means of testing effectiveness of registration.
+- Add better multi-processing support.
+- Add 3D module for elastiX registrations.
+
 ## Getting started
 
 The library provides a command-line interface which can be invoked:
