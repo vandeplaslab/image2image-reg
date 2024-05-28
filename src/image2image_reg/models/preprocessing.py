@@ -132,23 +132,30 @@ class Preprocessing(BaseModel):
 
     def as_str(self) -> str:
         """Create nice formatting based on pre-processing."""
-        out = f"Image type: {self.image_type.value}"
+        out = f"{self.image_type.value}; "
         if self.max_intensity_projection:
-            out += "\nMax intensity projection"
+            out += "MIP; "
         if self.contrast_enhance:
-            out += "\nContrast enhance"
+            out += "enhance; "
         if self.invert_intensity:
-            out += "\nInvert intensity"
+            out += "invert"
+        if out.endswith("; "):
+            out = out[:-2]
+        out += "\n"
         if self.channel_indices:
-            out += f"\nChannel indices: {self.channel_indices}"
+            out += f"ids: {self.channel_indices}\n"
         if self.flip:
-            out += f"\nFlip: {self.flip.value}"
+            out += f"flip-{self.flip.value}; "
         if self.translate_x or self.translate_y:
-            out += f"\nTranslate: {self.translate_x}, {self.translate_y}"
+            out += f"translate({self.translate_x}, {self.translate_y}); "
         if self.rotate_counter_clockwise:
-            out += f"\nRotate: {self.rotate_counter_clockwise}"
+            out += f"{self.rotate_counter_clockwise}°"
+        if out.endswith("; "):
+            out = out[:-2]
+        if not out.endswith("\n"):
+            out += "\n"
         if self.downsample > 1:
-            out += f"\nDownsample: {self.downsample}"
+            out += f"x{self.downsample} downsample"
         return out
 
     def to_dict(self, as_wsireg: bool = False) -> dict:

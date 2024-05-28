@@ -9,6 +9,8 @@ import dask.array as da
 import numpy as np
 import SimpleITK as sitk
 from image2image_io.readers.utilities import grayscale, guess_rgb
+from loguru import logger
+
 from image2image_reg.enums import ImageType
 from image2image_reg.models import Preprocessing
 from image2image_reg.models.bbox import BoundingBox
@@ -22,7 +24,6 @@ from image2image_reg.utils.transformation import (
     prepare_wsireg_transform_data,
     transform_plane,
 )
-from loguru import logger
 
 
 def get_channel_indices_from_names(channel_names: list[str], channel_names_to_select: list[str]) -> list[int]:
@@ -108,8 +109,7 @@ def sitk_max_int_proj(image: sitk.Image) -> sitk.Image:
     Parameters
     ----------
     image
-        multichannel impleITK image
-
+        multichannel SimpleITK image
 
     Returns
     -------
@@ -118,6 +118,26 @@ def sitk_max_int_proj(image: sitk.Image) -> sitk.Image:
     # check if there are 3 dimensions (XYC)
     if len(image.GetSize()) == 3:
         return sitk.MaximumProjection(image, 2)[:, :, 0]
+    else:
+        logger.warning("Cannot perform maximum intensity project on single channel image")
+        return image
+
+
+def sitk_mean_int_proj(image: sitk.Image) -> sitk.Image:
+    """Finds maximum intensity projection of multi-channel SimpleITK image.
+
+    Parameters
+    ----------
+    image
+        multichannel SimpleITK image
+
+    Returns
+    -------
+    SimpleITK image
+    """
+    # check if there are 3 dimensions (XYC)
+    if len(image.GetSize()) == 3:
+        return sitk.MeanProjection(image, 2)[:, :, 0]
     else:
         logger.warning("Cannot perform maximum intensity project on single channel image")
         return image
@@ -152,6 +172,9 @@ def preprocess_intensity(
 
     if preprocessing.max_intensity_projection:
         image = sitk_max_int_proj(image)
+    if image.GetDepth() > 0:
+        image = sitk_mean_int_proj(image)
+        logger.warning("Image has more than one channel, mean intensity projection will be used")
     if preprocessing.contrast_enhance:
         image = contrast_enhance(image)
     if preprocessing.invert_intensity:
@@ -349,7 +372,7 @@ def preprocess(
     is_rgb: bool,
     transforms: list,
     transform_mask: bool = True,
-) -> sitk.Image:
+) -> tuple[sitk.Image, sitk.Image, list, list]:
     """Run full intensity and spatial preprocessing."""
     # intensity based pre-processing
     image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
@@ -379,8 +402,10 @@ def create_thumbnail(input_image: sitk.Image, max_thumbnail_size: int = 512) -> 
 
     Parameters
     ----------
-    - input_image: The input SimpleITK.Image object.
-    - max_thumbnail_size: The maximum size of the thumbnail's longest dimension.
+    input_image:
+        The input SimpleITK.Image object.
+    max_thumbnail_size:
+        The maximum size of the thumbnail's longest dimension.
 
     Returns
     -------
@@ -413,3 +438,32 @@ def create_thumbnail(input_image: sitk.Image, max_thumbnail_size: int = 512) -> 
     thumbnail = resampler.Execute(input_image)
 
     return thumbnail
+
+
+def preprocess_preview(
+    image: np.ndarray,
+    is_rgb: bool,
+    resolution: float,
+    preprocessing: Preprocessing,
+    initial_transforms: list | None = None,
+    transform_mask: bool = False,
+) -> np.ndarray:
+    """Complete pre-processing."""
+    channel_names = preprocessing.channel_names
+
+    image = preprocess_dask_array(image, channel_names, preprocessing)
+    # convert and cast
+    image = convert_and_cast(image, preprocessing)
+
+    # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
+    # set image
+    image, mask, initial_transforms, original_size_transform = preprocess(
+        image,
+        None,
+        preprocessing,
+        resolution,
+        is_rgb,
+        initial_transforms,
+        transform_mask=transform_mask,
+    )
+    return sitk.GetArrayFromImage(image)
