@@ -162,17 +162,9 @@ def preprocess_intensity(
     image: sitk.Image, preprocessing: Preprocessing, pixel_size: float, is_rgb: bool
 ) -> sitk.Image:
     """Preprocess image intensity data to single channel image."""
-    if preprocessing.image_type == ImageType.DARK:
-        preprocessing.invert_intensity = False
-    elif preprocessing.image_type == ImageType.LIGHT:
-        preprocessing.max_intensity_projection = False
-        preprocessing.contrast_enhance = False
-        if is_rgb:
-            preprocessing.invert_intensity = True
-
     if preprocessing.max_intensity_projection:
         image = sitk_max_int_proj(image)
-    if image.GetDepth() > 0:
+    if image.GetDepth() > 1:
         image = sitk_mean_int_proj(image)
         logger.warning("Image has more than one channel, mean intensity projection will be used")
     if preprocessing.contrast_enhance:
@@ -372,8 +364,18 @@ def preprocess(
     is_rgb: bool,
     transforms: list,
     transform_mask: bool = True,
+    check: bool = False,
 ) -> tuple[sitk.Image, sitk.Image, list, list]:
     """Run full intensity and spatial preprocessing."""
+    if check:
+        if preprocessing.image_type == ImageType.DARK:
+            preprocessing.invert_intensity = False
+        elif preprocessing.image_type == ImageType.LIGHT:
+            preprocessing.max_intensity_projection = False
+            preprocessing.contrast_enhance = False
+            if is_rgb:
+                preprocessing.invert_intensity = True
+
     # intensity based pre-processing
     image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
     # ensure that intensity-based pre-processing resulted in a single-channel image
@@ -458,12 +460,6 @@ def preprocess_preview(
     # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
     # set image
     image, mask, initial_transforms, original_size_transform = preprocess(
-        image,
-        None,
-        preprocessing,
-        resolution,
-        is_rgb,
-        initial_transforms,
-        transform_mask=transform_mask,
+        image, None, preprocessing, resolution, is_rgb, initial_transforms, transform_mask=transform_mask, check=False
     )
     return sitk.GetArrayFromImage(image)
