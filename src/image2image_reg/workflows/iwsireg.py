@@ -342,13 +342,20 @@ class IWsiReg:
         for i, (name, merge_modalities) in enumerate(self.merge_modalities.items()):
             func(f" {elbow if i == n else tee}{name} ({merge_modalities})")
 
-    def validate(self, allow_not_registered: bool = True) -> bool:
+    def validate(self, allow_not_registered: bool = True) -> tuple[bool, list[str]]:
         """Perform several checks on the project."""
         # check whether the paths are still where they were set up
         is_valid = True
+        errors = []
+        if not self.modalities:
+            errors.append("❌ No modalities have been added.")
+            logger.error(errors[-1])
+            is_valid = False
+
         for modality in self.modalities.values():
             if not isinstance(modality.path, ArrayLike) and not Path(modality.path).exists():
-                logger.error(f"❌ Modality '{modality.name}' path '{modality.path}' does not exist.")
+                errors.append(f"❌ Modality '{modality.name}' path '{modality.path}' does not exist.")
+                logger.error(errors[-1])
                 is_valid = False
             else:
                 logger.success(f"✅ Modality '{modality.name}' exist.")
@@ -357,13 +364,16 @@ class IWsiReg:
         for edge in self.registration_nodes:
             modalities = edge["modalities"]
             if modalities["source"] not in self.modalities:
-                logger.error(f"❌ Source modality '{modalities['source']}' does not exist.")
+                errors.append(f"❌ Source modality '{modalities['source']}' does not exist.")
+                logger.error(errors[-1])
                 is_valid = False
             elif modalities["target"] not in self.modalities:
-                logger.error(f"❌ Target modality '{modalities['target']}' does not exist.")
+                errors.append(f"❌ Target modality '{modalities['target']}' does not exist.")
+                logger.error(errors[-1])
                 is_valid = False
             elif modalities["source"] == modalities["target"]:
-                logger.error("❌ Source and target modalities cannot be the same.")
+                errors.append("❌ Source and target modalities cannot be the same.")
+                logger.error(errors[-1])
                 is_valid = False
             else:
                 logger.success(f"✅ Modality pair {modalities['source']} - {modalities['target']} exist.")
@@ -371,24 +381,28 @@ class IWsiReg:
         # check whether all registration paths exist
         for source, targets in self.registration_paths.items():
             if source not in self.modalities:
-                logger.error(f"❌ Source modality '{source}' does not exist.")
+                errors.append(f"❌ Source modality '{source}' does not exist.")
+                logger.error(errors[-1])
                 is_valid = False
             for target in targets:
                 if target not in self.modalities:
-                    logger.error(f"❌ Target modality '{target}' does not exist.")
+                    errors.append(f"❌ Target modality '{target}' does not exist.")
+                    logger.error(errors[-1])
                     is_valid = False
                 if source == target:
-                    logger.error("❌ Source and target modalities cannot be the same.")
+                    errors.append("❌ Source and target modalities cannot be the same.")
+                    logger.error(errors[-1])
                     is_valid = False
 
         # check whether all modalities have been registered
         if not allow_not_registered:
             for edge in self.registration_nodes:
                 if not edge["registered"]:
-                    logger.error(
+                    errors.append(
                         f"❌ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
                         f"has not been registered."
                     )
+                    logger.error(errors[-1])
                     is_valid = False
                 else:
                     logger.success(
@@ -396,10 +410,11 @@ class IWsiReg:
                         f"has been registered."
                     )
         if not is_valid:
-            logger.error("❌ Project configuration is invalid.")
+            errors.append("❌ Project configuration is invalid.")
+            logger.error(errors[-1])
         else:
             logger.success("✅ Project configuration is valid.")
-        return is_valid
+        return is_valid, errors
 
     def load_from_i2i_wsireg(self, raise_on_error: bool = True) -> None:
         """Load data from image2image-reg project file."""
