@@ -5,10 +5,12 @@ from enum import Enum
 from pathlib import Path
 
 import numpy as np
+from koyo.json import read_json_data
+from koyo.typing import PathLike
+from pydantic import BaseModel, validator
+
 from image2image_reg.enums import CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
-from koyo.json import read_json_data
-from pydantic import BaseModel, validator
 
 
 def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:
@@ -98,7 +100,12 @@ class Preprocessing(BaseModel):
     crop_bbox: ty.Optional[BoundingBox] = None
     crop_polygon: ty.Optional[Polygon] = None
     downsample: int = 1
+
+    # mask pre-processing
     use_mask: bool = True
+    mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None
+    mask_bbox: ty.Optional[BoundingBox] = None
+    mask_polygon: ty.Optional[Polygon] = None
 
     def __init__(self, **kwargs: ty.Any):
         if "max_int_proj" in kwargs:
@@ -109,11 +116,40 @@ class Preprocessing(BaseModel):
             kwargs["rotate_counter_clockwise"] = kwargs.pop("rotate_cc")
         if "crop_to_mask_bbox" in kwargs:
             kwargs["crop_to_bbox"] = kwargs.pop("crop_to_mask_bbox")
-        if "mask_bbox" in kwargs:
-            kwargs["crop_bbox"] = kwargs.pop("mask_bbox")
+        # if "mask_bbox" in kwargs:
+        #     kwargs["crop_bbox"] = kwargs.pop("mask_bbox")
         if "downsampling" in kwargs:
             kwargs["downsample"] = kwargs.pop("downsampling")
         super().__init__(**kwargs)
+
+    def is_cropped(self) -> bool:
+        """Return if cropped."""
+        return self.crop_to_bbox and (self.crop_bbox is not None or self.crop_polygon is not None)
+
+    def is_masked(self) -> bool:
+        """Return if masked."""
+        return self.use_mask and (self.mask is not None or self.mask_bbox is not None or self.mask_polygon is not None)
+
+    def as_str(self) -> str:
+        """Create nice formatting based on pre-processing."""
+        out = f"Image type: {self.image_type.value}"
+        if self.max_intensity_projection:
+            out += "\nMax intensity projection"
+        if self.contrast_enhance:
+            out += "\nContrast enhance"
+        if self.invert_intensity:
+            out += "\nInvert intensity"
+        if self.channel_indices:
+            out += f"\nChannel indices: {self.channel_indices}"
+        if self.flip:
+            out += f"\nFlip: {self.flip.value}"
+        if self.translate_x or self.translate_y:
+            out += f"\nTranslate: {self.translate_x}, {self.translate_y}"
+        if self.rotate_counter_clockwise:
+            out += f"\nRotate: {self.rotate_counter_clockwise}"
+        if self.downsample > 1:
+            out += f"\nDownsample: {self.downsample}"
+        return out
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Return dict."""
@@ -133,7 +169,16 @@ class Preprocessing(BaseModel):
                 data["rotate_cc"] = data.pop("rotate_counter_clockwise")
             if data.get("max_intensity_projection"):
                 data["max_int_proj"] = data.pop("max_intensity_projection")
-            for key in ["crop_to_bbox", "crop_polygon", "translate_x", "translate_y", "channel_names"]:
+            for key in [
+                "crop_to_bbox",
+                "crop_polygon",
+                "translate_x",
+                "translate_y",
+                "channel_names",
+                "mask",
+                "mask_bbox",
+                "mask_polygon",
+            ]:
                 if data.get(key):
                     data.pop(key)
         return data

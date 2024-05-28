@@ -1,15 +1,19 @@
 """Modality."""
+
 import typing as ty
 
 import dask.array as da
 import numpy as np
 import zarr
+from koyo.typing import PathLike
+from pydantic import BaseModel, validator
+
 from image2image_reg.enums import ArrayLike
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 from image2image_reg.models.export import Export
 from image2image_reg.models.preprocessing import Preprocessing
-from koyo.typing import PathLike
-from pydantic import BaseModel, validator
+
+# TODO: move mask/mask_bbox/mask_polygon/transform_mask to pre-processing
 
 
 class Modality(BaseModel):
@@ -28,11 +32,13 @@ class Modality(BaseModel):
     channel_names: ty.Optional[list[str]] = None
     channel_colors: ty.Optional[list[str]] = None
     pixel_size: float = 1.0
-    mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None
-    mask_bbox: ty.Optional[BoundingBox] = None
-    mask_polygon: ty.Optional[Polygon] = None
-    transform_mask: bool = True
     output_pixel_size: ty.Optional[tuple[float, float]] = None
+
+    # need to be deprecated and moved to pre-processing
+    mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None  # deprecate (move to pre-processing)
+    mask_bbox: ty.Optional[BoundingBox] = None  # deprecate (move to pre-processing)
+    mask_polygon: ty.Optional[Polygon] = None  # deprecate (move to pre-processing)
+    transform_mask: bool = True  # deprecate (move to pre-processing)
 
     @validator("mask_bbox", pre=True)
     def _validate_bbox(cls, v) -> ty.Optional[BoundingBox]:
@@ -81,3 +87,9 @@ class Modality(BaseModel):
         from image2image_reg.wrapper import ImageWrapper
 
         return ImageWrapper(self)
+
+    def is_masked(self) -> bool:
+        """Return if masked."""
+        return self.preprocessing.use_mask and (
+            self.mask is not None or self.mask_bbox is not None or self.mask_polygon is not None
+        )

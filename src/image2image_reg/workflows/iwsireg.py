@@ -114,6 +114,7 @@ class IWsiReg:
     REGISTERED_CONFIG_NAME = "registered-project.config.json"
 
     log_file: Path | None = None
+    _name: str | None = None
 
     def __init__(
         self,
@@ -124,6 +125,7 @@ class IWsiReg:
         merge: bool = False,
         pairwise: bool = False,
         log: bool = False,
+        init: bool = True,
         **_kwargs: ty.Any,
     ):
         # setup project directory
@@ -139,7 +141,6 @@ class IWsiReg:
         if ".wsireg" in name:
             name = name.replace(".wsireg", "")
         self.name = name
-        self.project_dir.mkdir(exist_ok=True, parents=True)
         self.cache_images = cache
         self.pairwise = pairwise
         self.merge_images = merge
@@ -168,12 +169,36 @@ class IWsiReg:
         }
 
         # setup cache directory
+        if init:
+            self.project_dir.mkdir(exist_ok=True, parents=True)
         self.cache_dir = self.project_dir / "Cache"
-        if self.cache_images:
+        if self.cache_images and init:
             self.cache_dir.mkdir(exist_ok=True, parents=True)
             logger.trace(f"Caching images to '{self.cache_dir}' directory.")
-        if log:
+        if log and init:
             self.set_logger()
+
+    @property
+    def name(self) -> str:
+        """Project name."""
+        return self._name
+
+    @name.setter
+    def name(self, value: str) -> None:
+        if self.project_dir.exists():
+            raise ValueError("Project directory already exists - cannot edit project name.")
+        self._name = value
+
+    @property
+    def output_dir(self) -> Path:
+        """Output directory."""
+        return self.project_dir.parent
+
+    @output_dir.setter
+    def output_dir(self, value: PathLike) -> None:
+        if self.project_dir.exists():
+            raise ValueError("Project directory already exists - cannot edit project name.")
+        self.project_dir = (Path(value) / self.name).with_suffix(".wsireg").resolve()
 
     def set_logger(self) -> None:
         """Setup logger."""
@@ -533,6 +558,15 @@ class IWsiReg:
     def load_from_wsireg(self) -> None:
         """Load data from WsiReg YAML project file."""
 
+    def has_modality(self, name: str | None = None, path: PathLike | None = None) -> bool:
+        """Check whether modality has been previously added."""
+        for modality in self.modalities.values():
+            if name and modality.name == name:
+                return True
+            if path and modality.path == path:
+                return True
+        return False
+
     def auto_add_modality(
         self,
         name: str,
@@ -634,6 +668,26 @@ class IWsiReg:
         )
         logger.trace(f"Added modality '{name}'.")
         return self.modalities[name]
+
+    def remove_modality(self, name: str | None = None, path: PathLike | None = None) -> Modality | None:
+        """Remove modality from the project."""
+        modality = None
+        if name is not None and name in self.modalities:
+            modality = self.modalities.pop(name)
+            logger.trace(f"Removed modality '{name}'.")
+        elif path is not None:
+            path = Path(path)
+            for modality_ in self.modalities.values():
+                if Path(modality_.path) == path:
+                    modality = self.modalities.pop(modality_.name)
+                    logger.trace(f"Removed modality '{modality.name}'.")
+                    break
+        # remove registration paths
+        if modality:
+            pass
+        if not modality:
+            logger.warning("Could not find modality to remove.")
+        return modality
 
     def auto_add_attachment_images(self, attach_to_modality: str, name: str, path: PathLike) -> None:
         """Add modality."""
@@ -893,6 +947,14 @@ class IWsiReg:
         """Number of registrations to be performed."""
         return len(self.registration_nodes)
 
+    def has_registration_path(self, source: str, target: str, through: str | None = None) -> bool:
+        """Check whether registration path exists."""
+        modalities = {"source": source, "target": through if through else target}
+        for node in self.registration_nodes:
+            if node["modalities"] == modalities:
+                return True
+        return False
+
     def add_registration_path(
         self,
         source: str,
@@ -922,6 +984,20 @@ class IWsiReg:
             assert "target" in preprocessing, "Preprocessing must contain target key."
             assert "source" in preprocessing, "Preprocessing must contain source key."
         self._add_registration_node(source, target, through, transform, preprocessing)
+
+    def remove_registration_path(self, source: str, target: str, through: str | None = None) -> None:
+        """Remove registration path."""
+        index = None
+
+        modalities = {"source": source, "target": through if through else target}
+        for i, node in enumerate(self.registration_nodes):
+            if node["modalities"] == modalities:
+                index = i
+                break
+        if index is not None:
+            self.registration_nodes.pop(index)
+            logger.trace(f"Removed registration path from '{source}' to '{target}' through '{through}'.")
+        self._create_transformation_paths(self.registration_paths)
 
     def _add_registration_node(
         self,
@@ -1126,9 +1202,9 @@ class IWsiReg:
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -1341,7 +1417,8 @@ class IWsiReg:
                 tform_txt = self._transforms_to_txt(self.transformations[attached_to_modality])
                 write_json_data(output_path, tform_txt)
                 logger.trace(
-                    f"Saved transformations to '{output_path}'. source={attached_to_modality}; target={target_modalities}."
+                    f"Saved transformations to '{output_path}'. source={attached_to_modality}; "
+                    f"target={target_modalities}."
                 )
         return out
 
@@ -1506,7 +1583,7 @@ class IWsiReg:
                         fmt,
                         tile_size,
                         as_uint8,
-                        lambda: (True, attach_to_modality_key, to_original_size),
+                        lambda: (True, attach_to_modality_key, to_original_size),  # noqa: B023
                     )
                 )
             if to_write:
