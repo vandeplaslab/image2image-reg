@@ -274,6 +274,8 @@ class IWsiReg:
         path = Path(path)
         if not path.exists():
             raise ValueError(f"Path does not exist ({path}).")
+        if path.is_file() and path.name in [cls.CONFIG_NAME, cls.REGISTERED_CONFIG_NAME]:
+            path = path.parent
         if not path.is_dir():
             raise ValueError("Path is not a directory.")
         if not path.suffix == ".wsireg":
