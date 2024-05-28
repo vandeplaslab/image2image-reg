@@ -137,10 +137,8 @@ class IWsiReg:
                 raise ValueError("Name must be provided.")
             if output_dir is None:
                 raise ValueError("Output directory must be provided.")
-            self.project_dir = (Path(output_dir) / name).with_suffix(".wsireg").resolve()
-        if ".wsireg" in name:
-            name = name.replace(".wsireg", "")
-        self.name = name
+            self.project_dir = (Path(output_dir) / self.format_project_name(name)).resolve()
+        self.name = self.format_project_name(name)
         self.cache_images = cache
         self.pairwise = pairwise
         self.merge_images = merge
@@ -178,6 +176,13 @@ class IWsiReg:
         if log and init:
             self.set_logger()
 
+    @classmethod
+    def format_project_name(cls, name: str) -> str:
+        """Format project name so that it's properly formatted."""
+        if ".wsireg" in name:
+            name = name.replace(".wsireg", "")
+        return name
+
     @property
     def name(self) -> str:
         """Project name."""
@@ -185,8 +190,10 @@ class IWsiReg:
 
     @name.setter
     def name(self, value: str) -> None:
-        if self.project_dir.exists():
-            raise ValueError("Project directory already exists - cannot edit project name.")
+        if self._name == value:
+            return
+        # if self.project_dir.exists():
+        #     raise ValueError("Project directory already exists - cannot edit project name.")
         self._name = value
 
     @property
@@ -196,9 +203,12 @@ class IWsiReg:
 
     @output_dir.setter
     def output_dir(self, value: PathLike) -> None:
-        if self.project_dir.exists():
-            raise ValueError("Project directory already exists - cannot edit project name.")
-        self.project_dir = (Path(value) / self.name).with_suffix(".wsireg").resolve()
+        value = (Path(value) / self.name).with_suffix(".wsireg").resolve()
+        if self.project_dir == value:
+            return
+        # if self.project_dir.exists():
+        #     raise ValueError("Project directory already exists - cannot edit project name.")
+        self.project_dir = value
 
     def set_logger(self) -> None:
         """Setup logger."""
@@ -342,21 +352,18 @@ class IWsiReg:
         for i, (name, merge_modalities) in enumerate(self.merge_modalities.items()):
             func(f" {elbow if i == n else tee}{name} ({merge_modalities})")
 
-    def validate(self, allow_not_registered: bool = True) -> tuple[bool, list[str]]:
+    def validate(self, allow_not_registered: bool = True, require_paths: bool = False) -> tuple[bool, list[str]]:
         """Perform several checks on the project."""
         # check whether the paths are still where they were set up
-        is_valid = True
         errors = []
         if not self.modalities:
             errors.append("❌ No modalities have been added.")
             logger.error(errors[-1])
-            is_valid = False
 
         for modality in self.modalities.values():
             if not isinstance(modality.path, ArrayLike) and not Path(modality.path).exists():
                 errors.append(f"❌ Modality '{modality.name}' path '{modality.path}' does not exist.")
                 logger.error(errors[-1])
-                is_valid = False
             else:
                 logger.success(f"✅ Modality '{modality.name}' exist.")
 
@@ -366,33 +373,32 @@ class IWsiReg:
             if modalities["source"] not in self.modalities:
                 errors.append(f"❌ Source modality '{modalities['source']}' does not exist.")
                 logger.error(errors[-1])
-                is_valid = False
             elif modalities["target"] not in self.modalities:
                 errors.append(f"❌ Target modality '{modalities['target']}' does not exist.")
                 logger.error(errors[-1])
-                is_valid = False
             elif modalities["source"] == modalities["target"]:
                 errors.append("❌ Source and target modalities cannot be the same.")
                 logger.error(errors[-1])
-                is_valid = False
             else:
                 logger.success(f"✅ Modality pair {modalities['source']} - {modalities['target']} exist.")
+
+        if require_paths:
+            if not self.registration_nodes:
+                errors.append("❌ No registration paths have been added.")
+                logger.error(errors[-1])
 
         # check whether all registration paths exist
         for source, targets in self.registration_paths.items():
             if source not in self.modalities:
                 errors.append(f"❌ Source modality '{source}' does not exist.")
                 logger.error(errors[-1])
-                is_valid = False
             for target in targets:
                 if target not in self.modalities:
                     errors.append(f"❌ Target modality '{target}' does not exist.")
                     logger.error(errors[-1])
-                    is_valid = False
                 if source == target:
                     errors.append("❌ Source and target modalities cannot be the same.")
                     logger.error(errors[-1])
-                    is_valid = False
 
         # check whether all modalities have been registered
         if not allow_not_registered:
@@ -403,12 +409,12 @@ class IWsiReg:
                         f"has not been registered."
                     )
                     logger.error(errors[-1])
-                    is_valid = False
                 else:
                     logger.success(
                         f"✅ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
                         f"has been registered."
                     )
+        is_valid = not errors
         if not is_valid:
             errors.append("❌ Project configuration is invalid.")
             logger.error(errors[-1])
@@ -1217,9 +1223,9 @@ class IWsiReg:
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
-                        registered_edge_transform["registration"]
-                    )
+                    transforms[modality][
+                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
+                    ] = registered_edge_transform["registration"]
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -1971,6 +1977,7 @@ class IWsiReg:
             else (self.REGISTERED_CONFIG_NAME if registered else self.CONFIG_NAME)
         )
         path = self.project_dir / filename
+        self.project_dir.mkdir(exist_ok=True, parents=True)
         write_json_data(path, config)
         logger.trace(f"Saved configuration to '{path}'.")
         return path
