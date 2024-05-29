@@ -284,6 +284,19 @@ def preprocess_reg_image_spatial(
             if transform_mask:
                 mask = transform_plane(mask, final_tform, composite_transform)
 
+    # rotate counter-clockwise
+    if float(preprocessing.rotate_counter_clockwise) != 0.0:
+        logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
+        rot_tform = generate_rigid_rotation_transform(image, pixel_size, preprocessing.rotate_counter_clockwise)
+        transforms.append(rot_tform)
+        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [rot_tform]})
+        image = transform_plane(image, final_tform, composite_transform)
+
+        if mask is not None:
+            if transform_mask:
+                mask.SetSpacing((pixel_size, pixel_size))
+                mask = transform_plane(mask, final_tform, composite_transform)
+
     # translate x/y image
     if preprocessing.translate_x or preprocessing.translate_y:
         logger.trace(f"Transforming image by translation: {preprocessing.translate_x}, {preprocessing.translate_y}")
@@ -292,19 +305,6 @@ def preprocess_reg_image_spatial(
         )
         transforms.append(translation_transform)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
-        image = transform_plane(image, final_tform, composite_transform)
-
-        if mask is not None:
-            if transform_mask:
-                mask.SetSpacing((pixel_size, pixel_size))
-                mask = transform_plane(mask, final_tform, composite_transform)
-
-    # rotate counter-clockwise
-    if float(preprocessing.rotate_counter_clockwise) != 0.0:
-        logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
-        rot_tform = generate_rigid_rotation_transform(image, pixel_size, preprocessing.rotate_counter_clockwise)
-        transforms.append(rot_tform)
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [rot_tform]})
         image = transform_plane(image, final_tform, composite_transform)
 
         if mask is not None:

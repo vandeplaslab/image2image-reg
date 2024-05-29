@@ -1,4 +1,5 @@
 """Transformation utilities."""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +11,7 @@ from pathlib import Path
 import itk
 import numpy as np
 import SimpleITK as sitk
+
 from image2image_reg.enums import ELX_TO_ITK_INTERPOLATORS
 from image2image_reg.models import Transform
 from image2image_reg.parameters.transformations import BASE_AFFINE_TRANSFORM, BASE_RIGID_TRANSFORM
@@ -76,14 +78,16 @@ def compute_affine_bound(shape: tuple[int, int], affine: np.ndarray, spacing: fl
 def calculate_center_of_rotation(
     affine: np.ndarray, shape: tuple[int, int], spacing: tuple[float, float]
 ) -> tuple[float, float]:
-    """
-    Calculate the center of rotation based on the affine matrix, image shape, and pixel spacing.
+    """Calculate the center of rotation based on the affine matrix, image shape, and pixel spacing.
 
     Parameters
     ----------
-    - affine: The 3x3 affine transformation matrix.
-    - shape: The (width, height) of the image.
-    - spacing: The (x, y) pixel spacing.
+    affine  : np.ndarray
+        The 3x3 affine transformation matrix.
+    shape : tuple[int, int]
+        The (width, height) of the image.
+    spacing : tuple[float, float]
+        The (x, y) pixel spacing.
 
     Returns
     -------
@@ -171,9 +175,9 @@ def prepare_tform_dict(tform_dict: dict, shape_tform: bool = False) -> dict:
 def transform_2d_image_itkelx(
     image: sitk.Image, transformation_maps: list, writer: str = "sitk", **_zarr_kwargs: ty.Any
 ):
-    """
-    Transform 2D images with multiple models and return the transformed image
-    or write the transformed image to disk as a .tif file.
+    """Transform 2D images with multiple models.
+
+    Return the transformed image or write the transformed image to disk as a .tif file.
     Multichannel or multicomponent images (RGB) have to be transformed a single channel at a time
     This function takes care of performing those transformations and reconstructing the image in the same
     data type as the input.
@@ -184,6 +188,8 @@ def transform_2d_image_itkelx(
         Image to be transformed
     transformation_maps : list
         list of SimpleElastix ParameterMaps to used for transformation
+    writer : str
+        Type of writer to use. Currently only supports "sitk" (default) and "zarr".
 
     Returns
     -------
@@ -238,6 +244,7 @@ def transform_2d_image_itkelx(
 
 
 def transform_image_to_sitk(image, tfx):
+    """Transform image to SimpleITK format."""
     # manage transformation/casting if data is multichannel or RGB
     # data is always returned in the same PixelIDType as it is entered
 
@@ -272,6 +279,7 @@ def transform_image_to_sitk(image, tfx):
 
 
 def transform_image_itkelx_to_sitk(image, tfx):
+    """Transform image to SimpleITK format."""
     # manage transformation/casting if data is multichannel or RGB
     # data is always returned in the same PixelIDType as it is entered
 
@@ -367,24 +375,23 @@ def generate_rigid_rotation_transform(image: sitk.Image, spacing: float, angle: 
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=angle)
     # calculate rotation center point
-    rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(
+    rot_x, rot_y = image.TransformContinuousIndexToPhysicalPoint(
         ((bound_w - 1) / 2, (bound_h - 1) / 2),
     )  # type: ignore[no-untyped-call]
 
     c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2  # type: ignore[no-untyped-call]
     c_x_phy, c_y_phy = image.TransformContinuousIndexToPhysicalPoint((c_x, c_y))  # type: ignore[no-untyped-call]
-    t_x = rot_cent_pt[0] - c_x_phy
-    t_y = rot_cent_pt[1] - c_y_phy
+    t_x = rot_x - c_x_phy
+    t_y = rot_y - c_y_phy
 
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(int(ceil(bound_w))), str(int(ceil(bound_h)))]
-    tform["CenterOfRotationPoint"] = [str(rot_cent_pt[0]), str(rot_cent_pt[1])]
+    tform["CenterOfRotationPoint"] = [str(rot_x), str(rot_y)]
     tform["TransformParameters"] = [
         str(np.radians(angle)),
         str(-1 * t_x),
         str(-1 * t_y),
     ]
-
     return tform
 
 
@@ -440,24 +447,28 @@ def generate_rigid_translation_transform_alt(
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
 
-    rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(
+    (rot_x, rot_y) = image.TransformContinuousIndexToPhysicalPoint(
         ((bound_w - 1) / 2, (bound_h - 1) / 2),
     )  # type: ignore[no-untyped-call]
     (
-        translation_x,
-        translation_y,
+        translation_x_phy,
+        translation_y_phy,
     ) = image.TransformContinuousIndexToPhysicalPoint(
         (float(translation_x), float(translation_y)),
     )  # type: ignore[no-untyped-call]
     # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
 
+    w = int(ceil(max(w - translation_x, bound_w)) * 1)
+    h = int(ceil(max(h - translation_y, bound_h)) * 1)
+
     tform["Spacing"] = [str(spacing), str(spacing)]
-    tform["Size"] = [str(int(ceil(w + translation_x))), str(int(ceil(h + translation_y)))]
-    tform["CenterOfRotationPoint"] = [str(rot_cent_pt[0]), str(rot_cent_pt[1])]
+    tform["Size"] = [str(w), str(h)]
+    # tform["Origin"] = [str(int(w)), str(int(h))]
+    tform["CenterOfRotationPoint"] = [str(rot_x), str(rot_y)]
     tform["TransformParameters"] = [
         str(0),
-        str(translation_x),
-        str(translation_y),
+        str(translation_x_phy),
+        str(translation_y_phy),
     ]
     return tform
 
@@ -515,6 +526,7 @@ def make_composite_itk(itk_transforms: list[Transform]) -> sitk.CompositeTransfo
 
 
 def collate_wsireg_transforms(parameter_data):
+    """Collate WsiReg transforms."""
     if isinstance(parameter_data, str) and Path(parameter_data).suffix == ".json":
         parameter_data = json.load(open(parameter_data))
 
@@ -544,6 +556,7 @@ def collate_wsireg_transforms(parameter_data):
 
 
 def wsireg_transforms_to_itk_composite(parameter_data):
+    """Wsireg transforms to ITK composite."""
     reg_transforms = collate_wsireg_transforms(parameter_data)
     composite_tform = make_composite_itk(reg_transforms)
 
@@ -551,6 +564,7 @@ def wsireg_transforms_to_itk_composite(parameter_data):
 
 
 def prepare_wsireg_transform_data(transform_data: str | dict | None):
+    """Prepare WsiReg transform data."""
     if isinstance(transform_data, str):
         transform_data = json_to_pmap_dict(transform_data)
 
@@ -567,6 +581,7 @@ def identity_elx_transform(
     image_size: tuple[int, int],
     image_spacing: tuple[int, int] | tuple[float, float],
 ):
+    """Create identity elastix transform."""
     identity = BASE_RIGID_TRANSFORM
     identity.update({"Size": [str(i) for i in image_size]})
     identity.update({"Spacing": [str(i) for i in image_spacing]})

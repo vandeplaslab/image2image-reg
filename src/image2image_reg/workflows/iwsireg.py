@@ -1006,18 +1006,30 @@ class IWsiReg:
             assert "source" in preprocessing, "Preprocessing must contain source key."
         self._add_registration_node(source, target, through, transform, preprocessing)
 
-    def remove_registration_path(self, source: str, target: str, through: str | None = None) -> None:
+    def find_index_of_registration_path(self, source: str, target: str, through: str | None = None) -> int | None:
         """Remove registration path."""
         index = None
-
         modalities = {"source": source, "target": through if through else target}
         for i, node in enumerate(self.registration_nodes):
             if node["modalities"] == modalities:
                 index = i
                 break
         if index is not None:
+            return index
+        return None
+
+    def remove_registration_path(self, source: str, target: str, through: str | None = None) -> None:
+        """Remove registration path."""
+        index = self.find_index_of_registration_path(source, target, through)
+        if index is not None:
             self.registration_nodes.pop(index)
             logger.trace(f"Removed registration path from '{source}' to '{target}' through '{through}'.")
+        self._create_transformation_paths(self.registration_paths)
+
+    def reset_registration_paths(self) -> None:
+        """Reset registration paths."""
+        self.registration_nodes.clear()
+        self.registration_paths.clear()
         self._create_transformation_paths(self.registration_paths)
 
     def _add_registration_node(
@@ -1223,9 +1235,9 @@ class IWsiReg:
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
