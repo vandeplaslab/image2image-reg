@@ -7,13 +7,14 @@ from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 from image2image_io.readers import BaseReader, ShapesReader, get_simple_reader
-from image2image_reg.models import BoundingBox, Modality, Polygon, Preprocessing
-from image2image_reg.preprocessing.convert import sitk_image_to_itk_image
 from koyo.json import read_json_data, write_json_data
 from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
+
+from image2image_reg.models import BoundingBox, Modality, Polygon, Preprocessing
+from image2image_reg.preprocessing.convert import sitk_image_to_itk_image
 
 
 def filename_with_suffix(filename: Path, extra: str, suffix: str) -> Path:
@@ -204,7 +205,7 @@ class ImageWrapper:
         with MeasureTimer() as timer:
             logger.trace(f"Pre-processing image {self.modality.name} with {preprocessing}...")
             image = preprocess_dask_array(image, channel_names, preprocessing)
-            logger.trace(f"Pre-processed image in {timer()}")
+            logger.trace(f"Initialized from dask array in {timer()}")
             # convert and cast
             image = convert_and_cast(image, preprocessing)
             logger.trace(f"Converted and cast image in {timer(since_last=True)}")
@@ -277,7 +278,8 @@ class ImageWrapper:
             pixel_size = self.image.GetSpacing()[0] if self.image else self.modality.pixel_size
         mask = bbox.to_sitk_image(image_shape, pixel_size)
         mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
+        kind = "bbox" if isinstance(bbox, BoundingBox) else "polygon"
         logger.trace(
-            f"Loaded mask from bbox for {self.modality.name} with shape: {image_shape} and pixel size: {pixel_size:.2f}"
+            f"Loaded mask from {kind} for {self.modality.name} with shape: {image_shape} and pixel size: {pixel_size:.2f}"
         )
         return mask

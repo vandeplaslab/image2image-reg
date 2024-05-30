@@ -133,13 +133,14 @@ def valis_init_configuration(
     feature_detector: str = "sensitive_vgg",
 ):
     """Create Valis configuration."""
-    from natsort import natsorted
+    from natsort import natsorted, ns
     from valis import valtils
 
     logger.info(f"Creating configuration for '{project_name}' in '{output_dir}'")
 
     output_dir = Path(output_dir)
-    filelist = natsorted(filelist)
+    # sort by name but ensure that its correctly rendered when not taking upper case into consideration
+    filelist = natsorted(filelist, alg=ns.IGNORECASE)
     filelist = [Path(path).resolve() for path in filelist]
     for path in filelist:
         assert path.exists(), f"{path} does not exist."
@@ -171,7 +172,7 @@ def valis_init_configuration(
     config = {
         "project_name": project_name,
         "filelist": [str(path) for path in filelist],
-        "reference": str(reference),
+        "reference": str(reference) if reference else None,
         "channel_kws": channel_kws,
         "check_for_reflections": check_for_reflections,
         "non_rigid_reg": non_rigid_reg,
@@ -244,84 +245,107 @@ def valis_registration(
     if kwargs:
         logger.warning(f"Unused keyword arguments: {kwargs}")
 
-    try:
-        registrar_path = output_dir / project_name / "data" / f"{project_name}_registrar.pickle"
-        if registrar_path.exists():
-            import pickle
+    with MeasureTimer() as main_timer:
+        try:
+            registrar_path = output_dir / project_name / "data" / f"{project_name}_registrar.pickle"
+            if registrar_path.exists():
+                import pickle
 
-            with open(registrar_path, "rb") as f:
-                registrar = pickle.load(f)
-        else:
-            registrar = registration.Valis(
-                str(output_dir),
-                str(output_dir),
-                name=project_name,
-                image_type="fluorescence",
-                imgs_ordered=True,
-                img_list=filelist,
-                reference_img_f=str(reference) if reference else None,
-                align_to_reference=reference is not None,
-                check_for_reflections=check_for_reflections,
-                feature_detector_cls=feature_detector_cls,
-                **kws,
-            )
+                with open(registrar_path, "rb") as f:
+                    registrar = pickle.load(f)
+            else:
+                registrar = registration.Valis(
+                    str(output_dir),
+                    str(output_dir),
+                    name=project_name,
+                    image_type="fluorescence",
+                    imgs_ordered=True,
+                    img_list=filelist,
+                    reference_img_f=str(reference) if reference else None,
+                    align_to_reference=reference is not None,
+                    check_for_reflections=check_for_reflections,
+                    feature_detector_cls=feature_detector_cls,
+                    **kws,
+                )
 
-            with MeasureTimer() as timer:
-                registrar.register(processor_dict=channel_kws)
-            logger.info(f"Registered low-res images in {timer()}")
-
-            # We can also plot the high resolution matches using `Valis.draw_matches`:
-            try:
-                matches_dst_dir = Path(registrar.dst_dir) / "matches-initial"
-                registrar.draw_matches(matches_dst_dir)
-            except Exception:
-                logger.error("Failed to export matches.")
-
-            # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an image that
-            # is 25% full resolution.
-            if micro_reg:
-                try:
-                    img_dims = np.array(
-                        [slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()]
-                    )
-                    min_max_size = np.min([np.max(d) for d in img_dims])
-                    micro_reg_size = np.floor(min_max_size * micro_reg_fraction).astype(int)
-                except Exception:
-                    micro_reg_size = 3000
-
-                logger.info(f"Micro-registering using {micro_reg_size} pixels.")
-                # Perform high resolution non-rigid registration
                 with MeasureTimer() as timer:
+                    registrar.register(processor_dict=channel_kws)
+                logger.info(f"Registered low-res images in {timer()}")
+
+                # We can also plot the high resolution matches using `Valis.draw_matches`:
+                try:
+                    with MeasureTimer() as timer:
+                        matches_dst_dir = Path(registrar.dst_dir) / "matches-initial"
+                        registrar.draw_matches(matches_dst_dir)
+                    logger.info(f"Exported matches in {timer()}")
+                except Exception:
+                    logger.error("Failed to export matches.")
+
+                # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an
+                # image that is proportion of the full resolution.
+                if micro_reg:
                     try:
-                        registrar.register_micro(
-                            max_non_rigid_registration_dim_px=micro_reg_size,
-                            processor_dict=channel_kws,
-                            reference_img_f=str(reference) if reference else None,
-                            align_to_reference=True,
+                        img_dims = np.array(
+                            [slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()]
                         )
-                    except Exception as exc:
-                        logger.error(f"Error during non-rigid registration: {exc}")
-                logger.info(f"Registered high-res images in {timer()}")
+                        min_max_size = np.min([np.max(d) for d in img_dims])
+                        micro_reg_size = np.floor(min_max_size * micro_reg_fraction).astype(int)
+                    except Exception:
+                        micro_reg_size = 3000
 
-            # We can also plot the high resolution matches using `Valis.draw_matches`:
-            try:
-                matches_dst_dir = Path(registrar.dst_dir) / "matches-final"
-                registrar.draw_matches(matches_dst_dir)
-            except Exception:
-                logger.error("Failed to export matches.")
+                    logger.info(f"Micro-registering using {micro_reg_size} pixels.")
+                    # Perform high resolution non-rigid registration
+                    with MeasureTimer() as timer:
+                        try:
+                            registrar.register_micro(
+                                max_non_rigid_registration_dim_px=micro_reg_size,
+                                processor_dict=channel_kws,
+                                reference_img_f=str(reference) if reference else None,
+                                align_to_reference=reference is not None,
+                            )
+                        except Exception as exc:
+                            logger.error(f"Error during non-rigid registration: {exc}")
+                    logger.info(f"Registered high-res images in {timer()}")
 
-        # export images to OME-TIFFs
-        registered_dir = output_dir / project_name / "registered"
-        registered_dir.mkdir(exist_ok=True, parents=True)
-        transform_registered_image(registrar, registered_dir, non_rigid_reg=non_rigid_reg)
+                # We can also plot the high resolution matches using `Valis.draw_matches`:
+                try:
+                    with MeasureTimer() as timer:
+                        matches_dst_dir = Path(registrar.dst_dir) / "matches-final"
+                        registrar.draw_matches(matches_dst_dir)
+                    logger.info(f"Exported matches in {timer()}")
+                except Exception as exc:
+                    logger.error(f"Failed to export matches: {exc}.")
 
-        # export attached images to OME-TIFFs
-        attached_images = kwargs.get("attachment_images", {})
-        for src_name, attachments in attached_images.items():
-            src_path = get_slide_path(registrar, src_name)
-            transform_attached_image(registrar, src_path, attachments, registered_dir)
+            # export images to OME-TIFFs
+            with MeasureTimer() as timer:
+                registered_dir = output_dir / project_name / "registered"
+                registered_dir.mkdir(exist_ok=True, parents=True)
+                transform_registered_image(registrar, registered_dir, non_rigid_reg=non_rigid_reg)
+            logger.info(f"Exported registered images in {timer()}")
 
-    except Exception as exc:
+            # export attached images to OME-TIFFs
+            with MeasureTimer() as timer:
+                attached_images = kwargs.get("attachment_images", {})
+                for src_name, attachments in attached_images.items():
+                    src_path = get_slide_path(registrar, src_name)
+                    transform_attached_image(registrar, src_path, attachments, registered_dir)
+            logger.info(f"Exported attached images in {timer()}")
+
+        except Exception as exc:
+            registration.kill_jvm()
+            raise exc
         registration.kill_jvm()
-        raise exc
-    registration.kill_jvm()
+    logger.info(f"Completed registration in {main_timer()}")
+
+
+def get_valis_registrar(project_name: str, output_dir: PathLike) -> None:
+    """Get Valis registrar if it's available."""
+    registrar = None
+    output_dir = Path(output_dir)
+    registrar_path = output_dir / project_name / "data" / f"{project_name}_registrar.pickle"
+    if registrar_path.exists():
+        import pickle
+
+        with open(registrar_path, "rb") as f:
+            registrar = pickle.load(f)
+    return registrar

@@ -54,12 +54,15 @@ def preprocess_dask_array(
         if preprocessing:
             array_out = np.asarray(grayscale(array, is_interleaved=is_rgb))
             array_out = sitk.GetImageFromArray(array_out)  # type: ignore[assignment]
+            logger.trace("Converting RGB to greyscale")
         else:
             array_out = np.asarray(array)
             array_out = sitk.GetImageFromArray(array_out, isVector=True)  # type: ignore[assignment]
+            logger.trace("Converting RGB to SimpleITK image")
     # no need to pre-process
     elif len(array.shape) == 2:
         array_out = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
+        logger.trace("Converting 2D array to SimpleITK image")
     else:
         # select channels
         if preprocessing:
@@ -68,6 +71,7 @@ def preprocess_dask_array(
                 channel_indices = list(preprocessing.channel_indices)
             elif len(array.shape) > 2 and preprocessing.channel_names is not None:
                 channel_indices = get_channel_indices_from_names(channel_names, preprocessing.channel_names)
+            logger.trace(f"Pre-processing dask array with {channel_indices} channels.")
             if channel_indices:
                 array = array[sort_indices(channel_indices), :, :]
         array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
@@ -164,14 +168,17 @@ def preprocess_intensity(
     """Preprocess image intensity data to single channel image."""
     if preprocessing.max_intensity_projection:
         image = sitk_max_int_proj(image)
+        logger.trace("Maximum intensity projection applied")
     if image.GetDepth() > 1:
-        image = sitk_mean_int_proj(image)
         logger.warning("Image has more than one channel, mean intensity projection will be used")
+        image = sitk_mean_int_proj(image)
+        logger.trace("Mean intensity projection applied")
     if preprocessing.contrast_enhance:
         image = contrast_enhance(image)
+        logger.trace("Contrast enhancement applied")
     if preprocessing.invert_intensity:
         image = sitk_inv_int(image)
-
+        logger.trace("Inverted intensity")
     if preprocessing.custom_processing:
         for k, v in preprocessing.custom_processing.items():
             logger.trace(f"Performing preprocessing step: {k}")
@@ -267,6 +274,7 @@ def preprocess_reg_image_spatial(
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))
             mask = sitk.Shrink(mask(preprocessing.downsample, preprocessing.downsample))
+            logger.trace("Downsampled mask")
         pixel_size = image.GetSpacing()[0]
 
     # apply affine transformation
@@ -279,10 +287,10 @@ def preprocess_reg_image_spatial(
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
         image = transform_plane(image, final_tform, composite_transform)
 
-        if mask is not None:
+        if mask is not None and transform_mask:
             mask.SetSpacing((pixel_size, pixel_size))
-            if transform_mask:
-                mask = transform_plane(mask, final_tform, composite_transform)
+            mask = transform_plane(mask, final_tform, composite_transform)
+            logger.trace("Applied affine transform to mask")
 
     # rotate counter-clockwise
     if float(preprocessing.rotate_counter_clockwise) != 0.0:
@@ -292,10 +300,10 @@ def preprocess_reg_image_spatial(
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [rot_tform]})
         image = transform_plane(image, final_tform, composite_transform)
 
-        if mask is not None:
-            if transform_mask:
-                mask.SetSpacing((pixel_size, pixel_size))
-                mask = transform_plane(mask, final_tform, composite_transform)
+        if mask is not None and transform_mask:
+            mask.SetSpacing((pixel_size, pixel_size))
+            mask = transform_plane(mask, final_tform, composite_transform)
+            logger.trace("Rotated mask")
 
     # translate x/y image
     if preprocessing.translate_x or preprocessing.translate_y:
@@ -307,10 +315,10 @@ def preprocess_reg_image_spatial(
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
         image = transform_plane(image, final_tform, composite_transform)
 
-        if mask is not None:
-            if transform_mask:
-                mask.SetSpacing((pixel_size, pixel_size))
-                mask = transform_plane(mask, final_tform, composite_transform)
+        if mask is not None and transform_mask:
+            mask.SetSpacing((pixel_size, pixel_size))
+            mask = transform_plane(mask, final_tform, composite_transform)
+            logger.trace("Translated mask")
 
     # flip image
     if preprocessing.flip:
@@ -320,10 +328,10 @@ def preprocess_reg_image_spatial(
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [flip_tform]})
         image = transform_plane(image, final_tform, composite_transform)
 
-        if mask is not None:
-            if transform_mask:
-                mask.SetSpacing((pixel_size, pixel_size))
-                mask = transform_plane(mask, final_tform, composite_transform)
+        if mask is not None and transform_mask:
+            mask.SetSpacing((pixel_size, pixel_size))
+            mask = transform_plane(mask, final_tform, composite_transform)
+            logger.trace("Flipped mask")
 
     # crop to bbox
     if mask and preprocessing.crop_to_bbox:
@@ -331,6 +339,7 @@ def preprocess_reg_image_spatial(
         if preprocessing.crop_bbox is None:
             mask_bbox = compute_mask_to_bbox(mask)
             preprocessing.crop_bbox = mask_bbox
+            logger.trace(f"Computed mask bounding box: {mask_bbox}")
 
     original_size_transform = None
     if preprocessing.crop_bbox:
@@ -352,7 +361,6 @@ def preprocess_reg_image_spatial(
         if mask is not None:
             mask.SetSpacing((pixel_size, pixel_size))
             mask = transform_plane(mask, final_tform, composite_transform)
-
     return image, mask, transforms, original_size_transform
 
 

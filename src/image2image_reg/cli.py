@@ -1108,7 +1108,7 @@ if valis_is_installed:
         name: str,
         output_dir: PathLike,
         image: list[PathLike],
-        reference: PathLike,
+        reference: PathLike | None,
         check_for_reflection: bool,
         no_non_rigid_reg: bool,
         no_micro_reg: bool,
