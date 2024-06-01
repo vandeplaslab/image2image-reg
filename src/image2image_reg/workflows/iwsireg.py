@@ -614,14 +614,14 @@ class IWsiReg:
         if preprocessing:
             preprocessing.channel_names = reader.channel_names
             preprocessing.channel_indices = reader.channel_ids
+            preprocessing.mask = mask
+            preprocessing.mask_bbox = mask_bbox
 
         return self.add_modality(
             name,
             path,
             pixel_size=reader.resolution or 1.0,
             channel_names=reader.channel_names,
-            mask=mask,
-            mask_bbox=mask_bbox,
             preprocessing=preprocessing,
             export=export,
             override=override,
@@ -635,11 +635,11 @@ class IWsiReg:
         channel_names: list[str] | None = None,
         channel_colors: list[str] | None = None,
         preprocessing: Preprocessing | dict[str, ty.Any] | None = None,
+        transform_mask: bool = True,
         mask: PathLike | np.ndarray | None = None,
         mask_bbox: tuple[int, int, int, int] | BoundingBox | None = None,
         mask_polygon: np.ndarray | Polygon | None = None,
         output_pixel_size: tuple[float, float] | None = None,
-        transform_mask: bool = True,
         export: Export | dict[str, ty.Any] | None = None,
         override: bool = False,
         raise_on_error: bool = True,
@@ -647,34 +647,44 @@ class IWsiReg:
         """Add modality."""
         from image2image_io.readers import is_supported
 
+        if "initial" in name:
+            raise ValueError("Sorry, the word 'initial' cannot be used in the modality name as it's reserved.")
+
         path = Path(path)
         if not path.exists() and raise_on_error:
             raise ValueError("Path does not exist.")
         if not is_supported(path, raise_on_error):
             raise ValueError("Unsupported file format.")
+        if pixel_size <= 0:
+            raise ValueError("Pixel size must be greater than 0.")
         if name in self.modalities and not override:
             raise ValueError(f"Modality '{name}' name already exists.")
-        if isinstance(preprocessing, dict):
-            preprocessing = Preprocessing(**preprocessing)
-        if isinstance(export, dict):
-            export = Export(**export)
+        if mask is not None and mask_bbox is not None and mask_polygon is not None:
+            raise ValueError("Mask can only be specified using one of the three options: mask, mask_bbox, mask_polygon")
         if isinstance(mask, (str, Path)):
             mask = Path(mask)
             if not mask.exists():
                 raise ValueError("Mask path does not exist.")
-        if pixel_size <= 0:
-            raise ValueError("Pixel size must be greater than 0.")
-        if isinstance(output_pixel_size, (int, float)):
-            output_pixel_size = (float(output_pixel_size), float(output_pixel_size))
-        if mask is not None and mask_bbox is not None and mask_polygon is not None:
-            raise ValueError("Mask can only be specified using one of the three options: mask, mask_bbox, mask_polygon")
         if mask_bbox is not None:
             mask_bbox = _transform_to_bbox(mask_bbox)
         if mask_polygon is not None:
             mask_polygon = _transform_to_polygon(mask_polygon)
-        if "initial" in name:
-            raise ValueError("Sorry, the word 'initial' cannot be used in the modality name as it's reserved.")
-
+        if isinstance(preprocessing, dict):
+            # preprocessing["use_mask"] = use_mask
+            preprocessing["mask"] = mask
+            preprocessing["mask_bbox"] = mask_bbox
+            preprocessing["mask_polygon"] = mask_polygon
+            preprocessing["transform_mask"] = transform_mask
+            preprocessing = Preprocessing(**preprocessing)
+        elif isinstance(preprocessing, Preprocessing):
+            preprocessing.mask = mask
+            preprocessing.mask_bbox = mask_bbox
+            preprocessing.mask_polygon = mask_polygon
+            preprocessing.transform_mask = transform_mask
+        if isinstance(export, dict):
+            export = Export(**export)
+        if isinstance(output_pixel_size, (int, float)):
+            output_pixel_size = (float(output_pixel_size), float(output_pixel_size))
         self.modalities[name] = Modality(
             name=name,
             path=path.resolve() if raise_on_error else path,
@@ -682,12 +692,8 @@ class IWsiReg:
             channel_names=channel_names,
             channel_colors=channel_colors,
             preprocessing=preprocessing,
-            mask=mask,
             output_pixel_size=output_pixel_size,
-            mask_bbox=mask_bbox,
-            mask_polygon=mask_polygon,
             export=export,
-            transform_mask=transform_mask,
         )
         logger.trace(f"Added modality '{name}'.")
         return self.modalities[name]
@@ -798,12 +804,7 @@ class IWsiReg:
             raise ValueError("Modality does not exist. Please add it before trying to add an attachment.")
         self.add_attachment_geojson(attach_to_modality, name, path)
 
-    def add_attachment_geojson(
-        self,
-        attach_to: str,
-        name: str,
-        paths: list[PathLike],
-    ) -> None:
+    def add_attachment_geojson(self, attach_to: str, name: str, paths: list[PathLike]) -> None:
         """
         Add attached shapes.
 
@@ -833,13 +834,7 @@ class IWsiReg:
         pixel_size = self.modalities[attach_to].pixel_size
         self._add_geojson_set(attach_to, name, paths_, pixel_size)
 
-    def _add_geojson_set(
-        self,
-        attach_to: str,
-        name: str,
-        paths: list[Path],
-        pixel_size: float,
-    ) -> None:
+    def _add_geojson_set(self, attach_to: str, name: str, paths: list[Path], pixel_size: float) -> None:
         """
         Add a shape set to the graph.
 
@@ -885,12 +880,7 @@ class IWsiReg:
             raise ValueError("Modality does not exist. Please add it before trying to add an attachment.")
         self.add_attachment_points(attach_to_modality, name, path)
 
-    def add_attachment_points(
-        self,
-        attach_to_modality: str,
-        name: str,
-        paths: list[PathLike],
-    ) -> None:
+    def add_attachment_points(self, attach_to_modality: str, name: str, paths: list[PathLike]) -> None:
         """
         Add attached shapes.
 
@@ -920,13 +910,7 @@ class IWsiReg:
         pixel_size = self.modalities[attach_to_modality].pixel_size
         self._add_points_set(attach_to_modality, name, paths_, pixel_size)
 
-    def _add_points_set(
-        self,
-        attach_to_modality: str,
-        name: str,
-        paths: list[Path],
-        pixel_size: float,
-    ) -> None:
+    def _add_points_set(self, attach_to_modality: str, name: str, paths: list[Path], pixel_size: float) -> None:
         """
         Add a shape set to the graph.
 
@@ -1237,9 +1221,9 @@ class IWsiReg:
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -1708,8 +1692,7 @@ class IWsiReg:
             or modality.preprocessing.flip
             or modality.preprocessing.translate_x != 0
             or modality.preprocessing.translate_y != 0
-            or modality.preprocessing.crop_to_bbox
-            or modality.preprocessing.crop_bbox
+            or modality.is_cropped()
             or modality.preprocessing.affine is not None
         ):
             initial_transform = ImageWrapper.load_initial_transform(modality, self.cache_dir)
@@ -1968,7 +1951,7 @@ class IWsiReg:
 
         # write config
         config: Config = {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "name": self.name,
             # "output_dir": str(self.project_dir),
             "cache_images": self.cache_images,

@@ -334,7 +334,7 @@ def preprocess_reg_image_spatial(
             logger.trace("Flipped mask")
 
     # crop to bbox
-    if mask and preprocessing.crop_to_bbox:
+    if mask and preprocessing.use_crop:
         logger.trace("Computing mask bounding box")
         if preprocessing.crop_bbox is None:
             mask_bbox = compute_mask_to_bbox(mask)

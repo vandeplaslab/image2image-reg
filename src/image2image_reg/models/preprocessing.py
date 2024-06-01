@@ -9,7 +9,7 @@ from koyo.json import read_json_data
 from koyo.typing import PathLike
 from pydantic import BaseModel, validator
 
-from image2image_reg.enums import CoordinateFlip, ImageType
+from image2image_reg.enums import ArrayLike, CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 
 
@@ -59,7 +59,7 @@ class Preprocessing(BaseModel):
         Translate image in x direction (specify in physical units, eg. microns)
     translate_y: int
         Translate image in y direction (specify in physical units, eg. microns)
-    crop_to_bbox: bool
+    use_crop: bool
         Convert a binary mask to a bounding box and crop to this area
     crop_bbox: tuple or list of 4 ints
         supply a pre-computed list of bbox info of form x,y,width,height
@@ -96,12 +96,15 @@ class Preprocessing(BaseModel):
     flip: ty.Optional[CoordinateFlip] = None
     translate_x: int = 0
     translate_y: int = 0
-    crop_to_bbox: bool = False
-    crop_bbox: ty.Optional[BoundingBox] = None
-    crop_polygon: ty.Optional[Polygon] = None
     downsample: int = 1
 
+    # crop pre-processing
+    use_crop: bool = False
+    crop_bbox: ty.Optional[BoundingBox] = None
+    crop_polygon: ty.Optional[Polygon] = None
+
     # mask pre-processing
+    transform_mask: bool = True
     use_mask: bool = True
     mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None
     mask_bbox: ty.Optional[BoundingBox] = None
@@ -115,7 +118,7 @@ class Preprocessing(BaseModel):
         if "rotate_cc" in kwargs:
             kwargs["rotate_counter_clockwise"] = kwargs.pop("rotate_cc")
         if "crop_to_mask_bbox" in kwargs:
-            kwargs["crop_to_bbox"] = kwargs.pop("crop_to_mask_bbox")
+            kwargs["use_crop"] = kwargs.pop("crop_to_mask_bbox")
         # if "mask_bbox" in kwargs:
         #     kwargs["crop_bbox"] = kwargs.pop("mask_bbox")
         if "downsampling" in kwargs:
@@ -124,7 +127,7 @@ class Preprocessing(BaseModel):
 
     def is_cropped(self) -> bool:
         """Return if cropped."""
-        return self.crop_to_bbox and (self.crop_bbox is not None or self.crop_polygon is not None)
+        return self.use_crop and (self.crop_bbox is not None or self.crop_polygon is not None)
 
     def is_masked(self) -> bool:
         """Return if masked."""
@@ -156,6 +159,10 @@ class Preprocessing(BaseModel):
             out += "\n"
         if self.downsample > 1:
             out += f"x{self.downsample} downsample"
+        if self.is_masked():
+            out += "mask was specified"
+        if self.is_cropped():
+            out += "crop was specified"
         return out
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
@@ -165,6 +172,15 @@ class Preprocessing(BaseModel):
             data["affine"] = data["affine"].tolist()
         if data.get("crop_bbox"):
             data["crop_bbox"] = data["crop_bbox"].to_dict(as_wsireg)
+        if data.get("crop_polygon"):
+            data["crop_polygon"] = data["crop_polygon"].to_dict(as_wsireg)
+        if data.get("mask"):
+            if isinstance(data["mask"], ArrayLike):
+                data["mask"] = "ArrayLike"
+        if data.get("mask_bbox"):
+            data["mask_bbox"] = data["mask_bbox"].to_dict(as_wsireg)
+        if data.get("mask_polygon"):
+            data["mask_polygon"] = data["mask_polygon"].to_dict(as_wsireg)
         if as_wsireg:
             if data.get("channel_indices"):
                 data["ch_indices"] = data.pop("channel_indices")
@@ -177,14 +193,16 @@ class Preprocessing(BaseModel):
             if data.get("max_intensity_projection"):
                 data["max_int_proj"] = data.pop("max_intensity_projection")
             for key in [
-                "crop_to_bbox",
+                "use_crop",
                 "crop_polygon",
                 "translate_x",
                 "translate_y",
                 "channel_names",
+                "use_mask",
                 "mask",
                 "mask_bbox",
                 "mask_polygon",
+                "transform_mask",
             ]:
                 if data.get(key):
                     data.pop(key)
@@ -215,11 +233,11 @@ class Preprocessing(BaseModel):
             invert_intensity=True,
         )
 
-    @validator("crop_bbox", pre=True)
-    def _validate_bbox(cls, v):
+    @validator("mask_bbox", "crop_bbox", pre=True)
+    def _validate_bbox(cls, v) -> ty.Optional[BoundingBox]:
         return _transform_to_bbox(v)
 
-    @validator("crop_polygon", pre=True)
+    @validator("mask_polygon", "crop_polygon", pre=True)
     def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
         return _transform_to_polygon(v)
 

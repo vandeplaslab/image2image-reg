@@ -59,12 +59,12 @@ class ImageWrapper:
 
         if self._mask is None and preprocessing:
             if preprocessing.use_mask:
-                if self.modality.mask is not None:
-                    self._mask = self.read_mask(self.modality.mask)
-                if self.modality.mask_bbox is not None:
-                    self._mask = self.make_bbox_mask(self.modality.mask_bbox)
-                elif self.modality.mask_polygon is not None:
-                    self._mask = self.make_bbox_mask(self.modality.mask_polygon)
+                if self.modality.preprocessing.mask is not None:
+                    self._mask = self.read_mask(self.modality.preprocessing.mask)
+                if self.modality.preprocessing.mask_bbox is not None:
+                    self._mask = self.make_bbox_mask(self.modality.preprocessing.mask_bbox)
+                elif self.modality.preprocessing.mask_polygon is not None:
+                    self._mask = self.make_bbox_mask(self.modality.preprocessing.mask_polygon)
         return self._mask
 
     @property
@@ -211,7 +211,7 @@ class ImageWrapper:
             logger.trace(f"Converted and cast image in {timer(since_last=True)}")
 
             # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
-            mask = self.mask if self.modality.transform_mask else None
+            mask = self.mask if self.modality.preprocessing.transform_mask else None
             # set image
             if preprocessing:
                 self.image, mask, self.initial_transforms, self.original_size_transform = preprocess(
@@ -221,12 +221,12 @@ class ImageWrapper:
                     self.reader.resolution,
                     self.reader.is_rgb,
                     self.initial_transforms,
-                    transform_mask=self.modality.transform_mask,
+                    transform_mask=self.modality.preprocessing.transform_mask,
                 )
             else:
                 self.image, mask, self.original_size_transform = image, mask, None
             # mask was not transformed so let's now retrieve it if it actually exists
-            if not self.modality.transform_mask:
+            if not self.modality.preprocessing.transform_mask:
                 mask = self.mask
             # overwrite existing mask
             self._mask = mask

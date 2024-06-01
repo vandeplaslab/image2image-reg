@@ -1,13 +1,15 @@
 """Test bbox."""
+
 import numpy as np
 import pytest
-from image2image_reg.models import BoundingBox, Export, Polygon, Preprocessing
 from pydantic import ValidationError
+
+from image2image_reg.models import BoundingBox, Export, Polygon, Preprocessing
 
 
 def test_polygon():
     poly = Polygon(np.array([[0, 0], [0, 10], [10, 10], [10, 0]]))
-    assert poly.yx.shape == (4, 2), "Shape should be (4, 2)"
+    assert poly.xy.shape == (4, 2), "Shape should be (4, 2)"
 
     mask = poly.to_mask((100, 100))
     assert mask.shape == (100, 100), "Shape should be (100, 100)"
@@ -69,3 +71,31 @@ def test_prepro():
     assert prepro.rotate_counter_clockwise == 0, "rotate_counter_clockwise should be 0"
     prepro.rotate_counter_clockwise = 360.0
     assert prepro.rotate_counter_clockwise == 0, "rotate_counter_clockwise should be 0"
+
+
+def test_prepro_with_mask():
+    prepro = Preprocessing(use_mask=True, mask_bbox=[0, 0, 100, 100])
+    assert prepro.mask_bbox is not None, "mask is None"
+    config = prepro.to_dict()
+    assert config, "Config is missing"
+    assert not isinstance(config["mask_bbox"], BoundingBox), "mask_bbox should not be a bbox"
+
+    prepro = Preprocessing(use_crop=True, mask_polygon=[[100, 0], [200, 0], [400, 0]])
+    assert prepro.mask_polygon is not None, "mask is None"
+    config = prepro.to_dict()
+    assert config, "Config is missing"
+    assert not isinstance(config["mask_polygon"], Polygon), "mask_polygon should not be a bbox"
+
+
+def test_prepro_with_crop():
+    prepro = Preprocessing(use_crop=True, crop_bbox=[0, 0, 100, 100])
+    assert prepro.crop_bbox is not None, "crop is None"
+    config = prepro.to_dict()
+    assert config, "Config is missing"
+    assert not isinstance(config["crop_bbox"], BoundingBox), "crop_bbox should not be a bbox"
+
+    prepro = Preprocessing(use_crop=True, crop_polygon=[[100, 0], [200, 0], [400, 0]])
+    assert prepro.crop_polygon is not None, "crop is None"
+    config = prepro.to_dict()
+    assert config, "Config is missing"
+    assert not isinstance(config["crop_polygon"], Polygon), "crop_polygon should not be a bbox"

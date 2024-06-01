@@ -1,4 +1,5 @@
 """Test CLI."""
+
 import os
 
 from image2image_reg.utils._test import get_test_file
@@ -143,11 +144,11 @@ def test_cli_add_images_path_mask_bbox(tmp_path):
 
     obj = IWsiReg.from_path(path)
     modality = obj.modalities["target"]
-    assert modality.mask_bbox is not None, "No mask bbox found."
-    assert modality.mask_bbox.x == 0
-    assert modality.mask_bbox.y == 0
-    assert modality.mask_bbox.width == 1000
-    assert modality.mask_bbox.height == 1000
+    assert modality.preprocessing.mask_bbox is not None, "No mask bbox found."
+    assert modality.preprocessing.mask_bbox.x == 0
+    assert modality.preprocessing.mask_bbox.y == 0
+    assert modality.preprocessing.mask_bbox.width == 1000
+    assert modality.preprocessing.mask_bbox.height == 1000
 
 
 def test_cli_merge(tmp_path):

@@ -6,10 +6,9 @@ import dask.array as da
 import numpy as np
 import zarr
 from koyo.typing import PathLike
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 
 from image2image_reg.enums import ArrayLike
-from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 from image2image_reg.models.export import Export
 from image2image_reg.models.preprocessing import Preprocessing
 
@@ -34,38 +33,22 @@ class Modality(BaseModel):
     pixel_size: float = 1.0
     output_pixel_size: ty.Optional[tuple[float, float]] = None
 
-    # need to be deprecated and moved to pre-processing
-    mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None  # deprecate (move to pre-processing)
-    mask_bbox: ty.Optional[BoundingBox] = None  # deprecate (move to pre-processing)
-    mask_polygon: ty.Optional[Polygon] = None  # deprecate (move to pre-processing)
-    transform_mask: bool = True  # deprecate (move to pre-processing)
-
-    @validator("mask_bbox", pre=True)
-    def _validate_bbox(cls, v) -> ty.Optional[BoundingBox]:
-        return _transform_to_bbox(v)
-
-    @validator("mask_polygon", pre=True)
-    def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
-        return _transform_to_polygon(v)
-
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Convert to dict."""
         data = self.dict(exclude_none=True, exclude_defaults=False)
         if data.get("preprocessing"):
             if isinstance(data["preprocessing"], Preprocessing):
                 data["preprocessing"] = data["preprocessing"].to_dict(as_wsireg)
+            else:
+                pre = {}
+                for k, v in data["preprocessing"].items():
+                    pre[k] = v.to_dict(as_wsireg) if hasattr(v, "to_dict") else v
+                data["preprocessing"] = pre
         if data.get("export"):
             if isinstance(data["export"], Export):
                 data["export"] = data["export"].to_dict()
         if isinstance(data["path"], ArrayLike):
             data["path"] = "ArrayLike"
-        if data.get("mask"):
-            if isinstance(data["mask"], ArrayLike):
-                data["mask"] = "ArrayLike"
-        if data.get("mask_bbox"):
-            data["mask_bbox"] = data["mask_bbox"].to_dict()
-        if data.get("mask_polygon"):
-            data["mask_polygon"] = data["mask_polygon"].to_dict()
         # if export for wsireg, let's remove all extra components and rename few attributes
         if as_wsireg:
             if data.get("path"):
@@ -76,10 +59,6 @@ class Modality(BaseModel):
                 data["output_res"] = data.pop("output_pixel_size")
             if data.get("export"):
                 data.pop("export")
-            if data.get("mask_polygon"):
-                data.pop("mask_polygon")
-            if data.get("transform_mask"):
-                data.pop("transform_mask")
         return data
 
     def to_wrapper(self):
@@ -90,6 +69,8 @@ class Modality(BaseModel):
 
     def is_masked(self) -> bool:
         """Return if masked."""
-        return self.preprocessing.use_mask and (
-            self.mask is not None or self.mask_bbox is not None or self.mask_polygon is not None
-        )
+        return self.preprocessing.is_masked()
+
+    def is_cropped(self) -> bool:
+        """Return if masked."""
+        return self.preprocessing.is_cropped()
