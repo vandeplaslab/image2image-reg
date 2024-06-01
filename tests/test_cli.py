@@ -43,7 +43,7 @@ def test_cli_add_images_path_attachment(tmp_path):
     assert exit_status == 0
 
     # add shapes
-    exit_status = os.system(f"iwsireg --debug add-shape -p '{path!s}' -a source -n shape -s {polygon!s}")
+    exit_status = os.system(f"iwsireg --debug add-shape -p '{path!s}' -a source -n shape -f {polygon!s}")
     assert exit_status == 0
 
     # add merge modalities

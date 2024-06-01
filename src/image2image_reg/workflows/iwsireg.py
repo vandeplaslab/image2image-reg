@@ -137,7 +137,7 @@ class IWsiReg:
                 raise ValueError("Name must be provided.")
             if output_dir is None:
                 raise ValueError("Output directory must be provided.")
-            self.project_dir = (Path(output_dir) / self.format_project_name(name)).resolve()
+            self.project_dir = (Path(output_dir) / self.format_project_name(name)).with_suffix(".wsireg").resolve()
         self.name = self.format_project_name(name)
         self.cache_images = cache
         self.pairwise = pairwise
@@ -670,16 +670,14 @@ class IWsiReg:
         if mask_polygon is not None:
             mask_polygon = _transform_to_polygon(mask_polygon)
         if isinstance(preprocessing, dict):
-            # preprocessing["use_mask"] = use_mask
-            preprocessing["mask"] = mask
-            preprocessing["mask_bbox"] = mask_bbox
-            preprocessing["mask_polygon"] = mask_polygon
-            preprocessing["transform_mask"] = transform_mask
             preprocessing = Preprocessing(**preprocessing)
-        elif isinstance(preprocessing, Preprocessing):
+        if preprocessing.mask is None and mask is not None:
             preprocessing.mask = mask
+        if preprocessing.mask_bbox is None and mask_bbox is not None:
             preprocessing.mask_bbox = mask_bbox
+        if preprocessing.mask_polygon is None and mask_polygon is not None:
             preprocessing.mask_polygon = mask_polygon
+        if not preprocessing.transform_mask and transform_mask:
             preprocessing.transform_mask = transform_mask
         if isinstance(export, dict):
             export = Export(**export)
@@ -1034,9 +1032,13 @@ class IWsiReg:
         source_preprocessing, target_preprocessing = None, None
         if preprocessing:
             if preprocessing.get("source"):
-                source_preprocessing = Preprocessing(**preprocessing.get("source"))  # type: ignore[arg-type]
+                source_preprocessing = preprocessing["source"]
+                if isinstance(source_preprocessing, dict):
+                    source_preprocessing = Preprocessing(**source_preprocessing)  # type: ignore[arg-type]
             if preprocessing.get("target"):
-                target_preprocessing = Preprocessing(**preprocessing.get("target"))  # type: ignore[arg-type]
+                target_preprocessing = preprocessing["target"]
+                if isinstance(target_preprocessing, dict):
+                    target_preprocessing = Preprocessing(**target_preprocessing)  # type: ignore[arg-type]
 
         # validate transform
         if isinstance(transform, str):
@@ -1907,9 +1909,7 @@ class IWsiReg:
             merged_paths.append(path)
         return merged_paths
 
-    def save(self, registered: bool = False, auto: bool = False) -> Path:
-        """Save configuration to file."""
-        status = "registered" if registered is True else "setup"
+    def _get_config(self, registered: bool = False) -> dict:
         registration_paths = {}
         for index, edge in enumerate(self.registration_nodes):
             source = edge["modalities"]["source"]
@@ -1966,7 +1966,12 @@ class IWsiReg:
             "merge": self.merge_images,
             "merge_images": self.merge_modalities if len(self.merge_modalities) > 0 else None,
         }
+        return config
 
+    def save(self, registered: bool = False, auto: bool = False) -> Path:
+        """Save configuration to file."""
+        status = "registered" if registered is True else "setup"
+        config = self._get_config(registered)
         ts = time.strftime("%Y%m%d-%H%M%S")
         filename = (
             f"{ts}-{self.name}-configuration-{status}.json"

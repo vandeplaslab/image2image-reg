@@ -170,16 +170,16 @@ class Preprocessing(BaseModel):
         data = self.dict(exclude_none=True, exclude_defaults=True)
         if data.get("affine"):
             data["affine"] = data["affine"].tolist()
-        if data.get("crop_bbox"):
+        if data.get("crop_bbox") and hasattr(data["crop_bbox"], "to_dict"):
             data["crop_bbox"] = data["crop_bbox"].to_dict(as_wsireg)
-        if data.get("crop_polygon"):
+        if data.get("crop_polygon") and hasattr(data["crop_polygon"], "to_dict"):
             data["crop_polygon"] = data["crop_polygon"].to_dict(as_wsireg)
         if data.get("mask"):
             if isinstance(data["mask"], ArrayLike):
                 data["mask"] = "ArrayLike"
-        if data.get("mask_bbox"):
+        if data.get("mask_bbox") and hasattr(data["mask_bbox"], "to_dict"):
             data["mask_bbox"] = data["mask_bbox"].to_dict(as_wsireg)
-        if data.get("mask_polygon"):
+        if data.get("mask_polygon") and hasattr(data["mask_polygon"], "to_dict"):
             data["mask_polygon"] = data["mask_polygon"].to_dict(as_wsireg)
         if as_wsireg:
             if data.get("channel_indices"):
@@ -276,4 +276,6 @@ class Preprocessing(BaseModel):
         for k, v in output.items():
             if isinstance(v, Enum):
                 output[k] = v.value
+            elif isinstance(v, (BoundingBox, Polygon)):
+                output[k] = v.to_dict()
         return output
