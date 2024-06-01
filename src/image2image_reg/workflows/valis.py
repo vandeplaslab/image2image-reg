@@ -338,8 +338,14 @@ def valis_registration(
     logger.info(f"Completed registration in {main_timer()}")
 
 
-def get_valis_registrar(project_name: str, output_dir: PathLike) -> None:
+def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool = False) -> None:
     """Get Valis registrar if it's available."""
+    # initialize java
+    if init_jvm:
+        from valis import registration
+
+        registration.init_jvm()
+
     registrar = None
     output_dir = Path(output_dir)
     registrar_path = output_dir / project_name / "data" / f"{project_name}_registrar.pickle"

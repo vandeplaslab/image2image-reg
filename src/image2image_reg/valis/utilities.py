@@ -99,6 +99,7 @@ def transform_attached_image(
     output_dir: PathLike,
     interp_method: str = "bicubic",
     crop: str = "reference",
+    pyramid: int = 0,
 ) -> None:
     """Transform valis image."""
     from image2image_io.readers import get_simple_reader
@@ -123,7 +124,7 @@ def transform_attached_image(
             continue
 
         # warp image
-        warped = slide_src.warp_slide(level=0, interp_method=interp_method, crop=crop, src_f=str(path))
+        warped = slide_src.warp_slide(level=pyramid, interp_method=interp_method, crop=crop, src_f=str(path))
         if not isinstance(warped, np.ndarray):
             warped = vips2numpy(warped)
 
@@ -146,6 +147,7 @@ def transform_registered_image(
     interp_method: str = "bicubic",
     crop: str = "reference",
     non_rigid_reg: bool = True,
+    pyramid: int = 0,
 ) -> None:
     """Transform valis image."""
     from image2image_io.readers import get_simple_reader
@@ -166,7 +168,7 @@ def transform_registered_image(
         if output_filename.exists():
             continue
 
-        warped = slide_obj.warp_slide(level=0, interp_method=interp_method, crop=crop, non_rigid=non_rigid_reg)
+        warped = slide_obj.warp_slide(level=pyramid, interp_method=interp_method, crop=crop, non_rigid=non_rigid_reg)
         if not isinstance(warped, np.ndarray):
             warped = vips2numpy(warped)
 
