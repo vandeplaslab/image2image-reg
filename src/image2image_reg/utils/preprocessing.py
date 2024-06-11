@@ -282,7 +282,7 @@ def preprocess_reg_image_spatial(
         logger.trace("Applying affine transformation")
         affine_tform = preprocessing.affine
         if isinstance(affine_tform, np.ndarray):
-            affine_tform = affine_to_itk_affine(image, affine_tform, original_size, pixel_size, True)
+            affine_tform = affine_to_itk_affine(affine_tform, original_size, pixel_size, True)
         transforms.append(affine_tform)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
         image = transform_plane(image, final_tform, composite_transform)

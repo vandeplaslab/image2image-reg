@@ -1,13 +1,15 @@
 """Transformation sequence."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
-from image2image_reg.models.transform import Transform, TransformMixin
 from koyo.json import read_json_data
 from koyo.typing import PathLike
+
+from image2image_reg.models.transform import Transform, TransformMixin
 
 
 class TransformSequence(TransformMixin):
@@ -179,16 +181,45 @@ class TransformSequence(TransformMixin):
         #     transform_sequence_index = [0]
         return cls(transforms, transform_sequence_index)
 
+    @classmethod
+    def from_i2r(cls, path: PathLike, image_path: PathLike) -> TransformSequence:
+        """Load transform sequence from a i2r path.
+
+        Parameters
+        ----------
+        path: PathLike
+            Path to image2image registration transformation file.
+        image_path: PathLike
+            Path to the image so that metadata can be read.
+        """
+        transforms, transform_sequence_index = _read_i2r_transform(path, image_path)
+        return cls(transforms, transform_sequence_index)
+
+
+def _read_i2r_transform(path: PathLike, image_path: PathLike) -> tuple[list[dict[str, list[str]]], list[int]]:
+    """Read data from i2r transform dict."""
+    from image2image_io.readers import get_simple_reader
+
+    from image2image_reg.utils.transformation import affine_to_itk_affine
+
+    transforms_data: dict[str, list[str]] = read_json_data(path)
+    if "matrix_yx_um_inv" not in transforms_data:
+        raise ValueError("Cannot retrieve affine transformation.")
+    affine = np.asarray(transforms_data["matrix_yx_um_inv"])
+    reader = get_simple_reader(image_path, init_pyramid=False, auto_pyramid=False, quick=True)
+    transform_list = [affine_to_itk_affine(affine, reader.image_shape[::-1], spacing=reader.resolution, inverse=False)]
+    return transform_list, [0]
+
 
 def _read_wsireg_transform(
-    parameter_data: str | (Path | dict[str, list[str]]),
+    parameters_or_path: str | (Path | dict[str, list[str]]),
     first: bool = False,
     skip_initial: bool = False,
 ) -> tuple[list[dict[str, list[str]]], list[int]]:
     """Convert wsireg transform dict or from file to List of Transforms."""
-    transforms = parameter_data
-    if isinstance(parameter_data, (str, Path)):
-        transforms: dict[str, list[str]] = read_json_data(parameter_data)
+    transforms = parameters_or_path
+    if isinstance(parameters_or_path, (str, Path)):
+        transforms: dict[str, list[str]] = read_json_data(parameters_or_path)
 
     allowed_n = 1 if first else -1
     index = 0

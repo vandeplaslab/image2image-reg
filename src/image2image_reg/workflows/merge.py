@@ -17,7 +17,7 @@ def merge(
     fmt: str = "ome-tiff",
     as_uint8: bool | None = None,
     channel_ids: list[int] | None = None,
-    override: bool = False,
+    overwrite: bool = False,
 ) -> Path:
     """Merge multiple images."""
     from image2image_io.models.merge import MergeImages

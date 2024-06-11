@@ -10,6 +10,8 @@ def test_cli_entrypoint():
     """Test CLI entrypoint."""
     exit_status = os.system("iwsireg --help")
     assert exit_status == 0
+    exit_status = os.system("i2reg --help")
+    assert exit_status == 0
 
 
 def test_cli_init(tmp_path):

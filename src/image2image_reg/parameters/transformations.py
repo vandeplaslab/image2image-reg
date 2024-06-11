@@ -1,10 +1,11 @@
 """Parameter maps for registration."""
+
 from __future__ import annotations
 
 BASE_RIGID_TRANSFORM = {
     "Transform": ["EulerTransform"],
     "NumberOfParameters": ["3"],
-    "TransformParameters": ["0", "0", "0"],
+    "TransformParameters": ["0", "0", "0"],  # ?, tx, ty
     "InitialTransformParametersFileName": ["NoInitialTransform"],
     "HowToCombineTransforms": ["Compose"],
     "FixedImageDimension": ["2"],

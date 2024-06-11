@@ -598,7 +598,7 @@ class IWsiReg:
         mask: PathLike | None = None,
         mask_bbox: tuple[int, int, int, int] | None = None,
         export: Export | dict[str, ty.Any] | None = None,
-        override: bool = False,
+        overwrite: bool = False,
     ) -> Modality:
         """Add modality."""
         from image2image_io.readers import get_simple_reader, is_supported
@@ -608,7 +608,7 @@ class IWsiReg:
             raise ValueError("Path does not exist.")
         if not is_supported(path):
             raise ValueError("Unsupported file format.")
-        if name in self.modalities and not override:
+        if name in self.modalities and not overwrite:
             raise ValueError(f"Modality name '{name}' already exists.")
         reader: BaseReader = get_simple_reader(path, init_pyramid=False)
         if preprocessing:
@@ -624,7 +624,7 @@ class IWsiReg:
             channel_names=reader.channel_names,
             preprocessing=preprocessing,
             export=export,
-            override=override,
+            overwrite=overwrite,
         )
 
     def add_modality(
@@ -641,7 +641,7 @@ class IWsiReg:
         mask_polygon: np.ndarray | Polygon | None = None,
         output_pixel_size: tuple[float, float] | None = None,
         export: Export | dict[str, ty.Any] | None = None,
-        override: bool = False,
+        overwrite: bool = False,
         raise_on_error: bool = True,
     ) -> Modality:
         """Add modality."""
@@ -657,7 +657,7 @@ class IWsiReg:
             raise ValueError("Unsupported file format.")
         if pixel_size <= 0:
             raise ValueError("Pixel size must be greater than 0.")
-        if name in self.modalities and not override:
+        if name in self.modalities and not overwrite:
             raise ValueError(f"Modality '{name}' name already exists.")
         if mask is not None and mask_bbox is not None and mask_polygon is not None:
             raise ValueError("Mask can only be specified using one of the three options: mask, mask_bbox, mask_polygon")
@@ -777,7 +777,7 @@ class IWsiReg:
             pixel_size,
             channel_names=channel_names,
             channel_colors=channel_colors,
-            override=True,
+            overwrite=True,
         )
         self.attachment_images[name] = attach_to_modality
         logger.trace(f"Added attachment image '{name}'.")
@@ -1106,14 +1106,14 @@ class IWsiReg:
         self,
         modality: Modality,
         preprocessing: Preprocessing | None = None,
-        override: bool = False,
+        overwrite: bool = False,
         quick: bool = False,
     ) -> ImageWrapper:
         """Pre-process images."""
         from image2image_reg.wrapper import ImageWrapper
 
         wrapper = ImageWrapper(modality, preprocessing)
-        cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not override else False
+        cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not overwrite else False
         if not cached:
             wrapper.preprocess()
             wrapper.save_cache(self.cache_dir, self.cache_images)
@@ -1236,7 +1236,7 @@ class IWsiReg:
             return False
         return True
 
-    def preprocess(self, n_parallel: int = 1, override: bool = False, quick: bool = False) -> None:
+    def preprocess(self, n_parallel: int = 1, overwrite: bool = False, quick: bool = False) -> None:
         """Pre-process all images."""
         # TODO: add multi-core support
         self.set_logger()
@@ -1255,7 +1255,7 @@ class IWsiReg:
                     continue
                 logger.trace(f"Pre-processing {modality.name}.")
                 # TODO: allow extra pre-processing specification
-                self._preprocess_image(modality, None, override=override, quick=quick)
+                self._preprocess_image(modality, None, overwrite=overwrite, quick=quick)
         logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
 
     def register(self, n_parallel: int = 1, preprocess_first: bool = True, histogram_match: bool = False) -> None:
@@ -1454,7 +1454,7 @@ class IWsiReg:
         tile_size: int = 512,
         as_uint8: bool | None = None,
         write_merged: bool = True,
-        override: bool = False,
+        overwrite: bool = False,
     ) -> list | None:
         """Export images after applying transformation."""
         # TODO add multi-core support
@@ -1504,7 +1504,7 @@ class IWsiReg:
                         modality,
                         to_original_size=to_original_size,
                     )
-                    if _get_with_suffix(output_path).exists() and not override:
+                    if _get_with_suffix(output_path).exists() and not overwrite:
                         logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
                         continue
                     logger.trace(f"Exporting {modality} to {output_path}... (registered)")
@@ -1529,7 +1529,7 @@ class IWsiReg:
                     modality, attachment=False, to_original_size=to_original_size
                 )
 
-                if _get_with_suffix(output_path).exists() and not override:
+                if _get_with_suffix(output_path).exists() and not overwrite:
                     logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
                     continue
                 logger.trace(f"Exporting {modality} to {output_path}... (registered)")
@@ -1566,7 +1566,7 @@ class IWsiReg:
             #             self.image_dir
             #             / f"{self.name}-{attached_modality_key}_to_{attach_to_modality_key}_registered{suffix}"
             #         )
-            #         if _get_with_suffix(output_path).exists() and not override:
+            #         if _get_with_suffix(output_path).exists() and not overwrite:
             #             logger.trace(f"Skipping {attach_to_modality_key} as it already exists ({output_path}).")
 
             # attachment images
@@ -1592,7 +1592,7 @@ class IWsiReg:
                         attachment_modality=attached_modality,
                         to_original_size=to_original_size,
                     )
-                if _get_with_suffix(output_path).exists() and not override:
+                if _get_with_suffix(output_path).exists() and not overwrite:
                     logger.trace(f"Skipping {attach_to_modality_key} as it already exists ({output_path}).")
                     continue
                 logger.trace(f"Exporting {attached_modality} to {output_path}... (attached)")
@@ -1620,7 +1620,7 @@ class IWsiReg:
         # export merge modalities
         if write_merged and self.merge_modalities:
             path = self._transform_write_merge_images(
-                to_original_size=to_original_size, as_uint8=as_uint8, override=override
+                to_original_size=to_original_size, as_uint8=as_uint8, overwrite=overwrite
             )
             paths.append(path)
         return paths
@@ -1823,7 +1823,7 @@ class IWsiReg:
             as_uint8=as_uint8,
             tile_size=tile_size,
             channel_names=channel_names,
-            override=True,
+            overwrite=True,
         )
         return path
 
@@ -1833,7 +1833,7 @@ class IWsiReg:
         preview: bool = False,
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        override: bool = False,
+        overwrite: bool = False,
     ) -> list[Path]:
         from image2image_io.models.merge import MergeImages
         from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
@@ -1891,7 +1891,7 @@ class IWsiReg:
             else:
                 filename = f"{self.name}-{merge_name}_merged-registered"
             output_path = self.image_dir / filename
-            if output_path.with_suffix(".ome.tiff").exists() and not override:
+            if output_path.with_suffix(".ome.tiff").exists() and not overwrite:
                 logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
                 continue
 
