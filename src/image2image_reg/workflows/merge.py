@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from image2image_reg.models import BoundingBox, Modality
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
+
+from image2image_reg.models import BoundingBox, Modality
 
 
 def merge(
@@ -22,6 +23,7 @@ def merge(
     """Merge multiple images."""
     from image2image_io.models.merge import MergeImages
     from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
+
     from image2image_reg.wrapper import ImageWrapper
 
     paths = [Path(path) for path in paths]
