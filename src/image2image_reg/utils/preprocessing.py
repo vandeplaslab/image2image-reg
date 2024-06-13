@@ -162,6 +162,16 @@ def contrast_enhance(image: sitk.Image, alpha: float = 7, beta: float = 1) -> si
     return image
 
 
+def equalize_histogram(image: sitk.Image) -> sitk.Image:
+    """Equalize histogram of image."""
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    image = cv2.equalizeHist(image)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
 def preprocess_intensity(
     image: sitk.Image, preprocessing: Preprocessing, pixel_size: float, is_rgb: bool
 ) -> sitk.Image:
@@ -173,6 +183,9 @@ def preprocess_intensity(
         logger.warning("Image has more than one channel, mean intensity projection will be used")
         image = sitk_mean_int_proj(image)
         logger.trace("Mean intensity projection applied")
+    if preprocessing.equalize_histogram:
+        image = equalize_histogram(image)
+        logger.trace("Equalized histogram applied")
     if preprocessing.contrast_enhance:
         image = contrast_enhance(image)
         logger.trace("Contrast enhancement applied")

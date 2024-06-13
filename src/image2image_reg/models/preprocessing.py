@@ -83,6 +83,7 @@ class Preprocessing(BaseModel):
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK
     max_intensity_projection: bool = True
+    equalize_histogram: bool = False
     contrast_enhance: bool = False
     invert_intensity: bool = False
     channel_indices: ty.Optional[list[int]] = None
@@ -140,6 +141,9 @@ class Preprocessing(BaseModel):
         if self.max_intensity_projection:
             text += "MIP; "
             tooltip += "Max intensity projection\n"
+        if self.equalize_histogram:
+            text += "equalize; "
+            tooltip += "Histogram equalization\n"
         if self.contrast_enhance:
             text += "enhance; "
             tooltip += "Contrast enhancement\n"
