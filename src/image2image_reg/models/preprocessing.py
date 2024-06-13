@@ -133,37 +133,50 @@ class Preprocessing(BaseModel):
         """Return if masked."""
         return self.use_mask and (self.mask is not None or self.mask_bbox is not None or self.mask_polygon is not None)
 
-    def as_str(self) -> str:
+    def as_str(self) -> tuple[str, str]:
         """Create nice formatting based on pre-processing."""
-        out = f"{self.image_type.value}; "
+        text = f"{self.image_type.value}; "
+        tooltip = f"Image type: {self.image_type.value}\n"
         if self.max_intensity_projection:
-            out += "MIP; "
+            text += "MIP; "
+            tooltip += "Max intensity projection\n"
         if self.contrast_enhance:
-            out += "enhance; "
+            text += "enhance; "
+            tooltip += "Contrast enhancement\n"
         if self.invert_intensity:
-            out += "invert"
-        if out.endswith("; "):
-            out = out[:-2]
-        out += "\n"
+            text += "invert"
+            tooltip += "Invert intensity\n"
+        if text.endswith("; "):
+            text = text[:-2]
+        text += "\n"
         if self.channel_indices:
-            out += f"ids: {self.channel_indices}\n"
+            text += f"ids: {self.channel_indices}\n"
+            tooltip += f"Channel indices: {self.channel_indices}\n"
         if self.flip:
-            out += f"flip-{self.flip.value}; "
+            text += f"flip-{self.flip.value}; "
+            tooltip += f"Flip: {self.flip.value}\n"
         if self.translate_x or self.translate_y:
-            out += f"translate({self.translate_x}, {self.translate_y}); "
+            text += f"translate({self.translate_x}, {self.translate_y}); "
+            tooltip += f"Translate: ({self.translate_x}, {self.translate_y})\n"
         if self.rotate_counter_clockwise:
-            out += f"{self.rotate_counter_clockwise}°"
-        if out.endswith("; "):
-            out = out[:-2]
-        if not out.endswith("\n"):
-            out += "\n"
+            text += f"{self.rotate_counter_clockwise}°"
+            tooltip += f"Rotate: {self.rotate_counter_clockwise}°\n"
+        if text.endswith("; "):
+            text = text[:-2]
+        if not text.endswith("\n"):
+            text += "\n"
         if self.downsample > 1:
-            out += f"x{self.downsample} downsample"
+            text += f"x{self.downsample} downsample"
+            tooltip += f"Downsample: x{self.downsample}\n"
         if self.is_masked():
-            out += "mask was specified"
+            text += "mask was specified"
+            tooltip += "Using mask during registration\n"
         if self.is_cropped():
-            out += "crop was specified"
-        return out
+            text += "crop was specified"
+            tooltip += "Cropping image\n"
+        if tooltip.endswith("\n"):
+            tooltip = tooltip[:-1]
+        return text, tooltip
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Return dict."""

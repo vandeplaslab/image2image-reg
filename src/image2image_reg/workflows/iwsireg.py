@@ -590,6 +590,61 @@ class IWsiReg:
                 return True
         return False
 
+    def rename_modality(self, old_name: str, new_name: str) -> None:
+        """Rename modality."""
+        if old_name not in self.modalities:
+            raise ValueError(f"Modality '{old_name}' does not exist.")
+        if new_name in self.modalities:
+            raise ValueError(f"Modality '{new_name}' already exists.")
+        # rename modalities
+        self.modalities[old_name].name = new_name
+        self.modalities[new_name] = self.modalities.pop(old_name)
+        # rename attachment images
+        for name, attach_to in self.attachment_images.items():
+            if attach_to == old_name:
+                self.attachment_images[name] = new_name
+            if name == old_name:
+                self.attachment_images[new_name] = self.attachment_images.pop(old_name)
+        # rename attachment shapes
+        for _, shape_dict in self.attachment_shapes.items():
+            if shape_dict["attach_to"] == old_name:
+                shape_dict["attach_to"] = new_name
+        # rename attachment points
+        for _, points_dict in self.attachment_points.items():
+            if points_dict["attach_to"] == old_name:
+                points_dict["attach_to"] = new_name
+        # rename registration paths
+        for edge in self.registration_nodes:
+            if edge["modalities"]["source"] == old_name:
+                edge["modalities"]["source"] = new_name
+            if edge["modalities"]["target"] == old_name:
+                edge["modalities"]["target"] = new_name
+        registration_paths = deepcopy(self.registration_paths)
+        for source, targets in self.registration_paths.items():
+            if source == old_name:
+                registration_paths[new_name] = registration_paths.pop(old_name)
+            if old_name in targets:
+                targets[targets.index(old_name)] = new_name
+                registration_paths[source] = targets
+        self.registration_paths = registration_paths
+
+        self._create_transformation_paths(self.registration_paths)
+        logger.trace(f"Renamed modality '{old_name}' to '{new_name}'.")
+
+    def is_attachment(self, modality: str) -> bool:
+        """Check if modality is an attachment."""
+        return modality in self.attachment_images
+
+    def get_attachments(self, attach_to: str, kind: ty.Literal["image", "geojson", "points"] | str) -> int:
+        """Get number of attachments of a certain kind fora specified attachment image."""
+        if kind == "image":
+            return sum(1 for name, attach_to_ in self.attachment_images.items() if attach_to_ == attach_to)
+        if kind == "geojson":
+            return sum(1 for name, attach_to_ in self.attachment_shapes.items() if attach_to_["attach_to"] == attach_to)
+        if kind == "points":
+            return sum(1 for name, attach_to_ in self.attachment_points.items() if attach_to_["attach_to"] == attach_to)
+        raise ValueError(f"Invalid kind '{kind}' - expected 'image', 'geojson', 'points'.")
+
     def auto_add_modality(
         self,
         name: str,
@@ -671,14 +726,15 @@ class IWsiReg:
             mask_polygon = _transform_to_polygon(mask_polygon)
         if isinstance(preprocessing, dict):
             preprocessing = Preprocessing(**preprocessing)
-        if preprocessing.mask is None and mask is not None:
-            preprocessing.mask = mask
-        if preprocessing.mask_bbox is None and mask_bbox is not None:
-            preprocessing.mask_bbox = mask_bbox
-        if preprocessing.mask_polygon is None and mask_polygon is not None:
-            preprocessing.mask_polygon = mask_polygon
-        if not preprocessing.transform_mask and transform_mask:
-            preprocessing.transform_mask = transform_mask
+        if preprocessing:
+            if preprocessing.mask is None and mask is not None:
+                preprocessing.mask = mask
+            if preprocessing.mask_bbox is None and mask_bbox is not None:
+                preprocessing.mask_bbox = mask_bbox
+            if preprocessing.mask_polygon is None and mask_polygon is not None:
+                preprocessing.mask_polygon = mask_polygon
+            if not preprocessing.transform_mask and transform_mask:
+                preprocessing.transform_mask = transform_mask
         if isinstance(export, dict):
             export = Export(**export)
         if isinstance(output_pixel_size, (int, float)):
@@ -1223,9 +1279,9 @@ class IWsiReg:
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
