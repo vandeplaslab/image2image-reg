@@ -635,7 +635,16 @@ class IWsiReg:
         """Check if modality is an attachment."""
         return modality in self.attachment_images
 
-    def get_attachments(self, attach_to: str, kind: ty.Literal["image", "geojson", "points"] | str) -> int:
+    def get_image_modalities(self, with_attachment: bool = True) -> list[str]:
+        """Return list of image modalities."""
+        images = []
+        for modality in self.modalities.values():
+            if not with_attachment and self.is_attachment(modality.name):
+                continue
+            images.append(modality.name)
+        return images
+
+    def get_attachment_count(self, attach_to: str, kind: ty.Literal["image", "geojson", "points"] | str) -> int:
         """Get number of attachments of a certain kind fora specified attachment image."""
         if kind == "image":
             return sum(1 for name, attach_to_ in self.attachment_images.items() if attach_to_ == attach_to)
