@@ -170,8 +170,18 @@ def contrast_enhance(image: sitk.Image, alpha: float = 7, beta: float = 1) -> si
 def equalize_histogram(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
     spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image = sitk.GetArrayFromImage(image).astype(np.uint8)
     image = cv2.equalizeHist(image)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
+def median_filter(image: sitk.Image) -> sitk.Image:
+    """Equalize histogram of image."""
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    image = cv2.medianBlur(image, 5)
     image = sitk.GetImageFromArray(image)
     image.SetSpacing(spacing)
     return image
@@ -189,15 +199,17 @@ def preprocess_intensity(
             logger.warning("Image has more than one channel, mean intensity projection will be used")
             image = sitk_mean_int_proj(image)
             logger.trace(f"Mean intensity projection applied in {timer(since_last=True)}")
-        if preprocessing.invert_intensity:
-            image = sitk_inv_int(image)
-            logger.trace(f"Inverted intensity in {timer(since_last=True)}")
         if preprocessing.equalize_histogram:
             image = equalize_histogram(image)
             logger.trace(f"Equalized histogram applied in {timer(since_last=True)}")
+        # image = median_filter(image)
+        # logger.trace(f"Median filter applied in {timer(since_last=True)}")
         if preprocessing.contrast_enhance:
             image = contrast_enhance(image)
             logger.trace(f"Contrast enhancement applied in {timer(since_last=True)}")
+        if preprocessing.invert_intensity:
+            image = sitk_inv_int(image)
+            logger.trace(f"Inverted intensity in {timer(since_last=True)}")
         if preprocessing.custom_processing:
             for k, v in preprocessing.custom_processing.items():
                 logger.trace(f"Performing preprocessing step: {k} in {timer(since_last=True)}")
@@ -402,6 +414,8 @@ def preprocess(
             preprocessing.contrast_enhance = False
             if is_rgb:
                 preprocessing.invert_intensity = True
+    if preprocessing.equalize_histogram or preprocessing.contrast_enhance:
+        preprocessing.as_uint8 = True
 
     # intensity based pre-processing
     image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
