@@ -1055,6 +1055,20 @@ class IWsiReg:
             assert "source" in preprocessing, "Preprocessing must contain source key."
         self._add_registration_node(source, target, through, transform, preprocessing)
 
+    def update_registration_path(
+        self,
+        source: str,
+        target: str,
+        transform: str | ty.Iterable[str],
+        through: str | None = None,
+        preprocessing: dict | None = None,
+    ):
+        """Update registration path."""
+        if not self.has_registration_path(source, target, through):
+            return
+        self.remove_registration_path(source, target, through)
+        self.add_registration_path(source, target, transform, through, preprocessing)
+
     def find_index_of_registration_path(self, source: str, target: str, through: str | None = None) -> int | None:
         """Remove registration path."""
         index = None
@@ -1288,9 +1302,9 @@ class IWsiReg:
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms

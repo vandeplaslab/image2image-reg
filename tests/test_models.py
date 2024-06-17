@@ -24,6 +24,39 @@ def test_polygon():
     assert image.GetSpacing() == (1.0, 1.0), "Spacing should be (1.0, 1.0)"
     assert image.GetPixelID() == 1, "PixelID should be 1 (uint8)"
 
+    data = poly.to_dict()
+    assert isinstance(data, list), "data should be a list"
+
+
+def test_polygon_multi():
+    poly = Polygon(
+        [
+            np.array([[0, 0], [0, 10], [10, 10], [10, 0]]),
+            np.array([[0, 0], [0, 10], [10, 10], [10, 0]]) + 10,
+            np.array([[0, 0], [0, 10], [10, 10], [10, 0]]) + 20,
+        ],
+    )
+    assert isinstance(poly.xy, list), "xy should be a list"
+    assert len(poly.xy) == 3, "Length should be 3"
+
+    mask = poly.to_mask((100, 100))
+    assert mask.shape == (100, 100), "Shape should be (100, 100)"
+    assert mask.max() == 255, "Max value should be 255"
+
+    mask = poly.to_mask((150, 100))
+    assert mask.shape == (150, 100), "Shape should be (150, 100)"
+    assert mask.max() == 255, "Max value should be 255"
+
+    image = poly.to_sitk_image((100, 100), pixel_size=1.0)
+    assert image.GetSize() == (100, 100), "Size should be (100, 100)"
+    assert image.GetSpacing() == (1.0, 1.0), "Spacing should be (1.0, 1.0)"
+    assert image.GetPixelID() == 1, "PixelID should be 1 (uint8)"
+
+    data = poly.to_dict()
+    assert isinstance(data, list), "xy should be a list"
+    assert len(data) == 3, "Length should be 3"
+    assert isinstance(data[0], list), "xy should be a list"
+
 
 def test_bbox():
     bbox = BoundingBox(0, 0, 10, 10)

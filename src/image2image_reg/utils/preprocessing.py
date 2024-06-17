@@ -190,6 +190,7 @@ def clip_intensity(image: sitk.Image, min_val: int = 0, max_val: int = 255) -> s
     image.SetSpacing(spacing)
     return image
 
+
 def equalize_clahe(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
     spacing = image.GetSpacing()
@@ -329,12 +330,11 @@ def preprocess_intensity(
             image = sitk_mean_int_proj(image)
             logger.trace(f"Mean intensity projection applied in {timer(since_last=True)}")
         if preprocessing.equalize_histogram:
-            image = equalize_histogram(image)
+            # image = equalize_histogram(image)
+            image = equalize_clahe(image)
             logger.trace(f"Equalized histogram applied in {timer(since_last=True)}")
             # image = clip_intensity(image, 175, 200)
             # logger.trace(f"Clipped intensity applied in {timer(since_last=True)}")
-        # image = median_filter(image)
-        # logger.trace(f"Median filter applied in {timer(since_last=True)}")
         if preprocessing.contrast_enhance:
             image = contrast_enhance(image)
             logger.trace(f"Contrast enhancement applied in {timer(since_last=True)}")
@@ -408,6 +408,7 @@ def preprocess_reg_image_spatial(
     mask: sitk.Image | None = None,
     imported_transforms=None,
     transform_mask: bool = True,
+    spatial: bool = True,
 ) -> tuple[sitk.Image, sitk.Image | None, list[dict], tuple]:
     """
     Spatial preprocessing of the reg_image.
@@ -440,7 +441,7 @@ def preprocess_reg_image_spatial(
         pixel_size = image.GetSpacing()[0]
 
     # apply affine transformation
-    if preprocessing.affine is not None:
+    if preprocessing.affine is not None and spatial:
         logger.trace("Applying affine transformation")
         affine_tform = preprocessing.affine
         if isinstance(affine_tform, np.ndarray):
@@ -455,7 +456,7 @@ def preprocess_reg_image_spatial(
             logger.trace("Applied affine transform to mask")
 
     # rotate counter-clockwise
-    if float(preprocessing.rotate_counter_clockwise) != 0.0:
+    if float(preprocessing.rotate_counter_clockwise) != 0.0 and spatial:
         logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
         rot_tform = generate_rigid_rotation_transform(image, pixel_size, preprocessing.rotate_counter_clockwise)
         transforms.append(rot_tform)
@@ -468,7 +469,7 @@ def preprocess_reg_image_spatial(
             logger.trace("Rotated mask")
 
     # translate x/y image
-    if preprocessing.translate_x or preprocessing.translate_y:
+    if (preprocessing.translate_x or preprocessing.translate_y) and spatial:
         logger.trace(f"Transforming image by translation: {preprocessing.translate_x}, {preprocessing.translate_y}")
         translation_transform = generate_rigid_translation_transform_alt(
             image, pixel_size, preprocessing.translate_x, preprocessing.translate_y
@@ -483,7 +484,7 @@ def preprocess_reg_image_spatial(
             logger.trace("Translated mask")
 
     # flip image
-    if preprocessing.flip:
+    if preprocessing.flip and spatial:
         logger.trace(f"Flipping image {preprocessing.flip.value}")
         flip_tform = generate_affine_flip_transform(image, pixel_size, preprocessing.flip.value)
         transforms.append(flip_tform)
@@ -535,6 +536,7 @@ def preprocess(
     transforms: list,
     transform_mask: bool = True,
     check: bool = False,
+    spatial: bool = True,
 ) -> tuple[sitk.Image, sitk.Image, list, list]:
     """Run full intensity and spatial preprocessing."""
     if check:
@@ -560,12 +562,7 @@ def preprocess(
 
     # spatial pre-processing
     image, mask, transforms, original_size_transform = preprocess_reg_image_spatial(
-        image,
-        preprocessing,
-        pixel_size,
-        mask,
-        transforms,
-        transform_mask=transform_mask,
+        image, preprocessing, pixel_size, mask, transforms, transform_mask=transform_mask, spatial=spatial
     )
     return image, mask, transforms, original_size_transform
 
@@ -621,6 +618,7 @@ def preprocess_preview(
     preprocessing: Preprocessing,
     initial_transforms: list | None = None,
     transform_mask: bool = False,
+    spatial: bool = True,
 ) -> np.ndarray:
     """Complete pre-processing."""
     channel_names = preprocessing.channel_names
@@ -632,6 +630,14 @@ def preprocess_preview(
     # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
     # set image
     image, mask, initial_transforms, original_size_transform = preprocess(
-        image, None, preprocessing, resolution, is_rgb, initial_transforms, transform_mask=transform_mask, check=False
+        image,
+        None,
+        preprocessing,
+        resolution,
+        is_rgb,
+        initial_transforms,
+        transform_mask=transform_mask,
+        check=False,
+        spatial=spatial,
     )
     return sitk.GetArrayFromImage(image)

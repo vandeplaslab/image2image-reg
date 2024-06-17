@@ -531,6 +531,7 @@ def generate_rigid_translation_transform_alt(
     ) = image.TransformContinuousIndexToPhysicalPoint(
         (float(translation_x), float(translation_y)),
     )  # type: ignore[no-untyped-call]
+    translation_x_phy, translation_y_phy = translation_x, translation_y
     # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
 
     w = int(math.ceil(max(w - translation_x, bound_w)) * 1)

@@ -1,4 +1,5 @@
 """Bounding box module."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -43,11 +44,13 @@ class Polygon(MaskMixin):
     xy: np.ndarray
     mask_type: str = "polygon"
 
-    def __init__(self, xy: np.ndarray):
+    def __init__(self, xy: np.ndarray | list[np.ndarray]):
         self.xy = xy
 
     def to_dict(self, as_wsireg: bool = False) -> list:
         """Return dict."""
+        if isinstance(self.xy, list):
+            return [xy.tolist() for xy in self.xy]
         return self.xy.tolist()  # type: ignore[no-any-return]
 
     def to_mask(self, image_shape: tuple[int, int], dtype: type = bool, value: bool | int = True) -> np.ndarray:
@@ -56,6 +59,10 @@ class Polygon(MaskMixin):
 
         dtype = np.uint8
         mask = np.zeros(image_shape, dtype=dtype)
+        if isinstance(self.xy, list):
+            for xy in self.xy:
+                mask = cv2.fillPoly(mask, pts=[xy.astype(np.int32)], color=np.iinfo(dtype).max)
+            return mask
         mask = cv2.fillPoly(mask, pts=[self.xy.astype(np.int32)], color=np.iinfo(dtype).max)
         return mask
 
