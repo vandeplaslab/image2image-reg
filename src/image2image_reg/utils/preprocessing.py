@@ -190,6 +190,39 @@ def clip_intensity(image: sitk.Image, min_val: int = 0, max_val: int = 255) -> s
     image.SetSpacing(spacing)
     return image
 
+def equalize_clahe(image: sitk.Image) -> sitk.Image:
+    """Equalize histogram of image."""
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
+    image = clahe.apply(image)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
+def equalize_adapthist(image: sitk.Image) -> sitk.Image:
+    """Equalize histogram of image."""
+    from skimage import exposure
+
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image = exposure.equalize_adapthist(image)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
+def norm_and_adjust(image: sitk.Image) -> sitk.Image:
+    """Normalize and brightness adjustment."""
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image = cv2.normalize(image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+    image = cv2.add(image, 50)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
 
 def median_filter(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
@@ -252,6 +285,34 @@ def median_filter(image: sitk.Image) -> sitk.Image:
 #     bright_cam = brightest_pixels.mean(axis=0)
 #     cam_d = np.sqrt(np.sum((cam - bright_cam) ** 2, axis=2))
 #     return cam_d, cam
+def bilateral_filter(image: sitk.Image) -> sitk.Image:
+    """Equalize histogram of image."""
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    image = cv2.bilateralFilter(image, 9, 75, 75)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
+def nlmeans_filter(image: sitk.Image) -> sitk.Image:
+    """Non-local means denoising.."""
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
+def background_subtract(image: sitk.Image) -> sitk.Image:
+    """Subtract background from image."""
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
 
 
 def preprocess_intensity(
