@@ -1,11 +1,13 @@
 """Registration model."""
+
 from __future__ import annotations
 
 from enum import Enum, EnumMeta
 from pathlib import Path
 
-from image2image_reg.parameters.registration import DEFAULT_REGISTRATION_PARAMETERS_MAP
 from koyo.typing import PathLike
+
+from image2image_reg.parameters.registration import DEFAULT_REGISTRATION_PARAMETERS_MAP
 
 
 def _elx_lineparser(
@@ -71,19 +73,26 @@ class Registration(dict, Enum, metaclass=_RegModelMeta):
     nl_reduced: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_reduced"]
     nl_mid: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_mid"]
     nl2: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl2"]
+    nl3: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl3"]
     # expanded parameters
     rigid_expanded: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_expanded"]
+    similarity_expanded: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_expanded"]
     affine_expanded: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_expanded"]
     nl_expanded: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_expanded"]
+    # extreme parameters
+    rigid_extreme: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_extreme"]
+    similarity_extreme: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_extreme"]
+    affine_extreme: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_extreme"]
+    nl_extreme: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_extreme"]
     # advanced mean squares
     rigid_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_ams"]
-    affine_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_ams"]
     similarity_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_ams"]
+    affine_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_ams"]
     nl_ams: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_ams"]
     # normalized correlation
     rigid_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_anc"]
-    affine_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_anc"]
     similarity_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["similarity_anc"]
+    affine_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["affine_anc"]
     nl_anc: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["nl_anc"]
     # test parameters
     rigid_test: dict[str, list[str]] = DEFAULT_REGISTRATION_PARAMETERS_MAP["rigid_test"]

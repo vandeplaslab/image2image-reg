@@ -177,6 +177,20 @@ def equalize_histogram(image: sitk.Image) -> sitk.Image:
     return image
 
 
+def clip_intensity(image: sitk.Image, min_val: int = 0, max_val: int = 255) -> sitk.Image:
+    """Clip intensity of image."""
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    mask_below = image < min_val
+    image[mask_below] = 0
+    mask_above = image > max_val
+    image[mask_above] = max_val
+    # image = np.clip(image, min_val, max_val)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
 def median_filter(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
     spacing = image.GetSpacing()
@@ -187,11 +201,65 @@ def median_filter(image: sitk.Image) -> sitk.Image:
     return image
 
 
+# def test_filter(image: sitk.Image, brightness_q: float = 0.99) -> sitk.Image:
+#     from skimage import exposure
+#
+#     spacing = image.GetSpacing()
+#     image = sitk.GetArrayFromImage(image)
+#     image, _ = calc_background_color_dist(image, brightness_q=brightness_q)
+#     image = exposure.rescale_intensity(image, in_range="image", out_range=(0, 1))
+#     image = exposure.equalize_adapthist(image)
+#     image = exposure.rescale_intensity(image, in_range="image", out_range=(0, 255)).astype(np.uint8)
+#     image = sitk.GetImageFromArray(image)
+#     image.SetSpacing(spacing)
+#     return image
+#
+#
+# def calc_background_color_dist(
+#     img: np.ndarray, brightness_q: float = 0.99, mask: np.ndarray | None = None
+# ) -> tuple[np.ndarray, np.ndarray]:
+#     """Create mask that only covers tissue
+#
+#     #. Find background pixel (most luminescent)
+#     #. Convert image to CAM16-UCS
+#     #. Calculate distance between each pixel and background pixel
+#     #. Threshold on distance (i.e. higher distance = different color)
+#
+#     Returns
+#     -------
+#     cam_d : float
+#         Distance from background color
+#     cam : float
+#         CAM16UCS image
+#
+#     """
+#     import colour
+#
+#     eps = np.finfo("float").eps
+#     with colour.utilities.suppress_warnings(colour_usage_warnings=True):
+#         if 1 < img.max() <= 255 and np.issubdtype(img.dtype, np.integer):
+#             cam = colour.convert(img / 255 + eps, "sRGB", "CAM16UCS")
+#         else:
+#             cam = colour.convert(img + eps, "sRGB", "CAM16UCS")
+#
+#     if mask is None:
+#         brightest_thresh = np.quantile(cam[..., 0], brightness_q)
+#     else:
+#         brightest_thresh = np.quantile(cam[..., 0][mask > 0], brightness_q)
+#
+#     brightest_idx = np.where(cam[..., 0] >= brightest_thresh)
+#     brightest_pixels = cam[brightest_idx]
+#     bright_cam = brightest_pixels.mean(axis=0)
+#     cam_d = np.sqrt(np.sum((cam - bright_cam) ** 2, axis=2))
+#     return cam_d, cam
+
+
 def preprocess_intensity(
     image: sitk.Image, preprocessing: Preprocessing, pixel_size: float, is_rgb: bool
 ) -> sitk.Image:
     """Preprocess image intensity data to single channel image."""
     with MeasureTimer() as timer:
+        convert_and_cast(image, preprocessing)
         if preprocessing.max_intensity_projection:
             image = sitk_max_int_proj(image)
             logger.trace(f"Maximum intensity projection applied in {timer(since_last=True)}")
@@ -202,6 +270,8 @@ def preprocess_intensity(
         if preprocessing.equalize_histogram:
             image = equalize_histogram(image)
             logger.trace(f"Equalized histogram applied in {timer(since_last=True)}")
+            # image = clip_intensity(image, 175, 200)
+            # logger.trace(f"Clipped intensity applied in {timer(since_last=True)}")
         # image = median_filter(image)
         # logger.trace(f"Median filter applied in {timer(since_last=True)}")
         if preprocessing.contrast_enhance:
