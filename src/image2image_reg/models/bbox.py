@@ -38,6 +38,18 @@ class MaskMixin:
         return output_dir / f"{name}_{self.mask_type}.tiff"
 
 
+def _transform_to_polygon(v: np.ndarray) -> Polygon:
+    """Transform to bounding box."""
+    if v is None:
+        return None
+    if isinstance(v, list):
+        v = np.array(v)
+        return Polygon(v)
+    elif isinstance(v, Polygon):
+        return v
+    return Polygon(v)
+
+
 class Polygon(MaskMixin):
     """Polygon where data is in yx format."""
 
@@ -45,7 +57,7 @@ class Polygon(MaskMixin):
     mask_type: str = "polygon"
 
     def __init__(self, xy: np.ndarray | list[np.ndarray]):
-        self.xy = xy
+        self.xy = xy if isinstance(xy, list) else [xy]
 
     def to_dict(self, as_wsireg: bool = False) -> list:
         """Return dict."""
@@ -67,32 +79,17 @@ class Polygon(MaskMixin):
         return mask
 
 
-def _transform_to_polygon(v: np.ndarray) -> Polygon:
-    """Transform to bounding box."""
-    if v is None:
-        return None
-    if isinstance(v, list):
-        v = np.array(v)
-        return Polygon(v)
-    elif isinstance(v, Polygon):
-        return v
-    return Polygon(v)
-
-
 class BoundingBox(MaskMixin):
     """Bounding box named tuple."""
 
-    x: int
-    y: int
-    width: int
-    height: int
     mask_type: str = "bbox"
 
-    def __init__(self, x: int, y: int, width: int, height: int):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
+    def __init__(self, x: int | list[int], y: int | list[int], width: int | list[int], height: int | list[int]):
+        self.x = x if isinstance(x, list) else [x]
+        self.y = y if isinstance(y, list) else [y]
+        self.width = width if isinstance(width, list) else [width]
+        self.height = height if isinstance(height, list) else [height]
+        assert len(self.x) == len(self.y) == len(self.width) == len(self.height), "Bounding box must have 4 values"
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Return dict."""
@@ -103,13 +100,21 @@ class BoundingBox(MaskMixin):
     def to_mask(self, image_shape: tuple[int, int], dtype: type = bool, value: bool | int = True) -> np.ndarray:
         """Return mask."""
         mask: np.ndarray = np.zeros(image_shape, dtype=dtype)
-        if self.x + self.width > image_shape[1]:
-            self.width = image_shape[1] - self.x
-            logger.trace(f"Bounding box width exceeds image width. Setting width to {self.width}")
-        if self.y + self.height > image_shape[0]:
-            self.height = image_shape[0] - self.y
-            logger.trace(f"Bounding box height exceeds image height. Setting height to {self.height}")
-        mask[self.y : self.y + self.height, self.x : self.x + self.width] = value
+        for index in range(len(self.x)):
+            mask = self._draw_bbox(mask, index, image_shape, value)
+        return mask
+
+    def _draw_bbox(self, mask: np.ndarray, index: int, image_shape: tuple[int, int], value: bool | int) -> np.ndarray:
+        """Draw bounding box."""
+        if self.x[index] + self.width[index] > image_shape[1]:
+            self.width[index] = image_shape[1] - self.x[index]
+            logger.trace(f"Bounding box width exceeds image width. Setting width to {self.width[index]}")
+        if self.y[index] + self.height[index] > image_shape[0]:
+            self.height[index] = image_shape[0] - self.y[index]
+            logger.trace(f"Bounding box height exceeds image height. Setting height to {self.height[index]}")
+        mask[self.y[index] : self.y[index] + self.height[index], self.x[index] : self.x[index] + self.width[index]] = (
+            value
+        )
         return mask
 
 
