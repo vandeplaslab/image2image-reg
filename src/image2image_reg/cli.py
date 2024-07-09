@@ -241,7 +241,7 @@ def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> P
     default=None,
     show_default=True,
 )
-@click.argument("extra_args", nargs=-1, type=click.UNPROCESSED)
+# @click.argument("extra_args", nargs=-1, type=click.UNPROCESSED)
 def cli(
     verbosity: float = 1,
     no_color: bool = False,

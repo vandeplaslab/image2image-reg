@@ -43,7 +43,12 @@ def _transform_to_polygon(v: np.ndarray) -> Polygon:
     if v is None:
         return None
     if isinstance(v, list):
-        v = np.array(v)
+        assert len(v) > 0, "Polygon must have at least 1 value"
+        if isinst
+        if isinstance(v[0], (list, np.ndarray)):
+            v = [np.array(v_) for v_ in v]
+        else:
+            v = [np.array(v)]
         return Polygon(v)
     elif isinstance(v, Polygon):
         return v
@@ -126,8 +131,14 @@ def _transform_to_bbox(v: tuple[int, int, int, int] | list[int]) -> BoundingBox:
         return BoundingBox(**v)
     elif isinstance(v, (list, tuple)):
         v = list(v)
-        assert len(v) == 4, "Bounding box must have 4 values"
-        return BoundingBox(*v)
+        assert len(v) > 0, "Bounding box must have at least 1 value"
+        if isinstance(v[0], (int, float)):
+            return BoundingBox(*v)
+        x = [v_[0] for v_ in v]
+        y = [v_[1] for v_ in v]
+        width = [v_[2] for v_ in v]
+        height = [v_[3] for v_ in v]
+        return BoundingBox(x, y, width, height)
     elif isinstance(v, BoundingBox):
         return v
     return BoundingBox(*v)
