@@ -235,6 +235,44 @@ def median_filter(image: sitk.Image) -> sitk.Image:
     return image
 
 
+def remove_background_rolling_ball(image: sitk.Image) -> sitk.Image:
+    """Remove background using rolling ball algorithm."""
+    from skimage.restoration import rolling_ball
+
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    background = rolling_ball(image)
+    image = image - background
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
+def remove_background_black_tophat(image: sitk.Image) -> sitk.Image:
+    """Remove background using black tophat algorithm."""
+    # use openCV
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    size = 15
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+    image = cv2.morphologyEx(image, cv2.MORPH_BLACKHAT, kernel)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
+def remove_background_white_tophat(image: sitk.Image) -> sitk.Image:
+    """Remove background using white tophat algorithm."""
+    # use openCV
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    image = cv2.morphologyEx(image, cv2.MORPH_TOPHAT, kernel)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
 # def test_filter(image: sitk.Image, brightness_q: float = 0.99) -> sitk.Image:
 #     from skimage import exposure
 #
@@ -333,8 +371,8 @@ def preprocess_intensity(
             # image = equalize_histogram(image)
             image = equalize_clahe(image)
             logger.trace(f"Equalized histogram applied in {timer(since_last=True)}")
-            # image = clip_intensity(image, 175, 200)
-            # logger.trace(f"Clipped intensity applied in {timer(since_last=True)}")
+        # image = remove_background_black_tophat(image)
+        # logger.trace(f"Background removed in {timer(since_last=True)}")
         if preprocessing.contrast_enhance:
             image = contrast_enhance(image)
             logger.trace(f"Contrast enhancement applied in {timer(since_last=True)}")

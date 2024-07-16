@@ -204,7 +204,6 @@ def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> P
 
 @click.group(
     context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 120, "ignore_unknown_options": True},
-    chain=True,
     cls=GroupedGroup,
 )
 @click.version_option(__version__, prog_name="wsireg")
@@ -242,11 +241,13 @@ def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> P
     default=None,
     show_default=True,
 )
+# @click.argument("extra_args", nargs=-1, type=click.UNPROCESSED)
 def cli(
     verbosity: float = 1,
     no_color: bool = False,
     dev: bool = False,
     log: PathLike | None = None,
+    extra_args: ty.Tuple[str, ...] | None = None,
 ) -> None:
     """Launch registration app."""
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
