@@ -44,7 +44,6 @@ def _transform_to_polygon(v: np.ndarray) -> Polygon:
         return None
     if isinstance(v, list):
         assert len(v) > 0, "Polygon must have at least 1 value"
-        if isinst
         if isinstance(v[0], (list, np.ndarray)):
             v = [np.array(v_) for v_ in v]
         else:

@@ -436,10 +436,11 @@ class IWsiReg:
             for name, modality in config["modalities"].items():
                 if not Path(modality["path"]).exists() and raise_on_error:
                     raise ValueError(f"Modality path '{modality['path']}' does not exist.")
+                preprocessing = modality.get("preprocessing", dict())
                 self.add_modality(
                     name=name,
                     path=modality["path"],
-                    preprocessing=Preprocessing(**modality["preprocessing"]) if modality.get("preprocessing") else None,
+                    preprocessing=Preprocessing(**preprocessing) if preprocessing else None,
                     channel_names=modality.get("channel_names", None),
                     channel_colors=modality.get("channel_colors", None),
                     mask=modality.get("mask", None),
@@ -447,7 +448,7 @@ class IWsiReg:
                     mask_polygon=modality.get("mask_polygon", None),
                     output_pixel_size=modality.get("output_pixel_size", None),
                     pixel_size=modality.get("pixel_size", None),
-                    transform_mask=modality.get("transform_mask", True),
+                    transform_mask=preprocessing.get("transform_mask", False),
                     export=Export(**modality["export"]) if modality.get("export") else None,
                     raise_on_error=raise_on_error,
                 )

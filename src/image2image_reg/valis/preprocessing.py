@@ -27,15 +27,19 @@ class HEPreprocessing(ImageProcesser):
     def __init__(self, image, src_f, level, series, *args, **kwargs):
         super().__init__(image=image, src_f=src_f, level=level, series=series, *args, **kwargs)
 
-    def create_mask(self):
+    def create_mask(self) -> np.ndarray:
         _, tissue_mask = create_tissue_mask_from_rgb(self.image)
         return tissue_mask
 
     def process_image(self, *args, **kwargs):
         # turn into grayscale
         image = np.asarray(grayscale(self.image, is_interleaved=True))
+        # mask out background
+        mask = image < 1
         # invert intensities so dark is light and light is dark
         image = 255 - image
+        # apply mask
+        image[mask] = 0
         return image
 
 

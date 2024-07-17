@@ -152,9 +152,19 @@ def sitk_mean_int_proj(image: sitk.Image) -> sitk.Image:
         return image
 
 
-def sitk_inv_int(image: sitk.Image) -> sitk.Image:
+def sitk_inv_int(image: sitk.Image, mask_zeros: bool = True) -> sitk.Image:
     """Inverts intensity of images for registration, useful for alignment of bright field and fluorescence images."""
-    return sitk.InvertIntensity(image)
+    mask = None
+    if mask_zeros:
+        image = sitk.GetArrayFromImage(image)
+        mask = image < 1
+        image = sitk.GetImageFromArray(image)
+    image = sitk.InvertIntensity(image)
+    if mask is not None and mask_zeros:
+        image = sitk.GetArrayFromImage(image)
+        image[mask] = 0
+        image = sitk.GetImageFromArray(image)
+    return image
 
 
 def contrast_enhance(image: sitk.Image, alpha: float = 7, beta: float = 1) -> sitk.Image:

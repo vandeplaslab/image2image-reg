@@ -18,9 +18,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["200"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -68,9 +66,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["200"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -118,9 +114,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["200"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -191,9 +185,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["200"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100",
             "90",
@@ -242,9 +234,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["75"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": ["100", "50", "20", "10"],
         "Metric": ["AdvancedMattesMutualInformation"],
         "MovingImageDimension": ["2"],
@@ -294,9 +284,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["150"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "50",
             "40",
@@ -351,9 +339,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["200"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100",
             "70",
@@ -396,9 +382,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["500"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -446,9 +430,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["200"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -496,9 +478,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["500"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -569,9 +549,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["1000"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100",
             "90",
@@ -619,9 +597,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["500"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -669,9 +645,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["200"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -719,9 +693,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["500"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100.0",
             "75.0",
@@ -792,9 +764,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["1000"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "100",
             "90",
@@ -848,9 +818,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["1000"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "10",
         ],
@@ -913,9 +881,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "ImageSampler": ["Random"],
         "Interpolator": ["LinearInterpolator"],
         "MaximumNumberOfIterations": ["200"],
-        "MaximumNumberOfSamplingAttempts": [
-            "10",
-        ],
+        "MaximumNumberOfSamplingAttempts": ["25"],
         "MaximumStepLength": [
             "25",
             "20",

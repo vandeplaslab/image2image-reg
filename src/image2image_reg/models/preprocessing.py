@@ -105,7 +105,7 @@ class Preprocessing(BaseModel):
     crop_polygon: ty.Optional[Polygon] = None
 
     # mask pre-processing
-    transform_mask: bool = True
+    transform_mask: bool = False
     use_mask: bool = True
     mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None
     mask_bbox: ty.Optional[BoundingBox] = None
