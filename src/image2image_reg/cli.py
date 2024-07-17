@@ -247,7 +247,7 @@ def cli(
     no_color: bool = False,
     dev: bool = False,
     log: PathLike | None = None,
-    extra_args: ty.Tuple[str, ...] | None = None,
+    extra_args: tuple[str, ...] | None = None,
 ) -> None:
     """Launch registration app."""
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
