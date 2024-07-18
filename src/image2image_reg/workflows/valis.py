@@ -39,6 +39,12 @@ class ValisReg(Workflow):
         merge: bool = False,
         log: bool = False,
         init: bool = True,
+        check_for_reflections: bool = False,
+        non_rigid_registration: bool = False,
+        micro_registration: bool = True,
+        micro_registration_fraction: float = 0.125,
+        feature_detector: str = "sensitive_vgg",
+        feature_matcher: str = "RANSAC",
         **_kwargs: ty.Any,
     ):
         super().__init__(
@@ -52,12 +58,12 @@ class ValisReg(Workflow):
             **_kwargs,
         )
         self._reference: str = None
-        self.check_for_reflections: bool = True
-        self.non_rigid_registration: bool = False
-        self.micro_registration: bool = True
-        self.micro_registration_fraction: float = 0.125
-        self.feature_detector: str = "sensitive_vgg"
-        self.feature_matcher: str = "ransac"
+        self.check_for_reflections: bool = check_for_reflections
+        self.non_rigid_registration: bool = non_rigid_registration
+        self.micro_registration: bool = micro_registration
+        self.micro_registration_fraction: float = micro_registration_fraction
+        self.feature_detector: str = feature_detector
+        self.feature_matcher: str = feature_matcher
 
     @property
     def is_registered(self) -> bool:
@@ -98,7 +104,7 @@ class ValisReg(Workflow):
         self.name = config["name"]
         self.cache_images = config["cache_images"]
         self.merge_images = config["merge"]
-        self.reference = config["reference"]
+        self._reference = config["reference"]
         self.check_for_reflections = config["check_for_reflections"]
         self.non_rigid_registration = config["non_rigid_registration"]
         self.micro_registration = config["micro_registration"]
@@ -227,6 +233,43 @@ class ValisReg(Workflow):
             logger.success("✅ Project configuration is valid.")
         return is_valid, errors
 
+    def clear(self, cache: bool = True, valis: bool = False, image: bool = False, metadata: bool = False) -> None:
+        """Clear existing data."""
+        from image2image_reg.utils.utilities import _safe_delete
+
+        # clear transformations, cache, images
+        if cache:
+            for file in self.cache_dir.glob("*"):
+                _safe_delete(file)
+            _safe_delete(self.cache_dir)
+
+        if metadata:
+            for sub_directory in [
+                "masks",
+                "matches-initial",
+                "matches-final",
+                "overlaps",
+                "processed",
+                "micro_registration",
+                "registered",
+                "rigid_registration",
+            ]:
+                directory = self.project_dir / sub_directory
+                for file in directory.glob("*"):
+                    _safe_delete(file)
+                _safe_delete(directory)
+
+        if image:
+            for file in self.image_dir.glob("*"):
+                _safe_delete(file)
+            _safe_delete(self.image_dir)
+
+        if valis:
+            directory = self.project_dir / "data"
+            for file in directory.glob("*"):
+                _safe_delete(file)
+            _safe_delete(directory)
+
     @property
     def filelist(self) -> list[PathLike]:
         """Return list of file paths."""
@@ -242,7 +285,7 @@ class ValisReg(Workflow):
     @property
     def reference(self) -> PathLike | None:
         """Get reference image."""
-        reference = self.reference
+        reference = self._reference
         if reference:
             filelist = self.filelist
             reference = Path(reference)
@@ -256,6 +299,7 @@ class ValisReg(Workflow):
 
         # get filelist
         filelist = self.filelist
+        filelist = [str(s) for s in filelist]
         logger.info(f"Filelist has {len(filelist)} images.")
         # get reference
         reference = self.reference
@@ -266,6 +310,10 @@ class ValisReg(Workflow):
         # get matcher
         # feature_matcher_cls = get_feature_matcher(self.feature_matcher)
         # logger.info(f"Feature matcher: {feature_matcher_cls}")
+        # Print configuration
+        logger.info(f"Check for reflections: {self.check_for_reflections}")
+        logger.info(f"Non-rigid registration: {self.non_rigid_registration}")
+        logger.info(f"Micro-registration: {self.micro_registration}; fraction: {self.micro_registration_fraction}")
 
         kws = {}
         if not self.non_rigid_registration:
@@ -285,12 +333,13 @@ class ValisReg(Workflow):
 
                     with open(registrar_path, "rb") as f:
                         registrar = pickle.load(f)
+                    logger.info(f"Loaded registrar from '{registrar_path}'.")
                 else:
                     registrar = registration.Valis(
                         str(self.project_dir),
                         str(self.project_dir),
                         name=self.name,
-                        image_type="fluorescence",
+                        image_type="fluorescence",  # should it be auto
                         imgs_ordered=True,
                         img_list=filelist,
                         reference_img_f=str(reference) if reference else None,
@@ -300,6 +349,7 @@ class ValisReg(Workflow):
                         **kws,
                     )
                     registrar.dst_dir = str(self.project_dir)
+                    registrar.set_dst_paths()
 
                     with MeasureTimer() as timer:
                         registrar.register(processor_dict=channel_kws)
@@ -311,8 +361,8 @@ class ValisReg(Workflow):
                             matches_dst_dir = Path(registrar.dst_dir) / "matches-initial"
                             registrar.draw_matches(matches_dst_dir)
                         logger.info(f"Exported matches in {timer()}")
-                    except Exception:
-                        logger.error("Failed to export matches.")
+                    except Exception as exc:
+                        logger.exception(f"Failed to export matches {exc}.")
 
                     # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an
                     # image that is proportion of the full resolution.
@@ -325,20 +375,22 @@ class ValisReg(Workflow):
                             micro_reg_size = np.floor(min_max_size * self.micro_registration_fraction).astype(int)
                         except Exception:
                             micro_reg_size = 3000
+                            logger.error("Failed to calculate micro registration size.")
 
                         logger.info(f"Micro-registering using {micro_reg_size} pixels.")
                         # Perform high resolution non-rigid registration
-                        with MeasureTimer() as timer:
-                            try:
+                        try:
+                            with MeasureTimer() as timer:
                                 registrar.register_micro(
                                     max_non_rigid_registration_dim_px=micro_reg_size,
                                     processor_dict=channel_kws,
                                     reference_img_f=str(reference) if reference else None,
                                     align_to_reference=reference is not None,
                                 )
-                            except Exception as exc:
-                                logger.error(f"Error during non-rigid registration: {exc}")
-                        logger.info(f"Registered high-res images in {timer()}")
+                                logger.info(f"Registered high-res images in {timer()}")
+                        except Exception as exc:
+                            logger.exception(f"Error during micro registration: {exc}")
+                            self.micro_registration = False
 
                     # We can also plot the high resolution matches using `Valis.draw_matches`:
                     try:
@@ -347,10 +399,11 @@ class ValisReg(Workflow):
                             registrar.draw_matches(matches_dst_dir)
                         logger.info(f"Exported matches in {timer()}")
                     except Exception as exc:
-                        logger.error(f"Failed to export matches: {exc}.")
+                        logger.exception(f"Failed to export matches: {exc}.")
                 self.registrar = registrar
             except Exception as exc:
                 registration.kill_jvm()
+                logger.exception(f"Error during registration: {exc}")
                 raise exc
             registration.kill_jvm()
         logger.info(f"Completed registration in {main_timer()}")
@@ -365,7 +418,7 @@ class ValisReg(Workflow):
         paths = []
         # export images to OME-TIFFs
         with MeasureTimer() as timer:
-            registered_dir = self.project_dir / "registered"
+            registered_dir = self.image_dir
             registered_dir.mkdir(exist_ok=True, parents=True)
             paths_ = transform_registered_image(
                 self.registrar, registered_dir, non_rigid_reg=self.non_rigid_registration
@@ -693,7 +746,7 @@ def valis_registration(
                         registrar.draw_matches(matches_dst_dir)
                     logger.info(f"Exported matches in {timer()}")
                 except Exception:
-                    logger.error("Failed to export matches.")
+                    logger.exception("Failed to export matches.")
 
                 # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an
                 # image that is proportion of the full resolution.
@@ -706,6 +759,7 @@ def valis_registration(
                         micro_reg_size = np.floor(min_max_size * micro_reg_fraction).astype(int)
                     except Exception:
                         micro_reg_size = 3000
+                        logger.exception("Failed to calculate micro registration size.")
 
                     logger.info(f"Micro-registering using {micro_reg_size} pixels.")
                     # Perform high resolution non-rigid registration
@@ -718,7 +772,7 @@ def valis_registration(
                                 align_to_reference=reference is not None,
                             )
                         except Exception as exc:
-                            logger.error(f"Error during non-rigid registration: {exc}")
+                            logger.exception(f"Error during non-rigid registration: {exc}")
                     logger.info(f"Registered high-res images in {timer()}")
 
                 # We can also plot the high resolution matches using `Valis.draw_matches`:
@@ -728,7 +782,7 @@ def valis_registration(
                         registrar.draw_matches(matches_dst_dir)
                     logger.info(f"Exported matches in {timer()}")
                 except Exception as exc:
-                    logger.error(f"Failed to export matches: {exc}.")
+                    logger.exception(f"Failed to export matches: {exc}.")
 
             # export images to OME-TIFFs
             with MeasureTimer() as timer:
@@ -746,6 +800,7 @@ def valis_registration(
             logger.info(f"Exported attached images in {timer()}")
 
         except Exception as exc:
+            logger.exception(f"Failed to register images: {exc}")
             registration.kill_jvm()
             raise exc
         registration.kill_jvm()
@@ -773,4 +828,12 @@ def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool 
 
 def get_channel_kws(obj: ValisReg) -> dict:
     """Get channel kws for each file."""
-    return {}
+    from valis import valtils
+
+    channel_kws = {}
+    # iterate over modalities
+    for modality in obj.modalities.values():
+        name = valtils.get_name(str(modality.path))
+        modality_kws = modality.preprocessing.to_valis()
+        channel_kws[name] = [get_preprocessor(modality_kws[0]), modality_kws[1]]
+    return channel_kws

@@ -113,6 +113,7 @@ class Preprocessing(BaseModel):
 
     # valis-only
     method: ty.Optional[str] = None
+    # method: ty.Optional[ty.Union[str, tuple[str, dict]]] = None
 
     def __init__(self, **kwargs: ty.Any):
         if "max_int_proj" in kwargs:
@@ -136,6 +137,16 @@ class Preprocessing(BaseModel):
     def is_masked(self) -> bool:
         """Return if masked."""
         return self.use_mask and (self.mask is not None or self.mask_bbox is not None or self.mask_polygon is not None)
+
+    def to_valis(self) -> list[str, dict]:
+        """Return valis."""
+        if self.method == "I2RegPreprocessor":
+            return [self.method, self.dict()]
+        elif self.method == "ColorfulStandardizer":
+            return ["ColorfulStandardizer", {"c": 0.2, "h": 0}]
+        elif self.method in ["mip", "MaxIntensityProjection"]:
+            return ["MaxIntensityProjection", {"channel_names": self.channel_names}]
+        return [self.method, {}]
 
     def as_str(self) -> tuple[str, str]:
         """Create nice formatting based on pre-processing."""

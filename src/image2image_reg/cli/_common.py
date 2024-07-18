@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import sys
+import typing as ty
+from pathlib import Path
 
 import click
 from koyo.click import cli_parse_paths_sort
 from koyo.typing import PathLike
 from loguru import logger
+
+if ty.TYPE_CHECKING:
+    from image2image_reg.models import Preprocessing
 
 # declare common options
 ALLOW_EXTRA_ARGS = {"help_option_names": ["-h", "--help"], "ignore_unknown_options": True, "allow_extra_args": True}
@@ -132,7 +137,9 @@ def arg_split_bbox(ctx, param, value):
     return args
 
 
-def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> Preprocessing | None:
+def get_preprocessing(
+    preprocessing: str | None, affine: str | None = None, method: str | None = None
+) -> Preprocessing | None:
     """Get a pre-processing object."""
     from image2image_reg.models import Preprocessing
 
@@ -149,6 +156,13 @@ def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> P
             raise ValueError("Affine must be a JSON file.")
         # will be automatically converted to a numpy array
         pre.affine = affine  # type: ignore[assignment]
+    if method == "auto":
+        if preprocessing in ["dark", "fluorescence"]:
+            pre.method = "MaxIntensityProjection"
+        elif preprocessing in ["light", "brightfield"]:
+            pre.method = "ColorfulStandardizer"
+    elif method is not None:
+        pre.method = method
     return pre
 
 

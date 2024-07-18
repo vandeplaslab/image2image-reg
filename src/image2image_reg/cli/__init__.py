@@ -90,13 +90,13 @@ def cli(
     set_logger(verbosity, no_color, log)
 
 
-cli.add_command(elastix, help_group="Registration")
+cli.add_command(elastix, help_group="Registration")  # type: ignore
 if valis:
-    cli.add_command(valis, help_group="Registration")
+    cli.add_command(valis, help_group="Registration")  # type: ignore
 if simple_valis:
-    cli.add_command(simple_valis, help_group="Registration")
-cli.add_command(convert, help_group="Utility")
-cli.add_command(merge, help_group="Utility")
+    cli.add_command(simple_valis, help_group="Registration")  # type: ignore
+cli.add_command(convert, help_group="Utility")  # type: ignore
+cli.add_command(merge, help_group="Utility")  # type: ignore
 
 
 def main():

@@ -18,9 +18,10 @@ from koyo.typing import PathLike
 from koyo.utilities import is_installed, reraise_exception_if_debug
 from loguru import logger
 
-from image2image_reg.enums import WriterMode
+from image2image_reg.enums import ValisDetectorMethod, ValisMatcherMethod, ValisPreprocessingMethod, WriterMode
 
 from ._common import (
+    ALLOW_EXTRA_ARGS,
     as_uint8_,
     fmt_,
     n_parallel_,
@@ -34,6 +35,31 @@ from ._common import (
     write_registered_,
 )
 
+
+def cli_parse_method(ctx, param, value: str) -> str:
+    """Parse pre-processing."""
+    return [
+        {
+            "cs": "ColorfulStandard",
+            "lum": "Luminosity",
+            "he": "HEPreprocessing",
+            "mip": "MaxIntensityProjection",
+            "i2r": "I2RegPreprocessor",
+        }.get(v, v)
+        for v in value
+    ]
+
+
+def cli_parse_detector(ctx, param, value: str) -> str:
+    """Parse detector."""
+    return {"svgg": "sensitive_vgg", "vsvgg": "very_sensitive_vgg"}.get(value, value)
+
+
+def cli_parse_matcher(ctx, param, value: str) -> str:
+    """Parse matcher."""
+    return {"ransac": "RANSAC", "gms": "GMS"}.get(value, value)
+
+
 valis = None
 if is_installed("valis"):
 
@@ -41,6 +67,48 @@ if is_installed("valis"):
     def valis() -> None:
         """Valis registration."""
 
+    @click.option(
+        "-f",
+        "--fraction",
+        help="Micro-registration fraction.",
+        type=click.FloatRange(0, 1, clamp=True),
+        default=0.125,
+        show_default=True,
+    )
+    @click.option(
+        "--micro/--no_micro",
+        help="Perform micro registration.",
+        is_flag=True,
+        default=True,
+        show_default=True,
+    )
+    @click.option(
+        "--reflect/--no_reflect",
+        help="Check for reflections.",
+        is_flag=True,
+        default=True,
+        show_default=True,
+    )
+    @click.option(
+        "-M",
+        "--match",
+        help="Feature matching method.",
+        type=click.Choice(ty.get_args(ValisMatcherMethod), case_sensitive=False),
+        default="RANSAC",
+        show_default=True,
+        required=False,
+        callback=cli_parse_matcher,
+    )
+    @click.option(
+        "-D",
+        "--detect",
+        help="Feature detection method.",
+        type=click.Choice(ty.get_args(ValisDetectorMethod), case_sensitive=False),
+        default="sensitive_vgg",
+        show_default=True,
+        required=False,
+        callback=cli_parse_detector,
+    )
     @click.option(
         "--merge/--no_merge", help="Merge modalities once co-registered.", is_flag=True, default=True, show_default=True
     )
@@ -69,15 +137,36 @@ if is_installed("valis"):
         required=True,
     )
     @valis.command("new", help_group="Project")
-    def valis_new_cmd(output_dir: str, name: str, cache: bool, merge: bool) -> None:
+    def new_cmd(
+        output_dir: str,
+        name: str,
+        cache: bool,
+        merge: bool,
+        detect: bool,
+        match: bool,
+        reflect: bool,
+        micro: bool,
+        fraction: float,
+    ) -> None:
         """Create a new project."""
         from image2image_reg.cli.i2reg import new_runner
 
-        new_runner(output_dir, name, cache, merge, valis=True)
+        new_runner(
+            output_dir,
+            name,
+            cache,
+            merge,
+            valis=True,
+            feature_detector=detect,
+            feature_matcher=match,
+            check_for_reflections=reflect,
+            micro_registration=micro,
+            micro_registration_fraction=fraction,
+        )
 
     @project_path_single_
     @valis.command("about", help_group="Project")
-    def valis_about_cmd(project_dir: ty.Sequence[str]) -> None:
+    def about_cmd(project_dir: ty.Sequence[str]) -> None:
         """Print information about the registration project."""
         from image2image_reg.cli.i2reg import about_runner
 
@@ -85,7 +174,7 @@ if is_installed("valis"):
 
     @project_path_multi_
     @valis.command("validate", help_group="Project")
-    def valis_validate_cmd(project_dir: ty.Sequence[str]) -> None:
+    def validate_cmd(project_dir: ty.Sequence[str]) -> None:
         """Validate project configuration."""
         from image2image_reg.cli.i2reg import validate_runner
 
@@ -96,11 +185,12 @@ if is_installed("valis"):
         "-M",
         "--method",
         help="Pre-processing method.",
-        type=click.Choice(["basic", "light", "dark"], case_sensitive=False),
-        default=["basic"],
+        type=click.Choice(ty.get_args(ValisPreprocessingMethod), case_sensitive=False),
+        default=["auto"],
         show_default=True,
         required=False,
         multiple=True,
+        callback=cli_parse_method,
     )
     @click.option(
         "-P",
@@ -133,7 +223,7 @@ if is_installed("valis"):
     )
     @project_path_single_
     @valis.command("add-image", help_group="Project")
-    def valis_add_modality_cmd(
+    def add_modality_cmd(
         project_dir: str,
         name: ty.Sequence[str],
         image: ty.Sequence[str],
@@ -145,7 +235,7 @@ if is_installed("valis"):
         from image2image_reg.cli.i2reg import add_modality_runner
 
         add_modality_runner(
-            project_dir, name, image, preprocessings=preprocessing, overwrite=overwrite, method=method, valis=True
+            project_dir, name, image, preprocessings=preprocessing, overwrite=overwrite, methods=method, valis=True
         )
 
     @click.option(
@@ -178,7 +268,7 @@ if is_installed("valis"):
     )
     @project_path_single_
     @valis.command("add-attachment", help_group="Project")
-    def valis_add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
+    def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
         """Add attachment image to registered modality."""
         from image2image_reg.cli.i2reg import add_attachment_runner
 
@@ -250,7 +340,7 @@ if is_installed("valis"):
     )
     @project_path_single_
     @valis.command("add-shape", help_group="Project")
-    def valis_add_shape_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
+    def add_shape_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
         """Add attachment shape (GeoJSON) to registered modality."""
         from image2image_reg.cli.i2reg import add_shape_runner
 
@@ -283,9 +373,7 @@ if is_installed("valis"):
     )
     @project_path_multi_
     @valis.command("add-merge", help_group="Project")
-    def valis_add_merge_cmd(
-        project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool
-    ) -> None:
+    def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
         """Specify how (if) images should be merged."""
         from image2image_reg.cli.i2reg import add_merge_runner
 
@@ -310,7 +398,7 @@ if is_installed("valis"):
     )
     @project_path_multi_
     @valis.command("register", help_group="Execute")
-    def valis_register_cmd(
+    def register_cmd(
         project_dir: ty.Sequence[str],
         write: bool,
         fmt: WriterMode,
@@ -324,7 +412,7 @@ if is_installed("valis"):
         overwrite: bool,
     ) -> None:
         """Register images."""
-        valis_register_runner(
+        register_runner(
             project_dir,
             write_images=write,
             fmt=fmt,
@@ -368,7 +456,7 @@ if is_installed("valis"):
             )
         return path
 
-    def valis_register_runner(
+    def register_runner(
         paths: ty.Sequence[str],
         write_images: bool = True,
         fmt: WriterMode = "ome-tiff",
@@ -423,24 +511,24 @@ if is_installed("valis"):
             else:
                 errors = []
                 for path in paths:
-                    try:
-                        _valis_register(
-                            path,
-                            write_images,
-                            fmt,
-                            write_registered,
-                            write_not_registered,
-                            write_merged,
-                            remove_merged,
-                            as_uint8,
-                            n_parallel=n_parallel,
-                            overwrite=overwrite,
-                        )
-                        logger.info(f"Finished processing {path} in {timer(since_last=True)}")
-                    except Exception as exc:
-                        logger.exception(f"Failed to process {path}.")
-                        errors.append(path)
-                        reraise_exception_if_debug(exc)
+                    # try:
+                    _valis_register(
+                        path,
+                        write_images,
+                        fmt,
+                        write_registered,
+                        write_not_registered,
+                        write_merged,
+                        remove_merged,
+                        as_uint8,
+                        n_parallel=n_parallel,
+                        overwrite=overwrite,
+                    )
+                    logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+                    # except Exception:
+                    #     logger.exception(f"Failed to process {path}.")
+                    #     errors.append(path)
+                    # reraise_exception_if_debug(exc)
                 if errors:
                     errors = "\n- ".join(errors)
                     logger.error(f"Failed to register the following projects: {errors}")
@@ -457,7 +545,7 @@ if is_installed("valis"):
     @fmt_
     @project_path_multi_
     @valis.command("export", help_group="Execute")
-    def valis_export_cmd(
+    def export_cmd(
         project_dir: ty.Sequence[str],
         fmt: WriterMode,
         write_registered: bool,
@@ -470,7 +558,7 @@ if is_installed("valis"):
         overwrite: bool,
     ) -> None:
         """Export images."""
-        valis_export_runner(
+        export_runner(
             project_dir,
             fmt=fmt,
             write_registered=write_registered,
@@ -483,7 +571,7 @@ if is_installed("valis"):
             overwrite=overwrite,
         )
 
-    def valis_export_runner(
+    def export_runner(
         paths: ty.Sequence[str],
         fmt: WriterMode = "ome-tiff",
         write_registered: bool = True,
@@ -580,3 +668,54 @@ if is_installed("valis"):
             overwrite=overwrite,
         )
         return path
+
+    @click.option(
+        "-V",
+        "--no_valis",
+        help="Clear valis.",
+        is_flag=True,
+        default=False,
+        show_default=True,
+    )
+    @click.option(
+        "-M",
+        "--no_metadata",
+        help="Clear metadata.",
+        is_flag=True,
+        default=False,
+        show_default=True,
+    )
+    @click.option("-I", "--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
+    @click.option("-C", "--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
+    @project_path_multi_
+    @valis.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+    def clear_cmd(
+        project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_metadata: bool, no_valis: bool
+    ) -> None:
+        """Clear project data (cache/images/transformations/etc...)."""
+        clear_runner(project_dir, no_cache, no_image, no_metadata, no_valis)
+
+    def clear_runner(
+        paths: ty.Sequence[str],
+        no_cache: bool = True,
+        no_image: bool = True,
+        no_metadata: bool = True,
+        no_valis: bool = True,
+    ) -> None:
+        """Register images."""
+        from image2image_reg.workflows import ValisReg
+
+        print_parameters(
+            Parameter("Project directory", "-p/--project_dir", paths),
+            Parameter("Don't clear cache", "--no_cache", no_cache),
+            Parameter("Don't clear images", "--no_image", no_image),
+            Parameter("Don't clear metadata", "--no_metadata", no_metadata),
+            Parameter("Don't clear valis", "--no_valis", no_valis),
+        )
+
+        with MeasureTimer() as timer:
+            for path in paths:
+                pro = ValisReg.from_path(path)
+                pro.clear(cache=not no_cache, image=not no_image, metadata=not no_metadata, valis=not no_valis)
+                logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
+        logger.info(f"Finished clearing all projects in {timer()}.")

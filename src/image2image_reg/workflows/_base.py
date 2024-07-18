@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import typing as ty
-from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -12,12 +11,11 @@ from koyo.typing import PathLike
 from loguru import logger
 
 from image2image_reg._typing import AttachedShapeOrPointDict
+from image2image_reg.models import Export, Modality, Preprocessing
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 
 if ty.TYPE_CHECKING:
     from image2image_io.readers import BaseReader
-
-    from image2image_reg.models import Export, Modality, Preprocessing
 
 
 class Workflow:
@@ -102,6 +100,10 @@ class Workflow:
 
     def save(self, **kwargs: ty.Any) -> Path:
         """Save configuration to file."""
+        raise NotImplementedError("Must implement method")
+
+    def clear(self, **kwargs: ty.Any) -> None:
+        """Clear all data from the project."""
         raise NotImplementedError("Must implement method")
 
     @classmethod

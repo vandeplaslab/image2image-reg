@@ -41,6 +41,11 @@ from ._common import (
 )
 
 
+def is_valis(project_dir: Path) -> bool:
+    """Check if project is a Valis project."""
+    return Path(project_dir).suffix in [".valis", ".i2valis"]
+
+
 @click.group("elastix", cls=GroupedGroup)
 def elastix() -> None:
     """I2Reg registration."""
@@ -79,7 +84,19 @@ def new_cmd(output_dir: str, name: str, cache: bool, merge: bool) -> None:
     new_runner(output_dir, name, cache, merge)
 
 
-def new_runner(output_dir: str, name: str, cache: bool, merge: bool, valis: bool = False) -> None:
+def new_runner(
+    output_dir: str,
+    name: str,
+    cache: bool,
+    merge: bool,
+    valis: bool = False,
+    check_for_reflections: bool = False,
+    non_rigid_registration: bool = False,
+    micro_registration: bool = True,
+    micro_registration_fraction: float = 0.125,
+    feature_detector: str = "sensitive_vgg",
+    feature_matcher: str = "RANSAC",
+) -> None:
     """Create a new project."""
     from image2image_reg.workflows import IWsiReg, ValisReg
 
@@ -92,7 +109,18 @@ def new_runner(output_dir: str, name: str, cache: bool, merge: bool, valis: bool
     if not valis:
         obj = IWsiReg(name=name, output_dir=output_dir, cache=cache, merge=merge)
     else:
-        obj = ValisReg(name=name, output_dir=output_dir, cache=cache, merge=merge)
+        obj = ValisReg(
+            name=name,
+            output_dir=output_dir,
+            cache=cache,
+            merge=merge,
+            check_for_reflections=check_for_reflections,
+            non_rigid_registration=non_rigid_registration,
+            micro_registration=micro_registration,
+            micro_registration_fraction=micro_registration_fraction,
+            feature_detector=feature_detector,
+            feature_matcher=feature_matcher,
+        )
     obj.save()
 
 
@@ -212,7 +240,7 @@ def add_modality_runner(
     preprocessings: ty.Sequence[str | None] | None = None,
     affines: ty.Sequence[str] | None = None,
     overwrite: bool = False,
-    method: str | None = None,
+    methods: ty.Sequence[str] | None = None,
     valis: bool = False,
 ) -> None:
     """Add images to the project."""
@@ -240,6 +268,10 @@ def add_modality_runner(
     if len(affines) == 1 and len(paths) > 1:
         affines = affines * len(paths)
         info_msg(f"Using same pre-processing for all images: {affines[0]}")
+    if len(methods) == 1 and len(paths) > 1:
+        methods = methods * len(paths)
+        info_msg(f"Using same method for all images: {methods[0]}")
+
     if len(names) != len(paths) != len(preprocessings) != len(masks):
         raise ValueError("Number of names, paths and pre-processing must match.")
     if masks[0] and mask_bbox:
@@ -252,16 +284,16 @@ def add_modality_runner(
         Parameter("Masks", "-m/--mask", masks),
         Parameter("Mask bounding box", "-b/--mask_bbox", mask_bbox),
         Parameter("Pre-processing", "-P/--preprocessing", preprocessings),
-        Parameter("Method", "-M/--method", method),
+        Parameter("Method", "-M/--method", methods),
         Parameter("Affine", "-A/--affine", affines),
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
     obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
-    for name, path, mask, preprocessing, affine in zip(names, paths, masks, preprocessings, affines):
+    for name, path, mask, preprocessing, affine, method in zip(names, paths, masks, preprocessings, affines, methods):
         obj.auto_add_modality(
             name,
             path,
-            preprocessing=get_preprocessing(preprocessing, affine),
+            preprocessing=get_preprocessing(preprocessing, affine, method=method if valis else None),
             mask=mask,
             mask_bbox=mask_bbox,
             overwrite=overwrite,
@@ -824,57 +856,6 @@ def _register(
     return path
 
 
-@click.option(
-    "-R",
-    "--no_progress",
-    help="Clear progress.",
-    is_flag=True,
-    default=False,
-    show_default=True,
-)
-@click.option(
-    "-T",
-    "--no_transformations",
-    help="Clear transformations.",
-    is_flag=True,
-    default=False,
-    show_default=True,
-)
-@click.option("-I", "--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
-@click.option("-C", "--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
-@project_path_multi_
-@elastix.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-def clear_cmd(
-    project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
-) -> None:
-    """Clear project data (cache/images/transformations/etc...)."""
-    clear_runner(project_dir, no_cache, no_image, no_transformations, no_progress)
-
-
-def clear_runner(
-    paths: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
-) -> None:
-    """Register images."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
-
-    print_parameters(
-        Parameter("Project directory", "-p/--project_dir", paths),
-        Parameter("Don't clear cache", "--no_cache", no_cache),
-        Parameter("Don't clear images", "--no_image", no_image),
-        Parameter("Don't clear transformations", "--no_transformations", no_transformations),
-        Parameter("Don't clear progress", "--no_progress", no_progress),
-    )
-
-    with MeasureTimer() as timer:
-        for path in paths:
-            pro = IWsiReg.from_path(path)
-            pro.clear(
-                cache=not no_cache, image=not no_image, transformations=not no_transformations, progress=not no_progress
-            )
-            logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
-    logger.info(f"Finished clearing all projects in {timer()}.")
-
-
 @overwrite_
 @parallel_mode_
 @n_parallel_
@@ -1020,3 +1001,58 @@ def _export(
         overwrite=overwrite,
     )
     return path
+
+
+@click.option(
+    "-R",
+    "--no_progress",
+    help="Clear progress.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "-T",
+    "--no_transformations",
+    help="Clear transformations.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option("-I", "--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
+@click.option("-C", "--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
+@project_path_multi_
+@elastix.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+def clear_cmd(
+    project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
+) -> None:
+    """Clear project data (cache/images/transformations/etc...)."""
+    clear_runner(project_dir, no_cache, no_image, no_transformations, no_progress)
+
+
+def clear_runner(
+    paths: ty.Sequence[str],
+    no_cache: bool = True,
+    no_image: bool = True,
+    no_transformations: bool = True,
+    no_progress: bool = True,
+) -> None:
+    """Register images."""
+    from image2image_reg.workflows import IWsiReg
+
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Don't clear cache", "--no_cache", no_cache),
+        Parameter("Don't clear images", "--no_image", no_image),
+        Parameter("Don't clear transformations", "--no_transformations", no_transformations),
+        Parameter("Don't clear progress", "--no_progress", no_progress),
+    )
+
+    with MeasureTimer() as timer:
+        for path in paths:
+            pro = IWsiReg.from_path(path)
+            pro.clear(
+                cache=not no_cache, image=not no_image, transformations=not no_transformations, progress=not no_progress
+            )
+            logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
+    logger.info(f"Finished clearing all projects in {timer()}.")

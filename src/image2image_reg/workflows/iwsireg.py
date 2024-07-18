@@ -831,23 +831,7 @@ class IWsiReg(Workflow):
         self, cache: bool = True, image: bool = True, transformations: bool = True, progress: bool = True
     ) -> None:
         """Clear existing data."""
-        from shutil import rmtree
-
-        def _safe_delete(file_: Path) -> None:
-            if not file_.exists():
-                return
-            if file_.is_dir():
-                try:
-                    rmtree(file_)
-                    logger.trace(f"Deleted directory {file_}.")
-                except Exception as e:
-                    logger.error(f"Could not delete {file_}. {e}")
-            else:
-                try:
-                    file_.unlink()
-                    logger.trace(f"Deleted file {file_}.")
-                except Exception as e:
-                    logger.error(f"Could not delete {file_}. {e}")
+        from image2image_reg.utils.utilities import _safe_delete
 
         # clear transformations, cache, images
         if cache:

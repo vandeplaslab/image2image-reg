@@ -9,7 +9,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from koyo.typing import PathLike
+from loguru import logger
 from natsort import natsorted
+
+from image2image_reg.enums import ValisCrop, ValisInterpolation
 
 if ty.TYPE_CHECKING:
     from valis.registration import Valis
@@ -97,8 +100,8 @@ def transform_attached_image(
     source_path: PathLike,
     paths_to_register: list[PathLike],
     output_dir: PathLike,
-    interp_method: str = "bicubic",
-    crop: str = "reference",
+    interp_method: str | ValisInterpolation = "bicubic",
+    crop: str | bool | ValisCrop = "reference",
     pyramid: int = 0,
 ) -> list[Path]:
     """Transform valis image."""
@@ -110,9 +113,14 @@ def transform_attached_image(
     output_dir = Path(output_dir)
 
     # get reference slide and source slide
-    slide_ref = registrar.get_ref_slide()
-    if not Path(slide_ref.src_f).exists():
-        raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+    slide_ref = None
+    if registrar.reference_img_f:
+        slide_ref = registrar.get_ref_slide()
+        if slide_ref and not Path(slide_ref.src_f).exists():
+            raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+    else:
+        crop = False
+        logger.warning("No reference image found. Disabling cropping.")
     slide_src = registrar.get_slide(get_name(str(source_path)))
     if not Path(slide_src.src_f).exists():
         raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
@@ -137,7 +145,7 @@ def transform_attached_image(
             output_filename,
             None,
             warped,
-            resolution=slide_ref.resolution,
+            resolution=slide_ref.resolution if slide_ref else slide_src.resolution,
             channel_names=reader.channel_names,
         )
         files.append(exported)
@@ -147,8 +155,8 @@ def transform_attached_image(
 def transform_registered_image(
     registrar: Valis,
     output_dir: PathLike,
-    interp_method: str = "bicubic",
-    crop: str = "reference",
+    interp_method: str | ValisInterpolation = "bicubic",
+    crop: str | bool | ValisCrop = "reference",
     non_rigid_reg: bool = True,
     pyramid: int = 0,
 ) -> list[Path]:
@@ -159,9 +167,14 @@ def transform_registered_image(
 
     output_dir = Path(output_dir)
     # export images to OME-TIFFs
-    slide_ref = registrar.get_ref_slide()
-    if not Path(slide_ref.src_f).exists():
-        raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+    slide_ref = None
+    if registrar.reference_img_f:
+        slide_ref = registrar.get_ref_slide()
+        if slide_ref and not Path(slide_ref.src_f).exists():
+            raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+    else:
+        crop = False
+        logger.warning("No reference image found. Disabling cropping.")
 
     files = []
     for slide_obj in registrar.slide_dict.values():
@@ -185,7 +198,7 @@ def transform_registered_image(
             output_filename,
             None,
             warped,
-            resolution=slide_ref.resolution,
+            resolution=slide_ref.resolution if slide_ref else slide_obj.resolution,
             channel_names=reader.channel_names,
         )
         files.append(exported)
