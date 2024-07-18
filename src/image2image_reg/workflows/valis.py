@@ -5,15 +5,427 @@ from __future__ import annotations
 import typing as ty
 from pathlib import Path
 
+import numpy as np
 from koyo.json import read_json_data, write_json_data
-from koyo.typing import PathLike
+from koyo.timer import MeasureTimer
+from koyo.typing import ArrayLike, PathLike
 from koyo.utilities import is_installed
 from loguru import logger
+
+from image2image_reg._typing import ValisRegConfig
+from image2image_reg.models import Export, Preprocessing
+from image2image_reg.workflows._base import Workflow
 
 logger = logger.bind(src="Valis")
 
 if not is_installed("valis"):
     raise ImportError("Please install valis to use this module.")
+
+
+class ValisReg(Workflow):
+    """Registration using Valis."""
+
+    CONFIG_NAME = "valis.config.json"
+    EXTENSION = ".valis"
+
+    registrar: ty.Any = None
+
+    def __init__(
+        self,
+        name: str | None = None,
+        output_dir: PathLike | None = None,
+        project_dir: PathLike | None = None,
+        cache: bool = True,
+        merge: bool = False,
+        log: bool = False,
+        init: bool = True,
+        **_kwargs: ty.Any,
+    ):
+        super().__init__(
+            name=name,
+            output_dir=output_dir,
+            project_dir=project_dir,
+            cache=cache,
+            merge=merge,
+            log=log,
+            init=init,
+            **_kwargs,
+        )
+        self._reference: str = None
+        self.check_for_reflections: bool = True
+        self.non_rigid_registration: bool = False
+        self.micro_registration: bool = True
+        self.micro_registration_fraction: float = 0.125
+        self.feature_detector: str = "sensitive_vgg"
+        self.feature_matcher: str = "ransac"
+
+    @property
+    def is_registered(self) -> bool:
+        """Check if the project has been registered."""
+        registrar_path = self.project_dir / "data" / f"{self.name}_registrar.pickle"
+        return registrar_path.exists()
+
+    @classmethod
+    def from_path(cls, path: PathLike, raise_on_error: bool = True) -> ValisReg:
+        """Initialize based on the project path."""
+        path = Path(path)
+        if not path.exists():
+            raise ValueError(f"Path does not exist ({path}).")
+        if path.is_file() and path.name in [cls.CONFIG_NAME]:
+            path = path.parent
+        if not path.is_dir():
+            raise ValueError("Path is not a directory.")
+        if not path.suffix == ".valis":
+            raise ValueError("Path is not a valid Valis project.")
+
+        with MeasureTimer() as timer:
+            config_path = path / cls.CONFIG_NAME
+            config: dict | ValisRegConfig | None = None
+            if config_path.exists():
+                config = read_json_data(path / cls.CONFIG_NAME)
+            if config and "name" not in config:
+                config["name"] = path.stem
+            obj = cls(project_dir=path, **config)
+            if config_path.exists():
+                obj.load_from_i2valis(raise_on_error=raise_on_error)
+        logger.trace(f"Restored from config in {timer()}")
+        return obj
+
+    def load_from_i2valis(self, raise_on_error: bool = True) -> None:
+        """Load data from image2image-reg project file."""
+        config: ValisRegConfig = read_json_data(self.project_dir / self.CONFIG_NAME)
+        # restore parameters
+        self.name = config["name"]
+        self.cache_images = config["cache_images"]
+        self.merge_images = config["merge"]
+        self.reference = config["reference"]
+        self.check_for_reflections = config["check_for_reflections"]
+        self.non_rigid_registration = config["non_rigid_registration"]
+        self.micro_registration = config["micro_registration"]
+        self.micro_registration_fraction = config["micro_registration_fraction"]
+
+        # add modality information
+        with MeasureTimer() as timer:
+            for name, modality in config["modalities"].items():
+                if not Path(modality["path"]).exists() and raise_on_error:
+                    raise ValueError(f"Modality path '{modality['path']}' does not exist.")
+                preprocessing = modality.get("preprocessing", dict())
+                self.add_modality(
+                    name=name,
+                    path=modality["path"],
+                    preprocessing=Preprocessing(**preprocessing) if preprocessing else None,
+                    channel_names=modality.get("channel_names", None),
+                    channel_colors=modality.get("channel_colors", None),
+                    mask=modality.get("mask", None),
+                    mask_bbox=modality.get("mask_bbox", None),
+                    mask_polygon=modality.get("mask_polygon", None),
+                    output_pixel_size=modality.get("output_pixel_size", None),
+                    pixel_size=modality.get("pixel_size", None),
+                    transform_mask=preprocessing.get("transform_mask", False),
+                    export=Export(**modality["export"]) if modality.get("export") else None,
+                    raise_on_error=raise_on_error,
+                )
+            logger.trace(f"Loaded modalities in {timer()}")
+
+            # load attachment images
+            if config.get("attachment_images"):
+                for name, attach_to in config["attachment_images"].items():
+                    self.attachment_images[name] = attach_to
+                    logger.trace(f"Added attachment image '{name}' attached to '{attach_to}'")
+                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
+
+            if config.get("attachment_shapes"):
+                for name, shape_dict in config["attachment_shapes"].items():
+                    assert "shape_files" in shape_dict, "Shape dict missing 'shape_files' key."
+                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
+                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    self.attachment_shapes[name] = shape_dict
+                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
+
+            if config.get("attachment_points"):
+                for name, shape_dict in config["attachment_points"].items():
+                    assert "shape_files" in shape_dict, "Shape dict missing 'shape_files' key."
+                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
+                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    self.attachment_points[name] = shape_dict
+                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
+
+            # load merge modalities
+            if config["merge_images"]:
+                for name, merge_modalities in config["merge_images"].items():
+                    self.merge_modalities[name] = merge_modalities
+                logger.trace(f"Loaded merge modalities in {timer(since_last=True)}")
+
+    def print_summary(self, func: ty.Callable = logger.info) -> None:
+        """Print summary about the project."""
+        elbow, pipe, tee, blank = "└──", "│  ", "├──", "   "
+
+        func(f"Project name: {self.name}")
+        func(f"Project directory: {self.project_dir}")
+        func(f"Merging images: {self.merge_images}")
+        func(f"Feature detector: {self.feature_detector}")
+        func(f"Feature matcher: {self.feature_matcher}")
+        func(f"Check for reflections: {self.check_for_reflections}")
+        func(f"Non-rigid registration: {self.non_rigid_registration}")
+        func(f"Micro registration: {self.micro_registration}")
+        func(f"Micro registration fraction: {self.micro_registration_fraction}")
+
+        # func information about the specified modalities
+        func(f"Number of modalities: {len(self.modalities)}")
+        n = len(self.modalities) - 1
+        for i, modality in enumerate(self.modalities.values()):
+            func(f" {elbow if i == n else tee}{modality.name} ({modality.path})")
+            func(f" {pipe if i != n else blank}{tee}Preprocessing: {modality.preprocessing is not None}")
+            func(f" {pipe if i != n else blank}{elbow}Export: {modality.export}")
+
+        # func information about attachment images
+        func(f"Number of attachment images: {len(self.attachment_images)}")
+        n = len(self.attachment_images) - 1
+        for i, (name, attach_to) in enumerate(self.attachment_images.items()):
+            func(f" {elbow if i == n else tee}{name} ({attach_to})")
+        # func information about attachment shapes
+        func(f"Number of attachment shapes: {len(self.attachment_shapes)}")
+        n = len(self.attachment_shapes) - 1
+        for i, (name, shape_dict) in enumerate(self.attachment_shapes.items()):
+            func(f" {elbow if i == n else tee}{name} ({shape_dict})")
+        # func information about attachment shapes
+        func(f"Number of attachment points: {len(self.attachment_points)}")
+        n = len(self.attachment_points) - 1
+        for i, (name, shape_dict) in enumerate(self.attachment_points.items()):
+            func(f" {elbow if i == n else tee}{name} ({shape_dict})")
+
+        # func information about merge modalities
+        func(f"Number of merge modalities: {len(self.merge_modalities)}")
+        n = len(self.merge_modalities) - 1
+        for i, (name, merge_modalities) in enumerate(self.merge_modalities.items()):
+            func(f" {elbow if i == n else tee}{name} ({merge_modalities})")
+
+    def validate(self, allow_not_registered: bool = True, require_paths: bool = False) -> tuple[bool, list[str]]:
+        """Perform several checks on the project."""
+        # check whether the paths are still where they were set up
+        errors = []
+        if not self.modalities:
+            errors.append("❌ No modalities have been added.")
+            logger.error(errors[-1])
+        # check if the paths exist
+        for modality in self.modalities.values():
+            if not isinstance(modality.path, ArrayLike) and not Path(modality.path).exists():
+                errors.append(f"❌ Modality '{modality.name}' path '{modality.path}' does not exist.")
+                logger.error(errors[-1])
+            else:
+                logger.success(f"✅ Modality '{modality.name}' exist.")
+        # check if the reference exists
+        if self.reference and self.reference not in self.modalities:
+            errors.append(f"❌ Reference modality '{self.reference}' not found.")
+            logger.error(errors[-1])
+
+        is_valid = not errors
+        if not is_valid:
+            errors.append("❌ Project configuration is invalid.")
+            logger.error(errors[-1])
+        else:
+            logger.success("✅ Project configuration is valid.")
+        return is_valid, errors
+
+    @property
+    def filelist(self) -> list[PathLike]:
+        """Return list of file paths."""
+        from natsort import natsorted
+
+        filelist = [modality.path for modality in self.modalities.values()]
+        filelist = natsorted(filelist)
+        filelist = [Path(path) for path in filelist]
+        for path in filelist:
+            assert path.exists(), f"{path} does not exist."
+        return filelist
+
+    @property
+    def reference(self) -> PathLike | None:
+        """Get reference image."""
+        reference = self.reference
+        if reference:
+            filelist = self.filelist
+            reference = Path(reference)
+            assert reference.exists(), f"{reference} does not exist."
+            assert reference in filelist, f"{reference} not in filelist."
+        return reference
+
+    def register(self, **kwargs: ty.Any) -> None:
+        """Co-register images."""
+        from valis import registration
+
+        # get filelist
+        filelist = self.filelist
+        logger.info(f"Filelist has {len(filelist)} images.")
+        # get reference
+        reference = self.reference
+        logger.info(f"Reference image: {reference}")
+        # get detector
+        feature_detector_cls = get_feature_detector(self.feature_detector)
+        logger.info(f"Feature detector: {feature_detector_cls}")
+        # get matcher
+        # feature_matcher_cls = get_feature_matcher(self.feature_matcher)
+        # logger.info(f"Feature matcher: {feature_matcher_cls}")
+
+        kws = {}
+        if not self.non_rigid_registration:
+            kws["non_rigid_registrar_cls"] = None
+
+        channel_kws = get_channel_kws(self)
+
+        # initialize java
+        registration.init_jvm()
+
+        with MeasureTimer() as main_timer:
+            try:
+                # get registrar
+                registrar_path = self.project_dir / "data" / f"{self.name}_registrar.pickle"
+                if registrar_path.exists():
+                    import pickle
+
+                    with open(registrar_path, "rb") as f:
+                        registrar = pickle.load(f)
+                else:
+                    registrar = registration.Valis(
+                        str(self.project_dir),
+                        str(self.project_dir),
+                        name=self.name,
+                        image_type="fluorescence",
+                        imgs_ordered=True,
+                        img_list=filelist,
+                        reference_img_f=str(reference) if reference else None,
+                        align_to_reference=reference is not None,
+                        check_for_reflections=self.check_for_reflections,
+                        feature_detector_cls=feature_detector_cls,
+                        **kws,
+                    )
+                    registrar.dst_dir = str(self.project_dir)
+
+                    with MeasureTimer() as timer:
+                        registrar.register(processor_dict=channel_kws)
+                    logger.info(f"Registered low-res images in {timer()}")
+
+                    # We can also plot the high resolution matches using `Valis.draw_matches`:
+                    try:
+                        with MeasureTimer() as timer:
+                            matches_dst_dir = Path(registrar.dst_dir) / "matches-initial"
+                            registrar.draw_matches(matches_dst_dir)
+                        logger.info(f"Exported matches in {timer()}")
+                    except Exception:
+                        logger.error("Failed to export matches.")
+
+                    # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an
+                    # image that is proportion of the full resolution.
+                    if self.micro_registration:
+                        try:
+                            img_dims = np.array(
+                                [slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()]
+                            )
+                            min_max_size = np.min([np.max(d) for d in img_dims])
+                            micro_reg_size = np.floor(min_max_size * self.micro_registration_fraction).astype(int)
+                        except Exception:
+                            micro_reg_size = 3000
+
+                        logger.info(f"Micro-registering using {micro_reg_size} pixels.")
+                        # Perform high resolution non-rigid registration
+                        with MeasureTimer() as timer:
+                            try:
+                                registrar.register_micro(
+                                    max_non_rigid_registration_dim_px=micro_reg_size,
+                                    processor_dict=channel_kws,
+                                    reference_img_f=str(reference) if reference else None,
+                                    align_to_reference=reference is not None,
+                                )
+                            except Exception as exc:
+                                logger.error(f"Error during non-rigid registration: {exc}")
+                        logger.info(f"Registered high-res images in {timer()}")
+
+                    # We can also plot the high resolution matches using `Valis.draw_matches`:
+                    try:
+                        with MeasureTimer() as timer:
+                            matches_dst_dir = Path(registrar.dst_dir) / "matches-final"
+                            registrar.draw_matches(matches_dst_dir)
+                        logger.info(f"Exported matches in {timer()}")
+                    except Exception as exc:
+                        logger.error(f"Failed to export matches: {exc}.")
+                self.registrar = registrar
+            except Exception as exc:
+                registration.kill_jvm()
+                raise exc
+            registration.kill_jvm()
+        logger.info(f"Completed registration in {main_timer()}")
+
+    def write(self, **kwargs: ty.Any) -> list | None:
+        """Export images after applying transformation."""
+        from image2image_reg.valis.utilities import get_slide_path, transform_attached_image, transform_registered_image
+
+        if not self.registrar:
+            raise ValueError("Registrar not found. Please register first.")
+
+        paths = []
+        # export images to OME-TIFFs
+        with MeasureTimer() as timer:
+            registered_dir = self.project_dir / "registered"
+            registered_dir.mkdir(exist_ok=True, parents=True)
+            paths_ = transform_registered_image(
+                self.registrar, registered_dir, non_rigid_reg=self.non_rigid_registration
+            )
+            paths.extend(paths_)
+        logger.info(f"Exported registered images in {timer()}")
+
+        # export attached images to OME-TIFFs
+        with MeasureTimer() as timer:
+            attached_images = kwargs.get("attachment_images", {})
+            for src_name, attachments in attached_images.items():
+                src_path = get_slide_path(self.registrar, src_name)
+                paths_ = transform_attached_image(self.registrar, src_path, attachments, registered_dir)
+                paths.extend(paths_)
+        logger.info(f"Exported attached images in {timer()}")
+        return paths
+
+    def _get_config(self, **kwargs: ty.Any) -> dict:
+        """Get configuration."""
+        modalities_out: dict[str, dict] = {}
+        for modality in self.modalities.values():
+            modalities_out[modality.name] = modality.to_dict()
+
+        # write config
+        config: ValisRegConfig = {
+            "schema_version": "1.0",
+            "name": self.name,
+            "cache_images": self.cache_images,
+            # "cache_dir": str(self.cache_dir),
+            "reference": self.reference,
+            "check_for_reflections": self.check_for_reflections,
+            "non_rigid_registration": self.non_rigid_registration,
+            "micro_registration": self.micro_registration,
+            "micro_registration_fraction": self.micro_registration_fraction,
+            "feature_detector": self.feature_detector,
+            "feature_matcher": self.feature_matcher,
+            "modalities": modalities_out,
+            "attachment_shapes": self.attachment_shapes if len(self.attachment_shapes) > 0 else None,
+            "attachment_points": self.attachment_points if len(self.attachment_points) > 0 else None,
+            "attachment_images": self.attachment_images if len(self.attachment_images) > 0 else None,
+            "merge": self.merge_images,
+            "merge_images": self.merge_modalities if len(self.merge_modalities) > 0 else None,
+        }
+        return config
+
+    def save(self) -> Path:
+        """Save configuration to file."""
+        config = self._get_config()
+        filename = self.CONFIG_NAME
+        path = self.project_dir / filename
+        self.project_dir.mkdir(exist_ok=True, parents=True)
+        write_json_data(path, config)
+        logger.trace(f"Saved configuration to '{path}'.")
+        return path
+
+    def add_reference(self, name: str) -> None:
+        """Add reference image."""
+        if name not in self.modalities:
+            raise ValueError(f"Modality {name} not found.")
+        self.reference = name
 
 
 def get_config(config: dict[str, str] | PathLike) -> dict[str, str]:
@@ -214,7 +626,7 @@ def valis_registration(
     import numpy as np
     from koyo.timer import MeasureTimer
     from natsort import natsorted
-    from valis import registration, valtils
+    from valis import registration
 
     from image2image_reg.valis.utilities import get_slide_path, transform_attached_image, transform_registered_image
 
@@ -357,3 +769,8 @@ def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool 
         with open(registrar_path, "rb") as f:
             registrar = pickle.load(f)
     return registrar
+
+
+def get_channel_kws(obj: ValisReg) -> dict:
+    """Get channel kws for each file."""
+    return {}

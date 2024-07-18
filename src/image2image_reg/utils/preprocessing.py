@@ -503,6 +503,19 @@ def preprocess_reg_image_spatial(
             mask = transform_plane(mask, final_tform, composite_transform)
             logger.trace("Applied affine transform to mask")
 
+    # flip image
+    if preprocessing.flip and spatial:
+        logger.trace(f"Flipping image {preprocessing.flip.value}")
+        flip_tform = generate_affine_flip_transform(image, pixel_size, preprocessing.flip.value)
+        transforms.append(flip_tform)
+        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [flip_tform]})
+        image = transform_plane(image, final_tform, composite_transform)
+
+        if mask is not None and transform_mask:
+            mask.SetSpacing((pixel_size, pixel_size))
+            mask = transform_plane(mask, final_tform, composite_transform)
+            logger.trace("Flipped mask")
+
     # rotate counter-clockwise
     if float(preprocessing.rotate_counter_clockwise) != 0.0 and spatial:
         logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
@@ -530,19 +543,6 @@ def preprocess_reg_image_spatial(
             mask.SetSpacing((pixel_size, pixel_size))
             mask = transform_plane(mask, final_tform, composite_transform)
             logger.trace("Translated mask")
-
-    # flip image
-    if preprocessing.flip and spatial:
-        logger.trace(f"Flipping image {preprocessing.flip.value}")
-        flip_tform = generate_affine_flip_transform(image, pixel_size, preprocessing.flip.value)
-        transforms.append(flip_tform)
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [flip_tform]})
-        image = transform_plane(image, final_tform, composite_transform)
-
-        if mask is not None and transform_mask:
-            mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
-            logger.trace("Flipped mask")
 
     # crop to bbox
     if mask and preprocessing.use_crop:

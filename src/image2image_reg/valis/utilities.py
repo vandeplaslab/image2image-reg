@@ -100,7 +100,7 @@ def transform_attached_image(
     interp_method: str = "bicubic",
     crop: str = "reference",
     pyramid: int = 0,
-) -> None:
+) -> list[Path]:
     """Transform valis image."""
     from image2image_io.readers import get_simple_reader
     from image2image_io.writers import write_ome_tiff_from_array
@@ -117,6 +117,7 @@ def transform_attached_image(
     if not Path(slide_src.src_f).exists():
         raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
 
+    files = []
     for path in paths_to_register:
         reader = get_simple_reader(path)
         output_filename = output_dir / reader.path.name
@@ -132,13 +133,15 @@ def transform_attached_image(
         if warped.ndim == 3 and np.argmin(warped.shape) == 2 and not reader.is_rgb:
             warped = np.moveaxis(warped, 2, 0)
 
-        write_ome_tiff_from_array(
+        exported = write_ome_tiff_from_array(
             output_filename,
             None,
             warped,
             resolution=slide_ref.resolution,
             channel_names=reader.channel_names,
         )
+        files.append(exported)
+    return files
 
 
 def transform_registered_image(
@@ -148,7 +151,7 @@ def transform_registered_image(
     crop: str = "reference",
     non_rigid_reg: bool = True,
     pyramid: int = 0,
-) -> None:
+) -> list[Path]:
     """Transform valis image."""
     from image2image_io.readers import get_simple_reader
     from image2image_io.writers import write_ome_tiff_from_array
@@ -159,6 +162,8 @@ def transform_registered_image(
     slide_ref = registrar.get_ref_slide()
     if not Path(slide_ref.src_f).exists():
         raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+
+    files = []
     for slide_obj in registrar.slide_dict.values():
         if not Path(slide_obj.src_f).exists():
             raise ValueError(f"Slide {slide_ref.src_f} does not exist.")
@@ -176,13 +181,15 @@ def transform_registered_image(
         if warped.ndim == 3 and np.argmin(warped.shape) == 2 and not reader.is_rgb:
             warped = np.moveaxis(warped, 2, 0)
 
-        write_ome_tiff_from_array(
+        exported = write_ome_tiff_from_array(
             output_filename,
             None,
             warped,
             resolution=slide_ref.resolution,
             channel_names=reader.channel_names,
         )
+        files.append(exported)
+    return files
 
 
 def get_image_files(img_dir: PathLike, ordered: bool = False) -> list[Path]:

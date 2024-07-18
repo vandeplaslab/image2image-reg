@@ -111,6 +111,9 @@ class Preprocessing(BaseModel):
     mask_bbox: ty.Optional[BoundingBox] = None
     mask_polygon: ty.Optional[Polygon] = None
 
+    # valis-only
+    method: ty.Optional[str] = None
+
     def __init__(self, **kwargs: ty.Any):
         if "max_int_proj" in kwargs:
             kwargs["max_intensity_projection"] = kwargs.pop("max_int_proj")

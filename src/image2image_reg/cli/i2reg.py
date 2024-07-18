@@ -1,8 +1,7 @@
-"""CLI."""
+"""I2Reg command line interface."""
 
 from __future__ import annotations
 
-import sys
 import typing as ty
 from pathlib import Path
 
@@ -10,268 +9,41 @@ import click
 from click_groups import GroupedGroup
 from koyo.click import (
     Parameter,
-    arg_parse_framelist_multi,
     cli_parse_paths_sort,
     info_msg,
     print_parameters,
     warning_msg,
 )
-from koyo.system import IS_MAC
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
-from koyo.utilities import is_installed, reraise_exception_if_debug, running_as_pyinstaller_app
+from koyo.utilities import reraise_exception_if_debug
 from loguru import logger
 
-from image2image_reg import __version__
-from image2image_reg.enums import AVAILABLE_REGISTRATIONS, WriterMode
+from image2image_reg.enums import WriterMode
 
-if ty.TYPE_CHECKING:
-    from image2image_reg.models import Preprocessing
-
-valis_is_installed = is_installed("valis")
-
-# declare common options
-ALLOW_EXTRA_ARGS = {"help_option_names": ["-h", "--help"], "ignore_unknown_options": True, "allow_extra_args": True}
-overwrite_ = click.option(
-    "-W",
-    "--overwrite",
-    help="Overwrite existing data.",
-    is_flag=True,
-    default=None,
-    show_default=True,
-)
-as_uint8_ = click.option(
-    "-u/-U",
-    "--as_uint8/--no_as_uint8",
-    help="Downcast the image data format to uint8 which will substantially reduce the size of the files (unless it's"
-    " already in uint8...).",
-    is_flag=True,
-    default=None,
-    show_default=True,
-)
-original_size_ = click.option(
-    "-o/-O",
-    "--original_size/--no_original_size",
-    help="Write images in their original size after applying transformations.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-remove_merged_ = click.option(
-    "-g/-G",
-    "--remove_merged/--no_remove_merged",
-    help="Remove written images that have been merged.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-write_merged_ = click.option(
-    "-m/-M",
-    "--write_merged/--no_write_merged",
-    help="Write merge images. Nothing will happen if merge modalities have not been specified.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-write_not_registered_ = click.option(
-    "-n/-N",
-    "--write_not_registered/--no_write_not_registered",
-    help="Write not-registered images.",
-    is_flag=True,
-    default=False,
-    show_default=True,
-)
-write_registered_ = click.option(
-    "-r/-R",
-    "--write_registered/--no_write_registered",
-    help="Write registered images.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-fmt_ = click.option(
-    "-f",
-    "--fmt",
-    help="Output format.",
-    type=click.Choice(["ome-tiff"], case_sensitive=False),
-    default="ome-tiff",
-    show_default=True,
-    required=False,
-)
-write_ = click.option(
-    "-w/-W",
-    "--write/--no_write",
-    help="Write images to disk.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-n_parallel_ = click.option(
-    "-j",
-    "--n_parallel",
-    help="How many actions should be taken simultaneously.",
-    type=click.IntRange(1, 24, clamp=True),
-    show_default=True,
-    default=1,
-)
-parallel_mode_ = click.option(
-    "-P",
-    "--parallel_mode",
-    help="Parallel mode.",
-    type=click.Choice(["inner", "outer"], case_sensitive=False),
-    default="outer",
-    show_default=True,
-    required=False,
-)
-project_path_multi_ = click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the project directory. It usually ends in .i2reg extension.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    required=True,
-    multiple=True,
-    callback=cli_parse_paths_sort,
-)
-project_path_single_ = click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
+from ..parameters.registration import AVAILABLE_REGISTRATIONS
+from ._common import (
+    ALLOW_EXTRA_ARGS,
+    arg_split_bbox,
+    as_uint8_,
+    fmt_,
+    get_preprocessing,
+    n_parallel_,
+    original_size_,
+    overwrite_,
+    parallel_mode_,
+    project_path_multi_,
+    project_path_single_,
+    remove_merged_,
+    write_merged_,
+    write_not_registered_,
+    write_registered_,
 )
 
 
-# noinspection PyUnusedLocal
-def arg_split_bbox(ctx, param, value):
-    """Split arguments."""
-    if value is None:
-        return None
-    args = [int(arg.strip()) for arg in value.split(",")]
-    assert len(args) == 4, "Bounding box must have 4 values"
-    return args
-
-
-def set_logger(verbosity: float, no_color: bool, log: PathLike | None = None) -> None:
-    """Setup logger."""
-    from koyo.logging import get_loguru_config, set_loguru_env, set_loguru_log
-
-    level = verbosity * 10
-    level, fmt, colorize, enqueue = get_loguru_config(level, no_color=no_color)  # type: ignore[assignment]
-    set_loguru_env(fmt, level, colorize, enqueue)  # type: ignore[arg-type]
-    set_loguru_log(level=level.upper(), no_color=no_color, logger=logger)  # type: ignore[attr-defined]
-    logger.enable("image2image_reg")
-    logger.enable("image2image_io")
-    logger.enable("koyo")
-    # override koyo logger
-    set_loguru_log(level=level.upper(), no_color=no_color)  # type: ignore[attr-defined]
-    logger.debug(f"Activated logger with level '{level}'.")
-    if log:
-        set_loguru_log(
-            log,
-            level=level.upper(),  # type: ignore[attr-defined]
-            enqueue=enqueue,
-            colorize=False,
-            no_color=True,
-            catch=True,
-            diagnose=True,
-            logger=logger,
-            remove=False,
-        )
-        logger.trace(f"Command: {' '.join(sys.argv)}")
-
-
-def get_preprocessing(preprocessing: str | None, affine: str | None = None) -> Preprocessing | None:
-    """Get a pre-processing object."""
-    from image2image_reg.models import Preprocessing
-
-    if preprocessing in ["dark", "fluorescence"]:
-        pre = Preprocessing.fluorescence()
-    elif preprocessing in ["light", "brightfield"]:
-        pre = Preprocessing.brightfield()
-    elif preprocessing in ["basic"]:
-        pre = Preprocessing.basic()
-    else:
-        pre = None
-    if pre and affine:
-        if affine and not Path(affine).suffix == ".json":
-            raise ValueError("Affine must be a JSON file.")
-        # will be automatically converted to a numpy array
-        pre.affine = affine  # type: ignore[assignment]
-    return pre
-
-
-@click.group(
-    context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 120, "ignore_unknown_options": True},
-    cls=GroupedGroup,
-)
-@click.version_option(__version__, prog_name="wsireg")
-@click.option(
-    "--dev",
-    help="Flat to indicate that CLI should run in development mode and catch all errors.",
-    default=False,
-    is_flag=True,
-    show_default=True,
-)
-@click.option(
-    "--no_color",
-    help="Flag to disable colored logs (essential when logging to file).",
-    default=False,
-    is_flag=True,
-    show_default=True,
-)
-@click.option(
-    "--quiet", "-q", "verbosity", flag_value=0, help="Minimal output - only errors and exceptions will be shown."
-)
-@click.option("--debug", "verbosity", flag_value=0.5, help="Maximum output - all messages will be shown.")
-@click.option(
-    "--verbose",
-    "-v",
-    "verbosity",
-    default=1,
-    count=True,
-    help="Verbose output. This is additive flag so `-vvv` will print `INFO` messages and -vvvv will print `DEBUG`"
-    " information.",
-)
-@click.option(
-    "--log",
-    help="Write logs to file (specify log path).",
-    type=click.Path(exists=False, resolve_path=True, file_okay=True, dir_okay=False),
-    default=None,
-    show_default=True,
-)
-# @click.argument("extra_args", nargs=-1, type=click.UNPROCESSED)
-def cli(
-    verbosity: float = 1,
-    no_color: bool = False,
-    dev: bool = False,
-    log: PathLike | None = None,
-    extra_args: tuple[str, ...] | None = None,
-) -> None:
-    """Launch registration app."""
-    from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
-
-    if IS_MAC:
-        import os
-
-        os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
-        logger.trace("Disabled OBJC fork safety on macOS.")
-
-    if dev:
-        if running_as_pyinstaller_app():
-            click.echo("Developer mode is disabled in bundled app.")
-            dev = False
-        else:
-            verbosity = 0.5
-    verbosity = min(0.2, verbosity) * 10
-
-    if dev:
-        install_debugger_hook()
-        verbosity = 0
-    elif dev:
-        uninstall_debugger_hook()
-    set_logger(verbosity, no_color, log)
+@click.group("elastix", cls=GroupedGroup)
+def elastix() -> None:
+    """I2Reg registration."""
 
 
 @click.option(
@@ -301,15 +73,15 @@ def cli(
     show_default=True,
     required=True,
 )
-@cli.command("new", help_group="Project")
+@elastix.command("new", help_group="Project")
 def new_cmd(output_dir: str, name: str, cache: bool, merge: bool) -> None:
     """Create a new project."""
     new_runner(output_dir, name, cache, merge)
 
 
-def new_runner(output_dir: str, name: str, cache: bool, merge: bool) -> None:
+def new_runner(output_dir: str, name: str, cache: bool, merge: bool, valis: bool = False) -> None:
     """Create a new project."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows import IWsiReg, ValisReg
 
     print_parameters(
         Parameter("Output directory", "-o/--output_dir", output_dir),
@@ -317,38 +89,41 @@ def new_runner(output_dir: str, name: str, cache: bool, merge: bool) -> None:
         Parameter("Cache", "--cache/--no_cache", cache),
         Parameter("Merge", "--merge/--no_merge", merge),
     )
-    obj = IWsiReg(name=name, output_dir=output_dir, cache=cache, merge=merge)
+    if not valis:
+        obj = IWsiReg(name=name, output_dir=output_dir, cache=cache, merge=merge)
+    else:
+        obj = ValisReg(name=name, output_dir=output_dir, cache=cache, merge=merge)
     obj.save()
 
 
 @project_path_single_
-@cli.command("about", help_group="Project")
+@elastix.command("about", help_group="Project")
 def about_cmd(project_dir: ty.Sequence[str]) -> None:
     """Print information about the registration project."""
     about_runner(project_dir)
 
 
-def about_runner(project_dir: str) -> None:
+def about_runner(project_dir: str, valis: bool = False) -> None:
     """Add images to the project."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows import IWsiReg, ValisReg
 
-    obj = IWsiReg.from_path(project_dir)
+    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.print_summary()
 
 
 @project_path_multi_
-@cli.command("validate", help_group="Project")
+@elastix.command("validate", help_group="Project")
 def validate_cmd(project_dir: ty.Sequence[str]) -> None:
     """Validate project configuration."""
     validate_runner(project_dir)
 
 
-def validate_runner(paths: ty.Sequence[str]) -> None:
+def validate_runner(paths: ty.Sequence[str], valis: bool = False) -> None:
     """Add images to the project."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows import IWsiReg, ValisReg
 
     for project_dir in paths:
-        obj = IWsiReg.from_path(project_dir)
+        obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
         obj.validate()
 
 
@@ -413,7 +188,7 @@ def validate_runner(paths: ty.Sequence[str]) -> None:
     required=True,
 )
 @project_path_single_
-@cli.command("add-image", help_group="Project")
+@elastix.command("add-image", help_group="Project")
 def add_modality_cmd(
     project_dir: str,
     name: ty.Sequence[str],
@@ -437,9 +212,11 @@ def add_modality_runner(
     preprocessings: ty.Sequence[str | None] | None = None,
     affines: ty.Sequence[str] | None = None,
     overwrite: bool = False,
+    method: str | None = None,
+    valis: bool = False,
 ) -> None:
     """Add images to the project."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows import IWsiReg, ValisReg
 
     if not isinstance(names, (list, tuple)):
         names = [names]  # type: ignore[list-item]
@@ -475,10 +252,11 @@ def add_modality_runner(
         Parameter("Masks", "-m/--mask", masks),
         Parameter("Mask bounding box", "-b/--mask_bbox", mask_bbox),
         Parameter("Pre-processing", "-P/--preprocessing", preprocessings),
+        Parameter("Method", "-M/--method", method),
         Parameter("Affine", "-A/--affine", affines),
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
-    obj = IWsiReg.from_path(project_dir)
+    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     for name, path, mask, preprocessing, affine in zip(names, paths, masks, preprocessings, affines):
         obj.auto_add_modality(
             name,
@@ -487,6 +265,7 @@ def add_modality_runner(
             mask=mask,
             mask_bbox=mask_bbox,
             overwrite=overwrite,
+            method=method,
         )
     obj.save()
 
@@ -549,7 +328,7 @@ def add_modality_runner(
     required=True,
 )
 @project_path_single_
-@cli.command("add-path", help_group="Project")
+@elastix.command("add-path", help_group="Project")
 def add_path_cmd(
     project_dir: str,
     source: str,
@@ -624,15 +403,17 @@ def add_path_runner(
     required=True,
 )
 @project_path_single_
-@cli.command("add-attachment", help_group="Project")
+@elastix.command("add-attachment", help_group="Project")
 def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
     """Add attachment image to registered modality."""
     add_attachment_runner(project_dir, attach_to, name, image)
 
 
-def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], paths: list[str]) -> None:
+def add_attachment_runner(
+    project_dir: str, attach_to: str, names: list[str], paths: list[str], valis: bool = False
+) -> None:
     """Add attachment modality."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows import IWsiReg, ValisReg
 
     if not isinstance(paths, (list, tuple)):
         names = [names]
@@ -651,7 +432,7 @@ def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], pa
         Parameter("Name", "-n/--name", names),
         Parameter("Image", "-i/--image", paths),
     )
-    obj = IWsiReg.from_path(project_dir)
+    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     for name, path in zip(names, paths):
         obj.auto_add_attachment_images(attach_to, name, path)
     obj.save()
@@ -686,15 +467,17 @@ def add_attachment_runner(project_dir: str, attach_to: str, names: list[str], pa
     required=True,
 )
 @project_path_single_
-@cli.command("add-points", help_group="Project")
+@elastix.command("add-points", help_group="Project")
 def add_points_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
     """Add attachment points (csv/tsv/txt) to registered modality."""
     add_points_runner(project_dir, attach_to, name, file)
 
 
-def add_points_runner(project_dir: str, attach_to: str, name: str, paths: list[str | Path]) -> None:
+def add_points_runner(
+    project_dir: str, attach_to: str, name: str, paths: list[str | Path], valis: bool = False
+) -> None:
     """Add attachment modality."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows import IWsiReg, ValisReg
 
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
@@ -705,7 +488,7 @@ def add_points_runner(project_dir: str, attach_to: str, name: str, paths: list[s
         Parameter("Name", "-n/--name", name),
         Parameter("Point Files", "-f/--file", paths),
     )
-    obj = IWsiReg.from_path(project_dir)
+    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.add_attachment_points(attach_to, name, paths)
     obj.save()
 
@@ -739,15 +522,15 @@ def add_points_runner(project_dir: str, attach_to: str, name: str, paths: list[s
     required=True,
 )
 @project_path_single_
-@cli.command("add-shape", help_group="Project")
+@elastix.command("add-shape", help_group="Project")
 def add_shape_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
     """Add attachment shape (GeoJSON) to registered modality."""
     add_shape_runner(project_dir, attach_to, name, file)
 
 
-def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[str | Path]) -> None:
+def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[str | Path], valis: bool = False) -> None:
     """Add attachment modality."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows import IWsiReg, ValisReg
 
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
@@ -758,7 +541,7 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
         Parameter("Name", "-n/--name", name),
         Parameter("Shape files", "-f/--file", paths),
     )
-    obj = IWsiReg.from_path(project_dir)
+    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.add_attachment_geojson(attach_to, name, paths)
     obj.save()
 
@@ -789,25 +572,25 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
     required=True,
 )
 @project_path_multi_
-@cli.command("add-merge", help_group="Project")
+@elastix.command("add-merge", help_group="Project")
 def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
     """Specify how (if) images should be merged."""
     add_merge_runner(project_dir, name, modality, auto)
 
 
 def add_merge_runner(
-    paths: ty.Sequence[str], name: str, modalities: ty.Iterable[str] | None, auto: bool = False
+    paths: ty.Sequence[str], name: str, modalities: ty.Iterable[str] | None, auto: bool = False, valis: bool = False
 ) -> None:
     """Add attachment modality."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows import IWsiReg, ValisReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Name", "-n/--name", name),
         Parameter("Modalities", "-m/--modality", modalities),
     )
-    for path in paths:
-        obj = IWsiReg.from_path(path)
+    for project_dir in paths:
+        obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
         if auto:
             obj.auto_add_merge_modalities(name)
         else:
@@ -819,7 +602,7 @@ def add_merge_runner(
 @parallel_mode_
 @n_parallel_
 @project_path_multi_
-@cli.command("preprocess", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+@elastix.command("preprocess", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
 def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str, overwrite: bool) -> None:
     """Preprocess images."""
     preprocess_runner(project_dir, n_parallel, parallel_mode, overwrite)
@@ -887,7 +670,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
     show_default=True,
 )
 @project_path_multi_
-@cli.command("register", help_group="Execute")
+@elastix.command("register", help_group="Execute")
 def register_cmd(
     project_dir: ty.Sequence[str],
     histogram_match: bool,
@@ -1041,147 +824,6 @@ def _register(
     return path
 
 
-if valis_is_installed:
-
-    @click.option(
-        "-M",
-        "--no_micro_reg",
-        help="Perform non-rigid registration.",
-        is_flag=True,
-        default=None,
-        show_default=True,
-    )
-    @click.option(
-        "-N",
-        "--no_non_rigid_reg",
-        help="Perform non-rigid registration.",
-        is_flag=True,
-        default=False,
-        show_default=True,
-    )
-    @click.option(
-        "-R",
-        "--check_for_reflection",
-        help="Check for reflection.",
-        is_flag=True,
-        default=None,
-        show_default=True,
-    )
-    @click.option(
-        "-r",
-        "--reference",
-        help="Path to the reference image.",
-        type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
-        show_default=True,
-        required=False,
-        default=None,
-    )
-    @click.option(
-        "-i",
-        "--image",
-        help="Path to the image(s) that should be co-registered.",
-        type=click.UNPROCESSED,
-        show_default=True,
-        multiple=True,
-        required=True,
-        callback=cli_parse_paths_sort,
-    )
-    @click.option(
-        "-o",
-        "--output_dir",
-        help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
-        type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-        show_default=True,
-        required=False,
-        default=".",
-    )
-    @click.option(
-        "-n",
-        "--name",
-        help="Name to be given to the specified image (modality).",
-        type=click.STRING,
-        show_default=True,
-        multiple=False,
-        required=True,
-    )
-    @cli.command("valis-init", help_group="Valis")
-    def valis_init(
-        name: str,
-        output_dir: PathLike,
-        image: list[PathLike],
-        reference: PathLike | None,
-        check_for_reflection: bool,
-        no_non_rigid_reg: bool,
-        no_micro_reg: bool,
-    ) -> None:
-        """Initialize Valis configuration file."""
-        valis_init_runner(name, output_dir, image, reference, check_for_reflection, no_non_rigid_reg, no_micro_reg)
-
-    def valis_init_runner(
-        project_name: str,
-        output_dir: PathLike,
-        path: list[PathLike],
-        reference: PathLike,
-        check_for_reflection: bool = True,
-        no_non_rigid_reg: bool = False,
-        no_micro_reg: bool = False,
-    ):
-        """Register list of images using Valis algorithm."""
-        from image2image_reg.workflows.valis import valis_init_configuration
-
-        print_parameters(
-            Parameter("Project name", "-n/--name", project_name),
-            Parameter("Output directory", "-o/--output_dir", output_dir),
-            Parameter("Paths", "-i/--image", path),
-            Parameter("Reference", "-r/--reference", reference),
-            Parameter("Check for reflection", "-R/--check_for_reflection", check_for_reflection),
-            Parameter("No non-rigid registration", "-N/--no_non_rigid_reg", no_non_rigid_reg),
-            Parameter("No micro registration", "-M/--no_micro_reg", no_micro_reg),
-        )
-        valis_init_configuration(
-            project_name,
-            output_dir,
-            path,
-            reference,
-            check_for_reflections=check_for_reflection,
-            non_rigid_reg=not no_non_rigid_reg,
-            micro_reg=not no_micro_reg,
-        )
-
-    @click.option(
-        "-o",
-        "--output_dir",
-        help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
-        type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-        show_default=True,
-        required=False,
-        default=".",
-    )
-    @click.option(
-        "-c",
-        "--config",
-        help="Path to the configuration file.",
-        type=click.Path(file_okay=True, dir_okay=False, resolve_path=True),
-        show_default=True,
-        required=True,
-    )
-    @cli.command("valis-register", help_group="Valis")
-    def valis_register(config: PathLike, output_dir: PathLike):
-        """Register images using the Valis algorithm."""
-        valis_register_runner(output_dir, config)
-
-    def valis_register_runner(output_dir: PathLike, config: PathLike | None):
-        """Register list of images using Valis algorithm."""
-        from image2image_reg.workflows.valis import valis_registration_from_config
-
-        print_parameters(
-            Parameter("Output directory", "-o/--output_dir", output_dir),
-            Parameter("Config", "-c/--config", config),
-        )
-
-        valis_registration_from_config(output_dir=output_dir, config=config)
-
-
 @click.option(
     "-R",
     "--no_progress",
@@ -1201,7 +843,7 @@ if valis_is_installed:
 @click.option("-I", "--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
 @click.option("-C", "--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
 @project_path_multi_
-@cli.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+@elastix.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
 def clear_cmd(
     project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
 ) -> None:
@@ -1244,7 +886,7 @@ def clear_runner(
 @write_registered_
 @fmt_
 @project_path_multi_
-@cli.command("export", help_group="Execute")
+@elastix.command("export", help_group="Execute")
 def export_cmd(
     project_dir: ty.Sequence[str],
     fmt: WriterMode,
@@ -1378,118 +1020,3 @@ def _export(
         overwrite=overwrite,
     )
     return path
-
-
-@overwrite_
-@as_uint8_
-@fmt_
-@click.option(
-    "-C",
-    "--channel_ids",
-    type=click.STRING,
-    default=None,
-    help="Specify channel ids in the format: 1,2,4-6. You can provide multiple. If you are providing any, make sure to"
-    " provide one for each file you are trying to merge.",
-    callback=arg_parse_framelist_multi,
-    show_default=True,
-    multiple=True,
-    required=False,
-)
-@click.option(
-    "-b",
-    "--crop_bbox",
-    help="Bound box to be used for cropping of the image(s). It must be supplied in the format: x,y,width,height and"
-    " be in PIXEL units. It will throw an error if fewer or more than 4 values are supplied.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    required=False,
-    callback=arg_split_bbox,
-)
-@click.option(
-    "-o",
-    "--output_dir",
-    help="Path to images to be merged.",
-    type=click.Path(file_okay=False, dir_okay=True, resolve_path=True),
-    show_default=True,
-    required=True,
-)
-@click.option(
-    "-p",
-    "--path",
-    help="Path to images to be merged.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    required=True,
-    multiple=True,
-    callback=cli_parse_paths_sort,
-)
-@click.option(
-    "-n",
-    "--name",
-    help="Name of the merged image.",
-    type=click.STRING,
-    show_default=True,
-    required=True,
-)
-@cli.command("merge", help_group="Utility")
-def merge_cmd(
-    name: str,
-    path: ty.Sequence[str],
-    output_dir: str,
-    crop_bbox: tuple[int, int, int, int] | None,
-    channel_ids: ty.Sequence[tuple] | None,
-    fmt: WriterMode,
-    as_uint8: bool | None,
-    overwrite: bool,
-) -> None:
-    """Export images."""
-    merge_runner(name, path, output_dir, crop_bbox, channel_ids, fmt, as_uint8, overwrite)
-
-
-def merge_runner(
-    name: str,
-    paths: ty.Sequence[str],
-    output_dir: str,
-    crop_bbox: tuple[int, int, int, int] | None,
-    channel_ids: ty.Sequence[tuple] | None,
-    fmt: WriterMode = "ome-tiff",
-    as_uint8: bool | None = False,
-    overwrite: bool = False,
-) -> None:
-    """Register images."""
-    from image2image_reg.workflows.merge import merge as merge_images
-
-    print_parameters(
-        Parameter("Name", "-n/--name", name),
-        Parameter("Image paths", "-p/--path", paths),
-        Parameter("Output directory", "-o/--output_dir", output_dir),
-        Parameter("Crop bounding box", "-b/--crop_bbox", crop_bbox),
-        Parameter("Channel ids", "-C/--channel_ids", channel_ids),
-        Parameter("Output format", "-f/--fmt", fmt),
-        Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
-        Parameter("Overwrite", "-W/--overwrite", overwrite),
-    )
-
-    if channel_ids:
-        if len(channel_ids) != len(paths):
-            raise ValueError("Number of channel ids must match number of images.")
-
-    with MeasureTimer() as timer:
-        merge_images(
-            name, list(paths), output_dir, crop_bbox, fmt, as_uint8, channel_ids=channel_ids, overwrite=overwrite
-        )
-    logger.info(f"Finished processing project in {timer()}.")
-
-
-@cli.command("convert", help_group="Utility")
-def convert_cmd() -> None:
-    """Convert images to pyramidal OME-TIFF."""
-
-
-def main():
-    """Execute the "imimspy" command line program."""
-    cli.main(windows_expand_args=False)
-
-
-if __name__ == "__main__":
-    cli.main(windows_expand_args=False)

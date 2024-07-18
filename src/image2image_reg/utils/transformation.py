@@ -454,7 +454,8 @@ def generate_rigid_rotation_transform(image: sitk.Image, spacing: float, angle: 
         ((bound_w - 1) / 2, (bound_h - 1) / 2),
     )  # type: ignore[no-untyped-call]
 
-    c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2  # type: ignore[no-untyped-call]
+    size = image.GetSize()
+    c_x, c_y = (size[0] - 1) / 2, (size[1] - 1) / 2  # type: ignore[no-untyped-call]
     c_x_phy, c_y_phy = image.TransformContinuousIndexToPhysicalPoint((c_x, c_y))  # type: ignore[no-untyped-call]
     t_x = rot_x - c_x_phy
     t_y = rot_y - c_y_phy
@@ -505,7 +506,7 @@ def generate_rigid_translation_transform(
     return tform
 
 
-def generate_rigid_translation_transform_alt(
+def generate_rigid_translation_transform_alt2(
     image: sitk.Image,
     spacing: float,
     translation_x: float,
@@ -540,6 +541,53 @@ def generate_rigid_translation_transform_alt(
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(w), str(h)]
     # tform["Origin"] = [str(int(w)), str(int(h))]
+    tform["CenterOfRotationPoint"] = [str(rot_x), str(rot_y)]
+    tform["TransformParameters"] = [
+        str(0),
+        str(translation_x_phy),
+        str(translation_y_phy),
+    ]
+    return tform
+
+
+def generate_rigid_translation_transform_alt(
+    image: sitk.Image,
+    spacing: float,
+    translation_x_phy: float,
+    translation_y_phy: float,
+) -> dict:
+    """Generate a SimpleElastix transformation parameter Map to rotate image by angle.
+
+    Returns
+    -------
+    SimpleITK.ParameterMap of rotation transformation (EulerTransform)
+    """
+    w, h = image.GetSize()  # type: ignore[no-untyped-call]
+    tform = deepcopy(BASE_RIGID_TRANSFORM)
+    image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
+    bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
+
+    (rot_x, rot_y) = image.TransformContinuousIndexToPhysicalPoint(
+        ((bound_w - 1) / 2, (bound_h - 1) / 2),
+    )  # type: ignore[no-untyped-call]
+    (translation_x, translation_y) = image.TransformPhysicalPointToContinuousIndex(
+        (translation_x_phy, translation_y_phy),
+    )  # type: ignore[no-untyped-call]
+    # (
+    #     translation_x_phy,
+    #     translation_y_phy,
+    # ) = image.TransformContinuousIndexToPhysicalPoint(
+    #     (float(translation_x), float(translation_y)),
+    # )  # type: ignore[no-untyped-call]
+    # translation_x_phy, translation_y_phy = translation_x, translation_y
+    # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
+
+    w = int(math.ceil(max(w - translation_x, bound_w)) * 1)
+    h = int(math.ceil(max(h - translation_y, bound_h)) * 1)
+
+    tform["Spacing"] = [str(spacing), str(spacing)]
+    tform["Size"] = [str(w), str(h)]
+    # tform["Origin"] = [str(int(w // 2)), str(int(h // 2))]
     tform["CenterOfRotationPoint"] = [str(rot_x), str(rot_y)]
     tform["TransformParameters"] = [
         str(0),
