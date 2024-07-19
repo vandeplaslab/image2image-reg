@@ -182,6 +182,14 @@ if is_installed("valis"):
 
     @overwrite_
     @click.option(
+        "-R",
+        "--reference",
+        help="Set modality as the reference image to which other images will be referenced to.",
+        is_flag=True,
+        default=False,
+        show_default=True,
+    )
+    @click.option(
         "-M",
         "--method",
         help="Pre-processing method.",
@@ -229,13 +237,21 @@ if is_installed("valis"):
         image: ty.Sequence[str],
         preprocessing: ty.Sequence[str],
         method: str,
+        reference: bool,
         overwrite: bool = False,
     ) -> None:
         """Add images to the project."""
         from image2image_reg.cli.i2reg import add_modality_runner
 
         add_modality_runner(
-            project_dir, name, image, preprocessings=preprocessing, overwrite=overwrite, methods=method, valis=True
+            project_dir,
+            name,
+            image,
+            preprocessings=preprocessing,
+            overwrite=overwrite,
+            methods=method,
+            valis=True,
+            reference=reference,
         )
 
     @click.option(

@@ -242,6 +242,7 @@ def add_modality_runner(
     overwrite: bool = False,
     methods: ty.Sequence[str] | None = None,
     valis: bool = False,
+    reference: bool = False,
 ) -> None:
     """Add images to the project."""
     from image2image_reg.workflows import IWsiReg, ValisReg
@@ -299,6 +300,8 @@ def add_modality_runner(
             overwrite=overwrite,
             method=method,
         )
+        if reference and hasattr(obj, "set_reference"):
+            obj.set_reference(path=path)
     obj.save()
 
 

@@ -95,6 +95,59 @@ def get_slide_path(registrar: Valis, name: str) -> Path:
     return Path(slide.src_f)
 
 
+def transform_registered_image(
+    registrar: Valis,
+    output_dir: PathLike,
+    interp_method: str | ValisInterpolation = "bicubic",
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid_reg: bool = True,
+    pyramid: int = 0,
+) -> list[Path]:
+    """Transform valis image."""
+    from image2image_io.readers import get_simple_reader
+    from image2image_io.writers import write_ome_tiff_from_array
+    from valis.slide_tools import vips2numpy
+
+    output_dir = Path(output_dir)
+    # export images to OME-TIFFs
+    slide_ref = None
+    if registrar.reference_img_f:
+        slide_ref = registrar.get_ref_slide()
+        if slide_ref and not Path(slide_ref.src_f).exists():
+            raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+    else:
+        crop = False
+        logger.warning("No reference image found. Disabling cropping.")
+
+    files = []
+    for slide_obj in registrar.slide_dict.values():
+        if not Path(slide_obj.src_f).exists():
+            raise ValueError(f"Slide {slide_ref.src_f} does not exist.")
+
+        reader = get_simple_reader(slide_obj.src_f)
+        output_filename = output_dir / reader.path.name
+        if output_filename.exists():
+            continue
+
+        warped = slide_obj.warp_slide(level=pyramid, interp_method=interp_method, crop=crop, non_rigid=non_rigid_reg)
+        if not isinstance(warped, np.ndarray):
+            warped = vips2numpy(warped)
+
+        # ensure that RGB remains RGB but AF remain AF
+        if warped.ndim == 3 and np.argmin(warped.shape) == 2 and not reader.is_rgb:
+            warped = np.moveaxis(warped, 2, 0)
+
+        exported = write_ome_tiff_from_array(
+            output_filename,
+            None,
+            warped,
+            resolution=slide_ref.resolution if slide_ref else slide_obj.resolution,
+            channel_names=reader.channel_names,
+        )
+        files.append(exported)
+    return files
+
+
 def transform_attached_image(
     registrar: Valis,
     source_path: PathLike,
@@ -152,57 +205,12 @@ def transform_attached_image(
     return files
 
 
-def transform_registered_image(
-    registrar: Valis,
-    output_dir: PathLike,
-    interp_method: str | ValisInterpolation = "bicubic",
-    crop: str | bool | ValisCrop = "reference",
-    non_rigid_reg: bool = True,
-    pyramid: int = 0,
-) -> list[Path]:
-    """Transform valis image."""
-    from image2image_io.readers import get_simple_reader
-    from image2image_io.writers import write_ome_tiff_from_array
-    from valis.slide_tools import vips2numpy
+def transform_attached_points() -> list[Path]:
+    """Transform attached points."""
 
-    output_dir = Path(output_dir)
-    # export images to OME-TIFFs
-    slide_ref = None
-    if registrar.reference_img_f:
-        slide_ref = registrar.get_ref_slide()
-        if slide_ref and not Path(slide_ref.src_f).exists():
-            raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
-    else:
-        crop = False
-        logger.warning("No reference image found. Disabling cropping.")
 
-    files = []
-    for slide_obj in registrar.slide_dict.values():
-        if not Path(slide_obj.src_f).exists():
-            raise ValueError(f"Slide {slide_ref.src_f} does not exist.")
-
-        reader = get_simple_reader(slide_obj.src_f)
-        output_filename = output_dir / reader.path.name
-        if output_filename.exists():
-            continue
-
-        warped = slide_obj.warp_slide(level=pyramid, interp_method=interp_method, crop=crop, non_rigid=non_rigid_reg)
-        if not isinstance(warped, np.ndarray):
-            warped = vips2numpy(warped)
-
-        # ensure that RGB remains RGB but AF remain AF
-        if warped.ndim == 3 and np.argmin(warped.shape) == 2 and not reader.is_rgb:
-            warped = np.moveaxis(warped, 2, 0)
-
-        exported = write_ome_tiff_from_array(
-            output_filename,
-            None,
-            warped,
-            resolution=slide_ref.resolution if slide_ref else slide_obj.resolution,
-            channel_names=reader.channel_names,
-        )
-        files.append(exported)
-    return files
+def transform_attached_shapes() -> list[Path]:
+    """Transform attached shapes."""
 
 
 def get_image_files(img_dir: PathLike, ordered: bool = False) -> list[Path]:
@@ -304,6 +312,18 @@ def get_max_image_dimensions(img_list: list[np.ndarray]) -> tuple[int, int]:
     all_w, all_h = list(zip(*shapes))
     max_wh = (max(all_w), max(all_h))
     return max_wh
+
+
+def get_micro_registration_dimension(registrar: Valis, fraction: float = 0.125, max_size: int = 3000) -> int:
+    """Get the size of the micro registration image."""
+    try:
+        img_dims = np.array([slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()])
+        min_max_size = np.min([np.max(d) for d in img_dims])
+        micro_reg_size = np.floor(min_max_size * fraction).astype(int)
+    except Exception:  # type: ignore
+        micro_reg_size = max_size
+        logger.error("Failed to calculate micro registration size.")
+    return micro_reg_size
 
 
 def get_image_name(filename: PathLike) -> str:

@@ -282,6 +282,19 @@ class ValisReg(Workflow):
             assert path.exists(), f"{path} does not exist."
         return filelist
 
+    def set_reference(self, name: str | None = None, path: str | None = None) -> None:
+        """Set reference image."""
+        if not name and not path:
+            raise ValueError("Please provide either name or path.")
+        if name:
+            if name not in self.modalities:
+                raise ValueError(f"Modality {name} not found.")
+            path = self.modalities[name].path
+        if not Path(path).exists():
+            raise ValueError(f"Path {path} does not exist.")
+        self._reference = path
+        logger.trace(f"Set reference image to '{path}'.")
+
     @property
     def reference(self) -> PathLike | None:
         """Get reference image."""
@@ -296,6 +309,8 @@ class ValisReg(Workflow):
     def register(self, **kwargs: ty.Any) -> None:
         """Co-register images."""
         from valis import registration
+
+        from image2image_reg.valis.utilities import get_micro_registration_dimension
 
         # get filelist
         filelist = self.filelist
@@ -367,17 +382,9 @@ class ValisReg(Workflow):
                     # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an
                     # image that is proportion of the full resolution.
                     if self.micro_registration:
-                        try:
-                            img_dims = np.array(
-                                [slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()]
-                            )
-                            min_max_size = np.min([np.max(d) for d in img_dims])
-                            micro_reg_size = np.floor(min_max_size * self.micro_registration_fraction).astype(int)
-                        except Exception:
-                            micro_reg_size = 3000
-                            logger.error("Failed to calculate micro registration size.")
-
+                        micro_reg_size = get_micro_registration_dimension(registrar, self.micro_registration_fraction)
                         logger.info(f"Micro-registering using {micro_reg_size} pixels.")
+
                         # Perform high resolution non-rigid registration
                         try:
                             with MeasureTimer() as timer:
@@ -400,12 +407,12 @@ class ValisReg(Workflow):
                         logger.info(f"Exported matches in {timer()}")
                     except Exception as exc:
                         logger.exception(f"Failed to export matches: {exc}.")
+                # set registrar
                 self.registrar = registrar
             except Exception as exc:
                 registration.kill_jvm()
                 logger.exception(f"Error during registration: {exc}")
                 raise exc
-            registration.kill_jvm()
         logger.info(f"Completed registration in {main_timer()}")
 
     def write(self, **kwargs: ty.Any) -> list | None:
@@ -447,7 +454,6 @@ class ValisReg(Workflow):
             "schema_version": "1.0",
             "name": self.name,
             "cache_images": self.cache_images,
-            # "cache_dir": str(self.cache_dir),
             "reference": self.reference,
             "check_for_reflections": self.check_for_reflections,
             "non_rigid_registration": self.non_rigid_registration,
@@ -473,12 +479,6 @@ class ValisReg(Workflow):
         write_json_data(path, config)
         logger.trace(f"Saved configuration to '{path}'.")
         return path
-
-    def add_reference(self, name: str) -> None:
-        """Add reference image."""
-        if name not in self.modalities:
-            raise ValueError(f"Modality {name} not found.")
-        self.reference = name
 
 
 def get_config(config: dict[str, str] | PathLike) -> dict[str, str]:
@@ -676,12 +676,16 @@ def valis_registration(
     **kwargs,
 ) -> None:
     """Valis-based registration."""
-    import numpy as np
     from koyo.timer import MeasureTimer
     from natsort import natsorted
     from valis import registration
 
-    from image2image_reg.valis.utilities import get_slide_path, transform_attached_image, transform_registered_image
+    from image2image_reg.valis.utilities import (
+        get_micro_registration_dimension,
+        get_slide_path,
+        transform_attached_image,
+        transform_registered_image,
+    )
 
     output_dir = Path(output_dir)
 
@@ -745,23 +749,15 @@ def valis_registration(
                         matches_dst_dir = Path(registrar.dst_dir) / "matches-initial"
                         registrar.draw_matches(matches_dst_dir)
                     logger.info(f"Exported matches in {timer()}")
-                except Exception:
+                except Exception:  # type: ignore
                     logger.exception("Failed to export matches.")
 
                 # Calculate what `max_non_rigid_registration_dim_px` needs to be to do non-rigid registration on an
                 # image that is proportion of the full resolution.
                 if micro_reg:
-                    try:
-                        img_dims = np.array(
-                            [slide_obj.slide_dimensions_wh[0] for slide_obj in registrar.slide_dict.values()]
-                        )
-                        min_max_size = np.min([np.max(d) for d in img_dims])
-                        micro_reg_size = np.floor(min_max_size * micro_reg_fraction).astype(int)
-                    except Exception:
-                        micro_reg_size = 3000
-                        logger.exception("Failed to calculate micro registration size.")
-
+                    micro_reg_size = get_micro_registration_dimension(registrar, micro_reg_fraction)
                     logger.info(f"Micro-registering using {micro_reg_size} pixels.")
+
                     # Perform high resolution non-rigid registration
                     with MeasureTimer() as timer:
                         try:
@@ -771,7 +767,7 @@ def valis_registration(
                                 reference_img_f=str(reference) if reference else None,
                                 align_to_reference=reference is not None,
                             )
-                        except Exception as exc:
+                        except Exception as exc:  # type: ignore
                             logger.exception(f"Error during non-rigid registration: {exc}")
                     logger.info(f"Registered high-res images in {timer()}")
 
