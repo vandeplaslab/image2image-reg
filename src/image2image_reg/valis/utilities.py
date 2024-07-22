@@ -340,3 +340,91 @@ def get_image_name(filename: PathLike) -> str:
         back_slice_idx = 1
     img_name = "".join([".".join(filename.split(".")[:-back_slice_idx])])
     return img_name
+
+
+def get_preprocessor(preprocessor: str | type) -> type:
+    """Get pre-processor."""
+    import valis.preprocessing as pre_valis
+
+    import image2image_reg.valis.preprocessing as pre_wsireg
+
+    if isinstance(preprocessor, str):
+        if hasattr(pre_wsireg, preprocessor):
+            preprocessor = getattr(pre_wsireg, preprocessor)
+        elif hasattr(pre_valis, preprocessor):
+            preprocessor = getattr(pre_valis, preprocessor)
+        else:
+            raise ValueError(f"Preprocessor {preprocessor} not found.")
+    return preprocessor
+
+
+def get_preprocessing_for_path(path: PathLike) -> list[str, dict]:
+    """Get preprocessing kws for specified image."""
+    from image2image_io.config import CONFIG
+    from image2image_io.readers import get_simple_reader
+
+    with CONFIG.temporary_overwrite(only_last_pyramid=True, init_pyramid=False):
+        reader = get_simple_reader(path)
+        if reader.is_rgb:
+            kws = ["ColorfulStandardizer", {"c": 0.2, "h": 0}]
+        else:
+            kws = ["MaxIntensityProjection", {"channel_names": reader.channel_names}]
+    return kws
+
+
+def get_feature_detector_str(feature_detector: str) -> str:
+    """Get feature detector."""
+    available = {
+        "vgg": "VggFD",
+        "orb_vgg": "OrbVggFD",
+        "boost": "BoostFD",
+        "latch": "LatchFD",
+        "daisy": "DaisyFD",
+        "kaze": "KazeFD",
+        "akaze": "AkazeFD",
+        "brisk": "BriskFD",
+        "orb": "OrbFD",
+        # custom
+        "sensitive_vgg": "SensitiveVggFD",
+        "very_sensitive_vgg": "VerySensitiveVggFD",
+    }
+    all_available = list(available.values()) + list(available.keys())
+    if feature_detector not in all_available:
+        raise ValueError(f"Feature detector {feature_detector} not found. Please one of use: {all_available}")
+    return available[feature_detector] if feature_detector in available else feature_detector
+
+
+def get_feature_detector(feature_detector: str) -> type:
+    """Get feature detector object."""
+    import valis.feature_detectors as fd_valis
+
+    import image2image_reg.valis.detect as fd_wsireg
+
+    feature_detector = get_feature_detector_str(feature_detector)
+    if isinstance(feature_detector, str):
+        if hasattr(fd_wsireg, feature_detector):
+            feature_detector = getattr(fd_wsireg, feature_detector)
+        elif hasattr(fd_valis, feature_detector):
+            feature_detector = getattr(fd_valis, feature_detector)
+        else:
+            raise ValueError(f"Feature detector {feature_detector} not found.")
+    return feature_detector
+
+
+def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool = False) -> None:
+    """Get Valis registrar if it's available."""
+    # initialize java
+    if init_jvm:
+        from valis import registration
+
+        registration.init_jvm()
+
+    registrar = None
+    output_dir = Path(output_dir)
+    registrar_path = output_dir / project_name / "data" / f"{project_name}_registrar.pickle"
+    if registrar_path.exists():
+        import pickle
+
+        with open(registrar_path, "rb") as f:
+            registrar = pickle.load(f)
+    return registrar

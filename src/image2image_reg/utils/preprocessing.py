@@ -689,3 +689,48 @@ def preprocess_preview(
         spatial=spatial,
     )
     return sitk.GetArrayFromImage(image)
+
+
+def preprocess_preview_valis(
+    image: np.ndarray,
+    is_rgb: bool,
+    resolution: float,
+    preprocessing: Preprocessing,
+    initial_transforms: list | None = None,
+    transform_mask: bool = False,
+    spatial: bool = True,
+) -> np.ndarray:
+    """Complete pre-processing."""
+    if preprocessing.method == "I2RegPreprocessor":
+        channel_names = preprocessing.channel_names
+
+        image = preprocess_dask_array(image, channel_names, preprocessing)
+        # convert and cast
+        image = convert_and_cast(image, preprocessing)
+
+        # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
+        # set image
+        image, mask, initial_transforms, original_size_transform = preprocess(
+            image,
+            None,
+            preprocessing,
+            resolution,
+            is_rgb,
+            initial_transforms,
+            transform_mask=transform_mask,
+            check=False,
+            spatial=spatial,
+        )
+        return sitk.GetArrayFromImage(image)
+    else:
+        from image2image_reg.valis.utilities import get_preprocessor
+
+        method, kws = preprocessing.to_valis()
+        if method in ["OD"] and isinstance(image, da.Array):
+            image = image.compute()
+        elif method in ["ChannelGetter", "HEDeconvolution", "HEPreprocessing", "MaxIntensityProjection"]:
+            if isinstance(image, da.Array):
+                image = image.compute()
+            return image
+        preprocessor = get_preprocessor(method)(image, "", 0, 0)
+        return preprocessor.process_image(**kws)

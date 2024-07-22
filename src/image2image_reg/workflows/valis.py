@@ -5,10 +5,9 @@ from __future__ import annotations
 import typing as ty
 from pathlib import Path
 
-import numpy as np
 from koyo.json import read_json_data, write_json_data
 from koyo.timer import MeasureTimer
-from koyo.typing import ArrayLike, PathLike
+from koyo.typing import PathLike
 from koyo.utilities import is_installed
 from loguru import logger
 
@@ -215,7 +214,7 @@ class ValisReg(Workflow):
             logger.error(errors[-1])
         # check if the paths exist
         for modality in self.modalities.values():
-            if not isinstance(modality.path, ArrayLike) and not Path(modality.path).exists():
+            if isinstance(modality.path, (str, Path)) and not Path(modality.path).exists():
                 errors.append(f"❌ Modality '{modality.name}' path '{modality.path}' does not exist.")
                 logger.error(errors[-1])
             else:
@@ -285,15 +284,15 @@ class ValisReg(Workflow):
     def set_reference(self, name: str | None = None, path: str | None = None) -> None:
         """Set reference image."""
         if not name and not path:
-            raise ValueError("Please provide either name or path.")
-        if name:
+            self._reference = None
+        elif name:
             if name not in self.modalities:
                 raise ValueError(f"Modality {name} not found.")
             path = self.modalities[name].path
-        if not Path(path).exists():
-            raise ValueError(f"Path {path} does not exist.")
-        self._reference = path
-        logger.trace(f"Set reference image to '{path}'.")
+            if not Path(path).exists():
+                raise ValueError(f"Path {path} does not exist.")
+            self._reference = path
+        logger.trace(f"Set reference image to '{self._reference}'.")
 
     @property
     def reference(self) -> PathLike | None:
@@ -310,7 +309,7 @@ class ValisReg(Workflow):
         """Co-register images."""
         from valis import registration
 
-        from image2image_reg.valis.utilities import get_micro_registration_dimension
+        from image2image_reg.valis.utilities import get_feature_detector, get_micro_registration_dimension
 
         # get filelist
         filelist = self.filelist
@@ -493,6 +492,8 @@ def get_config(config: dict[str, str] | PathLike) -> dict[str, str]:
 
 def parse_config(config: dict[str, ty.Any]) -> dict[str, ty.Any]:
     """Parse configuration."""
+    from image2image_reg.valis.utilities import get_preprocessor
+
     if not config:
         raise ValueError("Configuration is empty.")
     if not isinstance(config, dict):
@@ -519,75 +520,6 @@ def parse_config(config: dict[str, ty.Any]) -> dict[str, ty.Any]:
     return config
 
 
-def get_preprocessor(preprocessor: str | type) -> type:
-    """Get pre-processor."""
-    import valis.preprocessing as pre_valis
-
-    import image2image_reg.valis.preprocessing as pre_wsireg
-
-    if isinstance(preprocessor, str):
-        if hasattr(pre_wsireg, preprocessor):
-            preprocessor = getattr(pre_wsireg, preprocessor)
-        elif hasattr(pre_valis, preprocessor):
-            preprocessor = getattr(pre_valis, preprocessor)
-        else:
-            raise ValueError(f"Preprocessor {preprocessor} not found.")
-    return preprocessor
-
-
-def get_preprocessing_for_path(path: PathLike) -> list[str, dict]:
-    """Get preprocessing kws for specified image."""
-    from image2image_io.config import CONFIG
-    from image2image_io.readers import get_simple_reader
-
-    with CONFIG.temporary_overwrite(only_last_pyramid=True, init_pyramid=False):
-        reader = get_simple_reader(path)
-        if reader.is_rgb:
-            kws = ["ColorfulStandardizer", {"c": 0.2, "h": 0}]
-        else:
-            kws = ["MaxIntensityProjection", {"channel_names": reader.channel_names}]
-    return kws
-
-
-def get_feature_detector_str(feature_detector: str) -> str:
-    """Get feature detector."""
-    available = {
-        "vgg": "VggFD",
-        "orb_vgg": "OrbVggFD",
-        "boost": "BoostFD",
-        "latch": "LatchFD",
-        "daisy": "DaisyFD",
-        "kaze": "KazeFD",
-        "akaze": "AkazeFD",
-        "brisk": "BriskFD",
-        "orb": "OrbFD",
-        # custom
-        "sensitive_vgg": "SensitiveVggFD",
-        "very_sensitive_vgg": "VerySensitiveVggFD",
-    }
-    all_available = list(available.values()) + list(available.keys())
-    if feature_detector not in all_available:
-        raise ValueError(f"Feature detector {feature_detector} not found. Please one of use: {all_available}")
-    return available[feature_detector] if feature_detector in available else feature_detector
-
-
-def get_feature_detector(feature_detector: str) -> type:
-    """Get feature detector object."""
-    import valis.feature_detectors as fd_valis
-
-    import image2image_reg.valis.detect as fd_wsireg
-
-    feature_detector = get_feature_detector_str(feature_detector)
-    if isinstance(feature_detector, str):
-        if hasattr(fd_wsireg, feature_detector):
-            feature_detector = getattr(fd_wsireg, feature_detector)
-        elif hasattr(fd_valis, feature_detector):
-            feature_detector = getattr(fd_valis, feature_detector)
-        else:
-            raise ValueError(f"Feature detector {feature_detector} not found.")
-    return feature_detector
-
-
 def valis_init_configuration(
     project_name: str,
     output_dir: PathLike,
@@ -602,6 +534,8 @@ def valis_init_configuration(
     """Create Valis configuration."""
     from natsort import natsorted, ns
     from valis import valtils
+
+    from image2image_reg.valis.utilities import get_feature_detector_str
 
     logger.info(f"Creating configuration for '{project_name}' in '{output_dir}'")
 
@@ -681,6 +615,7 @@ def valis_registration(
     from valis import registration
 
     from image2image_reg.valis.utilities import (
+        get_feature_detector,
         get_micro_registration_dimension,
         get_slide_path,
         transform_attached_image,
@@ -803,28 +738,11 @@ def valis_registration(
     logger.info(f"Completed registration in {main_timer()}")
 
 
-def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool = False) -> None:
-    """Get Valis registrar if it's available."""
-    # initialize java
-    if init_jvm:
-        from valis import registration
-
-        registration.init_jvm()
-
-    registrar = None
-    output_dir = Path(output_dir)
-    registrar_path = output_dir / project_name / "data" / f"{project_name}_registrar.pickle"
-    if registrar_path.exists():
-        import pickle
-
-        with open(registrar_path, "rb") as f:
-            registrar = pickle.load(f)
-    return registrar
-
-
 def get_channel_kws(obj: ValisReg) -> dict:
     """Get channel kws for each file."""
     from valis import valtils
+
+    from image2image_reg.valis.utilities import get_preprocessor
 
     channel_kws = {}
     # iterate over modalities

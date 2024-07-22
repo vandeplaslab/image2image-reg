@@ -152,6 +152,9 @@ class Preprocessing(BaseModel):
         """Create nice formatting based on pre-processing."""
         text = f"{self.image_type.value}; "
         tooltip = f"Image type: {self.image_type.value}\n"
+        if self.method:
+            text += f"{self.method}; "
+            tooltip += f"Method: {self.method}\n"
         if self.max_intensity_projection:
             text += "MIP; "
             tooltip += "Max intensity projection\n"
@@ -245,23 +248,25 @@ class Preprocessing(BaseModel):
         return cls(image_type=ImageType.DARK, as_uint8=True, max_intensity_projection=True)
 
     @classmethod
-    def fluorescence(cls) -> "Preprocessing":
+    def fluorescence(cls, valis: bool = False) -> "Preprocessing":
         """Basic image preprocessing."""
         return cls(
             image_type=ImageType.DARK,
             as_uint8=True,
             max_intensity_projection=True,
             contrast_enhance=True,
+            method="MaxIntensityProjection" if valis else None,
         )
 
     @classmethod
-    def brightfield(cls) -> "Preprocessing":
+    def brightfield(cls, valis: bool = False) -> "Preprocessing":
         """Basic image preprocessing."""
         return cls(
             image_type=ImageType.LIGHT,
             as_uint8=True,
             max_intensity_projection=False,
             invert_intensity=True,
+            method="ColorfulStandardizer" if valis else None,
         )
 
     @validator("mask_bbox", "crop_bbox", pre=True)

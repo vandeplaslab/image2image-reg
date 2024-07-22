@@ -24,7 +24,7 @@ from image2image_reg._typing import (
     SourceTargetPair,
     TransformPair,
 )
-from image2image_reg.enums import ArrayLike, WriterMode
+from image2image_reg.enums import WriterMode
 from image2image_reg.models import Export, Modality, Preprocessing, Registration, Transform, TransformSequence
 from image2image_reg.workflows._base import Workflow
 
@@ -211,7 +211,7 @@ class IWsiReg(Workflow):
             logger.error(errors[-1])
         # check if the paths exist
         for modality in self.modalities.values():
-            if not isinstance(modality.path, ArrayLike) and not Path(modality.path).exists():
+            if isinstance(modality.path, (str, Path)) and not Path(modality.path).exists():
                 errors.append(f"❌ Modality '{modality.name}' path '{modality.path}' does not exist.")
                 logger.error(errors[-1])
             else:
