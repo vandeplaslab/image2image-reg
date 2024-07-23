@@ -1,4 +1,5 @@
 """Slide reader using image2image as backend."""
+
 import os
 
 import numpy as np
@@ -43,7 +44,9 @@ class Image2ImageSlideReader(SlideReader):
         return numpy2vips(img)
 
     def slide2image(self, xywh=None, *args, **kwargs):
+        # get highest resolution image
         reader = get_simple_reader(self.src_f, quick=True, init_pyramid=False, auto_pyramid=False)
+        # retrieve highest resolution image
         img = reader.pyramid[0]
         reader.close()
         if xywh is not None:
@@ -51,8 +54,7 @@ class Image2ImageSlideReader(SlideReader):
             start_c, start_r = xywh[0:2]
             end_c, end_r = xywh[0:2] + xywh[2:]
             img = img[start_r:end_r, start_c:end_c]
-
-        return img
+        return img.compute()
 
     def _get_slide_dimensions(self, reader: BaseReader, *args, **kwargs):  # type: ignore
         channel_axis, _ = reader.get_channel_axis_and_n_channels()
