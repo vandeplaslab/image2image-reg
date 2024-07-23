@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing as ty
+from copy import deepcopy
 from pathlib import Path
 
 from koyo.json import read_json_data, write_json_data
@@ -15,7 +16,13 @@ from image2image_reg._typing import ValisRegConfig
 from image2image_reg.models import Export, Preprocessing
 from image2image_reg.workflows._base import Workflow
 
+if ty.TYPE_CHECKING:
+    from image2image_reg.workflows.iwsireg import IWsiReg
+
 logger = logger.bind(src="Valis")
+
+if not is_installed("valis") or not is_installed("pyvips"):
+    logger.warning("Valis or pyvips is not installed. Valis registration will not work.")
 
 
 class ValisReg(Workflow):
@@ -91,6 +98,42 @@ class ValisReg(Workflow):
             if config_path.exists():
                 obj.load_from_i2valis(raise_on_error=raise_on_error)
         logger.trace(f"Restored from config in {timer()}")
+        return obj
+
+    @classmethod
+    def from_wsireg(
+        cls,
+        obj: IWsiReg,
+        output_dir: PathLike,
+        check_for_reflections: bool = False,
+        non_rigid_registration: bool = False,
+        micro_registration: bool = True,
+        micro_registration_fraction: float = 0.125,
+        feature_detector: str = "sensitive_vgg",
+        feature_matcher: str = "RANSAC",
+    ) -> ValisReg:
+        """Create Valis configuration from IWsiReg object."""
+        obj = cls(
+            obj.name,
+            output_dir=output_dir,
+            merge=obj.merge_images,
+            check_for_reflections=check_for_reflections,
+            non_rigid_registration=non_rigid_registration,
+            micro_registration=micro_registration,
+            micro_registration_fraction=micro_registration_fraction,
+            feature_detector=feature_detector,
+            feature_matcher=feature_matcher,
+        )
+        # add modalities
+        for modality in obj.modalities.values():
+            obj.modalities[modality.name] = deepcopy(modality)
+            obj.modalities[modality.name].preprocessing.method = "I2RegPreprocessor"
+        # copy other attributes
+        obj.attachment_images = deepcopy(obj.attachment_images)
+        obj.attachment_shapes = deepcopy(obj.attachment_shapes)
+        obj.attachment_points = deepcopy(obj.attachment_points)
+        obj.merge_modalities = deepcopy(obj.merge_modalities)
+        obj.save()
         return obj
 
     def load_from_i2valis(self, raise_on_error: bool = True) -> None:

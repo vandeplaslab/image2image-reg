@@ -1528,6 +1528,12 @@ class IWsiReg(Workflow):
             yaml.dump(config, f, sort_keys=False)
         return filename
 
+    def to_valis(self, output_dir: PathLike) -> None:
+        """Convert the configuration to ValisReg"""
+        from image2image_reg.workflows import ValisReg
+
+        ValisReg.from_wsireg(self, output_dir)
+
     # def _create_initial_overlap_image(self):
     #     """Create image showing how images overlap before registration"""
     #     from itertools import combinations
