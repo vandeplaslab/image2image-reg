@@ -294,8 +294,10 @@ class I2RegPreprocessor(ImageProcesser):
         *args,
         **kwargs,
     ):
+        from image2image_io.readers import get_simple_reader
+
         from image2image_reg.models import Preprocessing
-        from image2image_reg.utils.preprocessing import guess_rgb, preprocess_preview
+        from image2image_reg.utils.preprocessing import preprocess_preview
 
         pre = Preprocessing(
             image_type=image_type,
@@ -307,8 +309,8 @@ class I2RegPreprocessor(ImageProcesser):
             channel_names=channel_names,
             as_uint8=as_uint8,
         )
-        is_rgb = guess_rgb(self.image.shape)
-        return preprocess_preview(self.image, is_rgb, 1.0, preprocessing=pre, spatial=False)
+        is_rgb = get_simple_reader(self.src_f, init_pyramid=False, auto_pyramid=False).is_rgb
+        return preprocess_preview(self.image, is_rgb, 1.0, preprocessing=pre, spatial=False, valis=True)
 
 
 class OD(ImageProcesser):

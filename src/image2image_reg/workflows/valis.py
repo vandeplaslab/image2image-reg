@@ -406,7 +406,7 @@ class ValisReg(Workflow):
                     registrar.set_dst_paths()
 
                     with MeasureTimer() as timer:
-                        registrar.register(processor_dict=channel_kws, reader_cls=Image2ImageSlideReader)
+                        registrar.register(processor_dict=channel_kws)
                     logger.info(f"Registered low-res images in {timer()}")
 
                     # We can also plot the high resolution matches using `Valis.draw_matches`:

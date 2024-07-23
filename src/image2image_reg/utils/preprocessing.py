@@ -43,6 +43,21 @@ def sort_indices(channel_indices: list[int]) -> list[int]:
     return np.unique(channel_indices).tolist()
 
 
+def _get_channel_indices(
+    array: np.ndarray,
+    channel_names: list[str],
+    preprocessing: Preprocessing | None = None,
+):
+    # select channels
+    channel_indices = None
+    if preprocessing:
+        if len(array.shape) > 2 and preprocessing.channel_indices is not None:
+            channel_indices = list(preprocessing.channel_indices)
+        elif len(array.shape) > 2 and preprocessing.channel_names is not None:
+            channel_indices = get_channel_indices_from_names(channel_names, preprocessing.channel_names)
+    return channel_indices
+
+
 def preprocess_dask_array(
     array: da.core.Array,
     channel_names: list[str],
@@ -69,14 +84,41 @@ def preprocess_dask_array(
         else:
             # select channels
             if preprocessing:
-                channel_indices = None
-                if len(array.shape) > 2 and preprocessing.channel_indices is not None:
-                    channel_indices = list(preprocessing.channel_indices)
-                elif len(array.shape) > 2 and preprocessing.channel_names is not None:
-                    channel_indices = get_channel_indices_from_names(channel_names, preprocessing.channel_names)
+                channel_indices = _get_channel_indices(array, channel_names, preprocessing)
                 logger.trace(f"Pre-processing dask array with {channel_indices} channels.")
                 if channel_indices:
                     array = array[sort_indices(channel_indices), :, :]
+            array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
+            logger.trace(f"Pre-processed dask array in {timer()}")
+    return array_out
+
+
+def preprocess_valis_array(
+    array: da.core.Array, channel_names: list[str], is_rgb: bool, preprocessing: Preprocessing | None = None
+) -> sitk.Image:
+    """Pre-process dask array."""
+    with MeasureTimer() as timer:
+        # perform max intensity projection
+        if is_rgb:
+            if preprocessing:
+                array_out = np.asarray(grayscale(array, is_interleaved=is_rgb))
+                array_out = sitk.GetImageFromArray(array_out)  # type: ignore[assignment]
+                logger.trace(f"Converted RGB to greyscale in {timer()}")
+            else:
+                array_out = np.asarray(array)
+                array_out = sitk.GetImageFromArray(array_out, isVector=True)  # type: ignore[assignment]
+                logger.trace(f"Converted RGB to SimpleITK image in {timer()}")
+        # no need to pre-process
+        elif len(array.shape) == 2:
+            array_out = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
+            logger.trace(f"Converted 2D array to SimpleITK image in {timer()}")
+        else:
+            # select channels
+            if preprocessing:
+                channel_indices = _get_channel_indices(array, channel_names, preprocessing)
+                logger.trace(f"Pre-processing dask array with {channel_indices} channels.")
+                if channel_indices:
+                    array = array[:, :, sort_indices(channel_indices)]
             array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
             logger.trace(f"Pre-processed dask array in {timer()}")
     return array_out
@@ -668,11 +710,15 @@ def preprocess_preview(
     initial_transforms: list | None = None,
     transform_mask: bool = False,
     spatial: bool = True,
+    valis: bool = False,
 ) -> np.ndarray:
     """Complete pre-processing."""
     channel_names = preprocessing.channel_names
 
-    image = preprocess_dask_array(image, channel_names, preprocessing, is_rgb=is_rgb)
+    if valis:
+        image = preprocess_valis_array(image, channel_names, is_rgb, preprocessing)
+    else:
+        image = preprocess_dask_array(image, channel_names, preprocessing, is_rgb=is_rgb)
     # convert and cast
     image = convert_and_cast(image, preprocessing)
 
