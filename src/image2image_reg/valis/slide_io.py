@@ -51,6 +51,7 @@ class Image2ImageSlideReader(SlideReader):
         # retrieve highest resolution image
         img = reader.pyramid[0]
         reader.close()
+        print(xywh)
         if xywh is not None:
             xywh = np.array(xywh)
             start_c, start_r = xywh[0:2]
