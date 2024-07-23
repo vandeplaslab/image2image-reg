@@ -238,7 +238,6 @@ class ValisReg(Workflow):
         n = len(self.attachment_points) - 1
         for i, (name, shape_dict) in enumerate(self.attachment_points.items()):
             func(f" {elbow if i == n else tee}{name} ({shape_dict})")
-
         # func information about merge modalities
         func(f"Number of merge modalities: {len(self.merge_modalities)}")
         n = len(self.merge_modalities) - 1
@@ -260,7 +259,7 @@ class ValisReg(Workflow):
             else:
                 logger.success(f"✅ Modality '{modality.name}' exist.")
         # check if the reference exists
-        if self.reference and self.reference not in self.modalities:
+        if self.reference and self.has_modality(name_or_path=self.reference):
             errors.append(f"❌ Reference modality '{self.reference}' not found.")
             logger.error(errors[-1])
 

@@ -298,7 +298,6 @@ class I2RegPreprocessor(ImageProcesser):
         from image2image_reg.utils.preprocessing import guess_rgb, preprocess_preview
 
         pre = Preprocessing(
-            image=self.image,
             image_type=image_type,
             max_intensity_projection=max_intensity_projection,
             equalize_histogram=equalize_histogram,
@@ -308,8 +307,14 @@ class I2RegPreprocessor(ImageProcesser):
             channel_names=channel_names,
             as_uint8=as_uint8,
         )
-
-        return preprocess_preview(self.image, guess_rgb(self.image.shape), 1.0, preprocessing=pre, spatial=False)
+        is_rgb = guess_rgb(self.image.shape)
+        return preprocess_preview(
+            self.image,
+            is_rgb,
+            1.0,
+            preprocessing=pre,
+            spatial=False,
+        )
 
 
 class OD(ImageProcesser):

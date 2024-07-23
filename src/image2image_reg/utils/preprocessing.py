@@ -47,9 +47,10 @@ def preprocess_dask_array(
     array: da.core.Array,
     channel_names: list[str],
     preprocessing: Preprocessing | None = None,
+    is_rgb: bool | None = None,
 ) -> sitk.Image:
     """Pre-process dask array."""
-    is_rgb = guess_rgb(array.shape)
+    is_rgb = is_rgb if isinstance(is_rgb, bool) else guess_rgb(array.shape)
     with MeasureTimer() as timer:
         # perform max intensity projection
         if is_rgb:
@@ -369,7 +370,7 @@ def preprocess_intensity(
 ) -> sitk.Image:
     """Preprocess image intensity data to single channel image."""
     with MeasureTimer() as timer:
-        convert_and_cast(image, preprocessing)
+        image = convert_and_cast(image, preprocessing)
         if preprocessing.max_intensity_projection:
             image = sitk_max_int_proj(image)
             logger.trace(f"Maximum intensity projection applied in {timer(since_last=True)}")
@@ -671,7 +672,7 @@ def preprocess_preview(
     """Complete pre-processing."""
     channel_names = preprocessing.channel_names
 
-    image = preprocess_dask_array(image, channel_names, preprocessing)
+    image = preprocess_dask_array(image, channel_names, preprocessing, is_rgb=is_rgb)
     # convert and cast
     image = convert_and_cast(image, preprocessing)
 
@@ -680,10 +681,10 @@ def preprocess_preview(
     image, mask, initial_transforms, original_size_transform = preprocess(
         image,
         None,
-        preprocessing,
-        resolution,
-        is_rgb,
-        initial_transforms,
+        preprocessing=preprocessing,
+        pixel_size=resolution,
+        is_rgb=is_rgb,
+        transforms=initial_transforms,
         transform_mask=transform_mask,
         check=False,
         spatial=spatial,

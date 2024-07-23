@@ -454,7 +454,12 @@ if is_installed("valis"):
         n_parallel: int = 1,
         overwrite: bool = False,
     ) -> PathLike:
+        import os
+
         from image2image_reg.workflows import ValisReg
+
+        # limit Vips concurrency to avoid memory issues
+        os.environ["VIPS_CONCURRENCY"] = "6"
 
         obj = ValisReg.from_path(path)
         obj.set_logger()

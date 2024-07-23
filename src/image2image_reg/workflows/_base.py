@@ -186,12 +186,16 @@ class Workflow:
             logger.info(f"Setup logging to file - '{self.log_file!s}'")
             logger.trace(f"Executed command: {sys.argv}")
 
-    def has_modality(self, name: str | None = None, path: PathLike | None = None) -> bool:
+    def has_modality(
+        self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None
+    ) -> bool:
         """Check whether modality has been previously added."""
         for modality in self.modalities.values():
             if name and modality.name == name:
                 return True
             if path and modality.path == path:
+                return True
+            if name_or_path and (modality.name == name_or_path or modality.path == name_or_path):
                 return True
         return False
 
