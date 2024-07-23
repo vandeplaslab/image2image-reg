@@ -46,6 +46,8 @@ class Image2ImageSlideReader(SlideReader):
     def slide2image(self, xywh=None, *args, **kwargs):
         # get highest resolution image
         reader = get_simple_reader(self.src_f, quick=True, init_pyramid=False, auto_pyramid=False)
+        is_rgb = reader.is_rgb
+        channel_axis, _ = reader.get_channel_axis_and_n_channels()
         # retrieve highest resolution image
         img = reader.pyramid[0]
         reader.close()
@@ -53,7 +55,15 @@ class Image2ImageSlideReader(SlideReader):
             xywh = np.array(xywh)
             start_c, start_r = xywh[0:2]
             end_c, end_r = xywh[0:2] + xywh[2:]
-            img = img[start_r:end_r, start_c:end_c]
+            if is_rgb:
+                img = img[start_r:end_r, start_c:end_c]
+            else:
+                if channel_axis == 0:
+                    img = img[:, start_r:end_r, start_c:end_c]
+                elif channel_axis == 1:
+                    img = img[start_r:end_r, :, start_c:end_c]
+                elif channel_axis == 2:
+                    img = img[start_r:end_r, start_c:end_c, :]
         return img.compute()
 
     def _get_slide_dimensions(self, reader: BaseReader, *args, **kwargs):  # type: ignore
