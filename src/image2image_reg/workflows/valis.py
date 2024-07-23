@@ -17,9 +17,6 @@ from image2image_reg.workflows._base import Workflow
 
 logger = logger.bind(src="Valis")
 
-if not is_installed("valis"):
-    raise ImportError("Please install valis to use this module.")
-
 
 class ValisReg(Workflow):
     """Registration using Valis."""
