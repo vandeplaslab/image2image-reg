@@ -308,13 +308,7 @@ class I2RegPreprocessor(ImageProcesser):
             as_uint8=as_uint8,
         )
         is_rgb = guess_rgb(self.image.shape)
-        return preprocess_preview(
-            self.image,
-            is_rgb,
-            1.0,
-            preprocessing=pre,
-            spatial=False,
-        )
+        return preprocess_preview(self.image, is_rgb, 1.0, preprocessing=pre, spatial=False)
 
 
 class OD(ImageProcesser):

@@ -348,6 +348,7 @@ class ValisReg(Workflow):
         """Co-register images."""
         from valis import registration
 
+        from image2image_reg.valis.slide_io import Image2ImageSlideReader
         from image2image_reg.valis.utilities import get_feature_detector, get_micro_registration_dimension
 
         # get filelist
@@ -405,7 +406,7 @@ class ValisReg(Workflow):
                     registrar.set_dst_paths()
 
                     with MeasureTimer() as timer:
-                        registrar.register(processor_dict=channel_kws)
+                        registrar.register(processor_dict=channel_kws, reader_cls=Image2ImageSlideReader)
                     logger.info(f"Registered low-res images in {timer()}")
 
                     # We can also plot the high resolution matches using `Valis.draw_matches`:
