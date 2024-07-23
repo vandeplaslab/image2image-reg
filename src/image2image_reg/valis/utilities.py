@@ -386,7 +386,9 @@ def get_feature_detector_str(feature_detector: str) -> str:
         "orb": "OrbFD",
         # custom
         "sensitive_vgg": "SensitiveVggFD",
+        "svgg": "SensitiveVggFD",
         "very_sensitive_vgg": "VerySensitiveVggFD",
+        "vsvgg": "VerySensitiveVggFD",
     }
     all_available = list(available.values()) + list(available.keys())
     if feature_detector not in all_available:
