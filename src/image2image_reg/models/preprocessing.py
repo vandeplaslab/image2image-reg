@@ -138,21 +138,23 @@ class Preprocessing(BaseModel):
         """Return if masked."""
         return self.use_mask and (self.mask is not None or self.mask_bbox is not None or self.mask_polygon is not None)
 
-    def to_valis(self) -> list[str, dict]:
+    def to_valis(self) -> tuple[str, dict]:
         """Return valis."""
         if self.method == "I2RegPreprocessor":
-            return [self.method, self.dict()]
+            return self.method, self.dict()
         elif self.method == "ColorfulStandardizer":
-            return ["ColorfulStandardizer", {"c": 0.2, "h": 0}]
+            return "ColorfulStandardizer", {"c": 0.2, "h": 0}
         elif self.method in ["mip", "MaxIntensityProjection"]:
-            return ["MaxIntensityProjection", {"channel_names": self.channel_names}]
-        return [self.method, {}]
+            return "MaxIntensityProjection", {"channel_names": self.channel_names}
+        elif self.method == "ChannelGetter":
+            return "ChannelGetter", {"channel": "dapi"}
+        return self.method, {}
 
-    def as_str(self) -> tuple[str, str]:
+    def as_str(self, valis: bool = False) -> tuple[str, str]:
         """Create nice formatting based on pre-processing."""
         text = f"{self.image_type.value}; "
         tooltip = f"Image type: {self.image_type.value}\n"
-        if self.method:
+        if valis and self.method:
             text += f"{self.method}; "
             tooltip += f"Method: {self.method}\n"
         if self.max_intensity_projection:
