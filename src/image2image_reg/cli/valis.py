@@ -15,7 +15,7 @@ from koyo.click import (
 )
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
-from koyo.utilities import is_installed, reraise_exception_if_debug
+from koyo.utilities import is_installed
 from loguru import logger
 
 from image2image_reg.enums import ValisDetectorMethod, ValisMatcherMethod, ValisPreprocessingMethod, WriterMode
@@ -24,7 +24,10 @@ from ._common import (
     ALLOW_EXTRA_ARGS,
     as_uint8_,
     fmt_,
+    modality_multi_,
+    modality_single_,
     n_parallel_,
+    output_dir_,
     overwrite_,
     parallel_mode_,
     project_path_multi_,
@@ -119,23 +122,8 @@ if is_installed("valis"):
         default=True,
         show_default=True,
     )
-    @click.option(
-        "-n",
-        "--name",
-        help="Name to be given to the specified image (modality).",
-        type=click.STRING,
-        show_default=True,
-        multiple=False,
-        required=True,
-    )
-    @click.option(
-        "-o",
-        "--output_dir",
-        help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
-        type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-        show_default=True,
-        required=True,
-    )
+    @modality_single_
+    @output_dir_
     @valis.command("new", help_group="Project")
     def new_cmd(
         output_dir: str,
@@ -220,15 +208,7 @@ if is_installed("valis"):
         required=True,
         callback=cli_parse_paths_sort,
     )
-    @click.option(
-        "-n",
-        "--name",
-        help="Name to be given to the specified image (modality).",
-        type=click.STRING,
-        show_default=True,
-        multiple=True,
-        required=True,
-    )
+    @modality_multi_
     @project_path_single_
     @valis.command("add-image", help_group="Project")
     def add_modality_cmd(
@@ -264,15 +244,7 @@ if is_installed("valis"):
         required=False,
         callback=cli_parse_paths_sort,
     )
-    @click.option(
-        "-n",
-        "--name",
-        help="Name to be given to the specified image (modality).",
-        type=click.STRING,
-        show_default=True,
-        multiple=True,
-        required=True,
-    )
+    @modality_multi_
     @click.option(
         "-a",
         "--attach_to",
@@ -300,15 +272,7 @@ if is_installed("valis"):
         required=True,
         callback=cli_parse_paths_sort,
     )
-    @click.option(
-        "-n",
-        "--name",
-        help="Name to be given to the specified image (modality).",
-        type=click.STRING,
-        show_default=True,
-        multiple=False,
-        required=True,
-    )
+    @modality_single_
     @click.option(
         "-a",
         "--attach_to",
@@ -336,15 +300,7 @@ if is_installed("valis"):
         required=True,
         callback=cli_parse_paths_sort,
     )
-    @click.option(
-        "-n",
-        "--name",
-        help="Name to be given to the specified image (modality).",
-        type=click.STRING,
-        show_default=True,
-        multiple=False,
-        required=True,
-    )
+    @modality_single_
     @click.option(
         "-a",
         "--attach_to",
@@ -379,14 +335,7 @@ if is_installed("valis"):
         required=False,
         default=None,
     )
-    @click.option(
-        "-n",
-        "--name",
-        help="Name to be given to the specified image (modality).",
-        type=click.STRING,
-        show_default=True,
-        required=True,
-    )
+    @modality_single_
     @project_path_multi_
     @valis.command("add-merge", help_group="Project")
     def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
