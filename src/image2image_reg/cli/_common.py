@@ -125,6 +125,51 @@ project_path_single_ = click.option(
     show_default=True,
     required=True,
 )
+modality_multi_ = click.option(
+    "-n",
+    "--name",
+    help="Name to be given to the specified image (modality).",
+    type=click.STRING,
+    show_default=True,
+    multiple=True,
+    required=True,
+)
+modality_single_ = click.option(
+    "-n",
+    "--name",
+    help="Name of the image (modality).",
+    type=click.STRING,
+    show_default=True,
+    required=True,
+)
+image_ = click.option(
+    "-i",
+    "--image",
+    help="Path to the image(s) that should be co-registered.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths_sort,
+)
+files_ = click.option(
+    "-f",
+    "--files",
+    help="Path to the image, shape (e.g. GeoJSON) or point files.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths_sort,
+)
+output_dir_ = click.option(
+    "-o",
+    "--output_dir",
+    help="Output directory where the project should be saved to.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=True,
+)
 
 
 # noinspection PyUnusedLocal

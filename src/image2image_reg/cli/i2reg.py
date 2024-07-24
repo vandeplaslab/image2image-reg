@@ -26,10 +26,15 @@ from ._common import (
     ALLOW_EXTRA_ARGS,
     arg_split_bbox,
     as_uint8_,
+    files_,
     fmt_,
     get_preprocessing,
+    image_,
+    modality_multi_,
+    modality_single_,
     n_parallel_,
     original_size_,
+    output_dir_,
     overwrite_,
     parallel_mode_,
     project_path_multi_,
@@ -61,23 +66,17 @@ def elastix() -> None:
     default=True,
     show_default=True,
 )
+@modality_single_
 @click.option(
     "-n",
     "--name",
-    help="Name to be given to the specified image (modality).",
+    help="Name to be given to the project.",
     type=click.STRING,
     show_default=True,
     multiple=False,
     required=True,
 )
-@click.option(
-    "-o",
-    "--output_dir",
-    help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
-)
+@output_dir_
 @elastix.command("new", help_group="Project")
 def new_cmd(output_dir: str, name: str, cache: bool, merge: bool) -> None:
     """Create a new project."""
@@ -89,6 +88,7 @@ def new_runner(
     name: str,
     cache: bool,
     merge: bool,
+    # valis
     valis: bool = False,
     check_for_reflections: bool = False,
     non_rigid_registration: bool = False,
@@ -196,25 +196,8 @@ def validate_runner(paths: ty.Sequence[str], valis: bool = False) -> None:
     required=False,
     callback=cli_parse_paths_sort,
 )
-@click.option(
-    "-i",
-    "--image",
-    help="Path to the image(s) that should be co-registered.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    multiple=True,
-    required=True,
-    callback=cli_parse_paths_sort,
-)
-@click.option(
-    "-n",
-    "--name",
-    help="Name to be given to the specified image (modality).",
-    type=click.STRING,
-    show_default=True,
-    multiple=True,
-    required=True,
-)
+@image_
+@modality_multi_
 @project_path_single_
 @elastix.command("add-image", help_group="Project")
 def add_modality_cmd(
@@ -419,15 +402,7 @@ def add_path_runner(
     required=False,
     callback=cli_parse_paths_sort,
 )
-@click.option(
-    "-n",
-    "--name",
-    help="Name to be given to the specified image (modality).",
-    type=click.STRING,
-    show_default=True,
-    multiple=True,
-    required=True,
-)
+@modality_single_
 @click.option(
     "-a",
     "--attach_to",
@@ -483,15 +458,7 @@ def add_attachment_runner(
     required=True,
     callback=cli_parse_paths_sort,
 )
-@click.option(
-    "-n",
-    "--name",
-    help="Name to be given to the specified image (modality).",
-    type=click.STRING,
-    show_default=True,
-    multiple=False,
-    required=True,
-)
+@modality_single_
 @click.option(
     "-a",
     "--attach_to",
@@ -538,15 +505,7 @@ def add_points_runner(
     required=True,
     callback=cli_parse_paths_sort,
 )
-@click.option(
-    "-n",
-    "--name",
-    help="Name to be given to the specified image (modality).",
-    type=click.STRING,
-    show_default=True,
-    multiple=False,
-    required=True,
-)
+@modality_single_
 @click.option(
     "-a",
     "--attach_to",
@@ -598,14 +557,7 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
     required=False,
     default=None,
 )
-@click.option(
-    "-n",
-    "--name",
-    help="Name to be given to the specified image (modality).",
-    type=click.STRING,
-    show_default=True,
-    required=True,
-)
+@modality_single_
 @project_path_multi_
 @elastix.command("add-merge", help_group="Project")
 def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
@@ -1004,6 +956,41 @@ def _export(
         overwrite=overwrite,
     )
     return path
+
+
+@overwrite_
+@as_uint8_
+@original_size_
+@fmt_
+@files_
+@modality_single_
+@project_path_single_
+@elastix.command("transform", help_group="Execute")
+def transform_cmd(
+    project_dir: str,
+    name: list[str],
+    files: list[str],
+    fmt: WriterMode,
+    original_size: bool,
+    as_uint8: bool | None,
+    overwrite: bool,
+) -> None:
+    """Transform images."""
+    transform_runner(
+        project_dir,
+        name=name,
+        files=files,
+        fmt=fmt,
+        original_size=original_size,
+        as_uint8=as_uint8,
+        overwrite=overwrite,
+    )
+
+
+def transform_runner(
+    path: PathLike, name: str, files: list[PathLike], fmt: str, original_size: bool, as_uint8: bool, overwrite: bool
+) -> None:
+    """Transform."""
 
 
 @click.option(
