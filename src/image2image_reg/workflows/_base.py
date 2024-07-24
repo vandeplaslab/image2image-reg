@@ -200,7 +200,7 @@ class Workflow:
                 return True
             if path and modality.path == path:
                 return True
-            if name_or_path and (modality.name == name_or_path or modality.path == name_or_path):
+            if name_or_path and (modality.name == name_or_path or modality.path == Path(name_or_path)):
                 return True
         return False
 

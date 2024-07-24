@@ -258,8 +258,9 @@ class ValisReg(Workflow):
                 logger.error(errors[-1])
             else:
                 logger.success(f"✅ Modality '{modality.name}' exist.")
+
         # check if the reference exists
-        if self.reference and self.has_modality(name_or_path=self.reference):
+        if self.reference and not self.has_modality(name_or_path=self.reference):
             errors.append(f"❌ Reference modality '{self.reference}' not found.")
             logger.error(errors[-1])
 

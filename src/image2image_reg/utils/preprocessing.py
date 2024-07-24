@@ -168,8 +168,11 @@ def sitk_max_int_proj(image: sitk.Image) -> sitk.Image:
     SimpleITK image
     """
     # check if there are 3 dimensions (XYC)
+    size = image.GetSize()
     if len(image.GetSize()) == 3:
-        return sitk.MaximumProjection(image, 2)[:, :, 0]
+        if size[2] < size[0]:
+            return sitk.MaximumProjection(image, 2)[:, :, 0]
+        return sitk.MaximumProjection(image, 0)[0, :, :]
     else:
         logger.warning("Cannot perform maximum intensity project on single channel image")
         return image
@@ -188,8 +191,11 @@ def sitk_mean_int_proj(image: sitk.Image) -> sitk.Image:
     SimpleITK image
     """
     # check if there are 3 dimensions (XYC)
+    size = image.GetSize()
     if len(image.GetSize()) == 3:
-        return sitk.MeanProjection(image, 2)[:, :, 0]
+        if size[2] < size[0]:
+            return sitk.MeanProjection(image, 2)[:, :, 0]
+        return sitk.MeanProjection(image, 0)[0, :, :]
     else:
         logger.warning("Cannot perform maximum intensity project on single channel image")
         return image
