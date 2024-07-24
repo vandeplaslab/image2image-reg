@@ -127,6 +127,11 @@ class Workflow:
         self._name = value
 
     @property
+    def project_name(self) -> str:
+        """Project name."""
+        return self.project_dir.name
+
+    @property
     def output_dir(self) -> Path:
         """Output directory."""
         return self.project_dir.parent

@@ -31,7 +31,7 @@ class ValisReg(Workflow):
     CONFIG_NAME = "valis.config.json"
     EXTENSION = ".valis"
 
-    registrar: ty.Any = None
+    _registrar: ty.Any = None
 
     def __init__(
         self,
@@ -344,11 +344,20 @@ class ValisReg(Workflow):
             assert reference in filelist, f"{reference} not in filelist."
         return reference
 
+    @property
+    def registrar(self) -> ty.Any:
+        """Load registrar or retrieve it."""
+        if self._registrar is None:
+            from image2image_reg.valis.utilities import get_valis_registrar_alt
+
+            self._registrar = get_valis_registrar_alt(self.project_dir, self.name, init_jvm=True)
+            logger.trace(f"Loaded registrar from '{self.project_dir}'.")
+        return self._registrar
+
     def register(self, **kwargs: ty.Any) -> None:
         """Co-register images."""
         from valis import registration
 
-        from image2image_reg.valis.slide_io import Image2ImageSlideReader
         from image2image_reg.valis.utilities import get_feature_detector, get_micro_registration_dimension
 
         # get filelist
@@ -447,7 +456,7 @@ class ValisReg(Workflow):
                     except Exception as exc:
                         logger.exception(f"Failed to export matches: {exc}.")
                 # set registrar
-                self.registrar = registrar
+                self._registrar = registrar
             except Exception as exc:
                 registration.kill_jvm()
                 logger.exception(f"Error during registration: {exc}")

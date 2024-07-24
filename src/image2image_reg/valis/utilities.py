@@ -30,7 +30,14 @@ def transform_points(registrar: Valis, source_path: PathLike, x: np.ndarray, y: 
 
 
 def transform_points_df(
-    registrar: Valis, source_path: PathLike, df: pd.DataFrame, crop: str = "reference"
+    registrar: Valis,
+    source_path: PathLike,
+    df: pd.DataFrame,
+    crop: str = "reference",
+    x_key: str = "x",
+    y_key: str = "y",
+    suffix: str = "_transformed",
+    replace: bool = False,
 ) -> pd.DataFrame:
     """Transform points in a dataframe.
 
@@ -45,11 +52,18 @@ def transform_points_df(
     crop : str, optional
         Crop method, by default "reference"
     """
-    return _transform_points_df(registrar, source_path, df, "x", "y", crop=crop)
+    return _transform_points_df(registrar, source_path, df, x_key, y_key, crop=crop, suffix=suffix, replace=replace)
 
 
 def transform_vertices_df(
-    registrar: Valis, source_path: PathLike, df: pd.DataFrame, crop: str = "reference"
+    registrar: Valis,
+    source_path: PathLike,
+    df: pd.DataFrame,
+    crop: str = "reference",
+    x_key: str = "vertex_x",
+    y_key: str = "vertex_y",
+    suffix: str = "_transformed",
+    replace: bool = False,
 ) -> pd.DataFrame:
     """Transform points in a dataframe.
 
@@ -64,7 +78,7 @@ def transform_vertices_df(
     crop : str, optional
         Crop method, by default "reference"
     """
-    return _transform_points_df(registrar, source_path, df, "vertex_", "vertex_y", crop=crop)
+    return _transform_points_df(registrar, source_path, df, x_key, y_key, crop=crop, suffix=suffix, replace=replace)
 
 
 def _transform_points_df(
@@ -74,18 +88,29 @@ def _transform_points_df(
     x_key: str = "x",
     y_key: str = "y",
     crop: str = "reference",
+    suffix: str = "_transformed",
+    replace: bool = False,
 ) -> pd.DataFrame:
     if x_key not in df.columns or y_key not in df.columns:
-        raise ValueError("Dataframe must have x and y columns.")
+        raise ValueError(f"Dataframe must have '{x_key}' and '{y_key}' columns.")
+    if replace and suffix == "_transformed":
+        suffix = "_original"
+
     x = df[x_key].values
     y = df[y_key].values
     x, y = transform_points(registrar, source_path, x, y, crop=crop)
-    if f"{x_key}_transformed" in df.columns:
-        df.drop(columns=[f"{x_key}_transformed"], inplace=True)
-    if f"{y_key}_transformed" in df.columns:
-        df.drop(columns=[f"{y_key}_transformed"], inplace=True)
-    df.insert(df.columns.get_loc(x_key), f"{x_key}_transformed", x)
-    df.insert(df.columns.get_loc(y_key), f"{y_key}_transformed", y)
+    if f"{x_key}{suffix}" in df.columns:
+        df.drop(columns=[f"{x_key}{suffix}"], inplace=True)
+    if f"{y_key}{suffix}" in df.columns:
+        df.drop(columns=[f"{y_key}{suffix}"], inplace=True)
+    if replace:
+        df.insert(max(0, df.columns.get_loc(x_key) - 1), f"{x_key}{suffix}", df[x_key])
+        df.insert(max(0, df.columns.get_loc(y_key) - 1), f"{y_key}{suffix}", df[y_key])
+        df[x_key] = x
+        df[y_key] = y
+    else:
+        df.insert(df.columns.get_loc(x_key), f"{x_key}{suffix}", x)
+        df.insert(df.columns.get_loc(y_key), f"{y_key}{suffix}", y)
     return df
 
 
@@ -413,7 +438,7 @@ def get_feature_detector(feature_detector: str) -> type:
     return feature_detector
 
 
-def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool = False) -> None:
+def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool = False) -> ty.Any:
     """Get Valis registrar if it's available."""
     # initialize java
     if init_jvm:
@@ -424,6 +449,25 @@ def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool 
     registrar = None
     output_dir = Path(output_dir)
     registrar_path = output_dir / project_name / "data" / f"{project_name}_registrar.pickle"
+    if registrar_path.exists():
+        import pickle
+
+        with open(registrar_path, "rb") as f:
+            registrar = pickle.load(f)
+    return registrar
+
+
+def get_valis_registrar_alt(project_dir: PathLike, name: str, init_jvm: bool = False) -> ty.Any:
+    """Get Valis registrar if it's available."""
+    # initialize java
+    if init_jvm:
+        from valis import registration
+
+        registration.init_jvm()
+
+    registrar = None
+    output_dir = Path(project_dir)
+    registrar_path = project_dir / "data" / f"{name}_registrar.pickle"
     if registrar_path.exists():
         import pickle
 

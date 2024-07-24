@@ -5,6 +5,7 @@ from warnings import warn
 
 import numpy as np
 import SimpleITK as sitk
+
 from image2image_reg.utils.convert import convert_to_itk
 
 
@@ -108,12 +109,14 @@ class TransformMixin:
         """
         if not self.output_spacing:
             raise ValueError("Output spacing not set, call `set_output_spacing` first")
+        if is_px:
+            points = points * source_pixel_size
 
         points = np.asarray(points).tolist()
         transformed_points = []
         for point in points:
-            if is_px:
-                point = point * source_pixel_size
+            # if is_px:
+            #     point = point * source_pixel_size
             for _index, transform in enumerate(self.transforms):
                 point = transform.inverse_transform.TransformPoint(point)
             transformed_point = np.array(point)
