@@ -11,6 +11,7 @@ import pandas as pd
 from koyo.typing import PathLike
 from loguru import logger
 from natsort import natsorted
+from tqdm import tqdm
 
 from image2image_reg.enums import ValisCrop, ValisInterpolation
 
@@ -127,6 +128,9 @@ def transform_registered_image(
     crop: str | bool | ValisCrop = "reference",
     non_rigid_reg: bool = True,
     pyramid: int = 0,
+    as_uint8: bool = False,
+    tile_size: int = 512,
+    overwrite: bool = False,
 ) -> list[Path]:
     """Transform valis image."""
     from image2image_io.readers import get_simple_reader
@@ -146,14 +150,17 @@ def transform_registered_image(
 
     files = []
     for slide_obj in registrar.slide_dict.values():
+        logger.trace(f"Transforming {slide_obj.name}...")
         if not Path(slide_obj.src_f).exists():
             raise ValueError(f"Slide {slide_ref.src_f} does not exist.")
 
-        reader = get_simple_reader(slide_obj.src_f)
+        reader = get_simple_reader(slide_obj.src_f, init_pyramid=False)
         output_filename = output_dir / reader.path.name
-        if output_filename.exists():
+        if output_filename.exists() and not overwrite:
+            logger.trace(f"File {output_filename} already exists. Moving on...")
             continue
 
+        # warp image and if necessary, convert to numpy
         warped = slide_obj.warp_slide(level=pyramid, interp_method=interp_method, crop=crop, non_rigid=non_rigid_reg)
         if not isinstance(warped, np.ndarray):
             warped = vips2numpy(warped)
@@ -162,12 +169,15 @@ def transform_registered_image(
         if warped.ndim == 3 and np.argmin(warped.shape) == 2 and not reader.is_rgb:
             warped = np.moveaxis(warped, 2, 0)
 
+        # write to disk
         exported = write_ome_tiff_from_array(
             output_filename,
             None,
             warped,
             resolution=slide_ref.resolution if slide_ref else slide_obj.resolution,
             channel_names=reader.channel_names,
+            as_uint8=as_uint8,
+            tile_size=tile_size,
         )
         files.append(exported)
     return files
@@ -181,6 +191,9 @@ def transform_attached_image(
     interp_method: str | ValisInterpolation = "bicubic",
     crop: str | bool | ValisCrop = "reference",
     pyramid: int = 0,
+    as_uint8: bool = False,
+    tile_size: int = 512,
+    overwrite: bool = False,
 ) -> list[Path]:
     """Transform valis image."""
     from image2image_io.readers import get_simple_reader
@@ -190,6 +203,7 @@ def transform_attached_image(
 
     output_dir = Path(output_dir)
 
+    logger.trace(f"Transforming attached images for {source_path}...")
     # get reference slide and source slide
     slide_ref = None
     if registrar.reference_img_f:
@@ -204,10 +218,12 @@ def transform_attached_image(
         raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
 
     files = []
-    for path in paths_to_register:
+    for path in tqdm(paths_to_register, desc="Transforming attached images"):
+        logger.trace(f"Transforming {path} to {source_path}...")
         reader = get_simple_reader(path)
         output_filename = output_dir / reader.path.name
-        if output_filename.exists():
+        if output_filename.exists() and not overwrite:
+            logger.trace(f"File {output_filename} already exists. Moving on...")
             continue
 
         # warp image
@@ -225,17 +241,91 @@ def transform_attached_image(
             warped,
             resolution=slide_ref.resolution if slide_ref else slide_src.resolution,
             channel_names=reader.channel_names,
+            as_uint8=as_uint8,
+            tile_size=tile_size,
         )
         files.append(exported)
     return files
 
 
-def transform_attached_points() -> list[Path]:
+def transform_attached_points(
+    registrar: Valis,
+    attach_to: PathLike,
+    output_dir: PathLike,
+    paths: list[PathLike],
+    pixel_size: float,
+    crop: str | bool | ValisCrop = "reference",
+    suffix: str = "_previous",
+    overwrite: bool = False,
+) -> list[Path]:
     """Transform attached points."""
+    from image2image_io.readers.points_reader import read_points
+    from image2image_io.readers.utilities import get_column_name
+    from valis.valtils import get_name
+
+    slide_src = registrar.get_slide(get_name(str(attach_to)))
+    if not Path(slide_src.src_f).exists():
+        raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
+
+    inv_pixel_size = 1 / pixel_size
+    is_in_px = pixel_size == 1.0
+    paths_ = []
+    for path in tqdm(paths, desc="Transforming attached points"):
+        # read data
+        path = Path(path)
+        output_path = output_dir / path.name
+        if output_path.exists() and not overwrite:
+            logger.trace(f"File {output_path} already exists. Moving on...")
+            continue
+
+        df = read_points(path, return_df=True)
+        x_key = get_column_name(df, ["x", "x_location", "x_centroid", "x:x", "vertex_x"])
+        y_key = get_column_name(df, ["y", "y_location", "y_centroid", "y:y", "vertex_y"])
+        if x_key not in df.columns or y_key not in df.columns:
+            raise ValueError(f"Invalid columns: {df.columns}")
+
+        # Valis operates in index units so we need to convert from physical units to index units explicitly
+        if not is_in_px:
+            df[x_key] = df[x_key] * inv_pixel_size
+            df[y_key] = df[y_key] * inv_pixel_size
+
+        # transform the points
+        df_transformed = transform_points_df(
+            registrar,
+            slide_src.src_f,
+            df,
+            x_key=x_key,
+            y_key=y_key,
+            crop=crop,
+            replace=True,
+            suffix=suffix,
+        )
+        if not is_in_px:
+            df_transformed[x_key] = df_transformed[x_key] * pixel_size
+            df_transformed[y_key] = df_transformed[y_key] * pixel_size
+
+        if path.suffix in [".csv", ".txt", ".tsv"]:
+            sep = {"csv": ",", "txt": "\t", "tsv": "\t"}[path.suffix[1:]]
+            df_transformed.to_csv(output_path, index=False, sep=sep)
+        elif path.suffix == ".parquet":
+            df_transformed.to_parquet(output_path, index=False)
+        else:
+            raise ValueError(f"Invalid file extension: {path.suffix}")
+        paths_.append(output_path)
+    return paths_
 
 
-def transform_attached_shapes() -> list[Path]:
+def transform_attached_shapes(
+    registrar: Valis,
+    attach_to: PathLike,
+    output_dir: PathLike,
+    paths: list[PathLike],
+    pixel_size: float,
+    crop: str | bool | ValisCrop = "reference",
+    overwrite: bool = False,
+) -> list[Path]:
     """Transform attached shapes."""
+    raise NotImplementedError("Must implement method")
 
 
 def get_image_files(img_dir: PathLike, ordered: bool = False) -> list[Path]:

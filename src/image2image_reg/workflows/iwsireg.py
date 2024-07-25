@@ -86,16 +86,6 @@ class IWsiReg(Workflow):
             "transformations": {},
         }
 
-        # setup cache directory
-        if init:
-            self.project_dir.mkdir(exist_ok=True, parents=True)
-        self.cache_dir = self.project_dir / "Cache"
-        if self.cache_images and init:
-            self.cache_dir.mkdir(exist_ok=True, parents=True)
-            logger.trace(f"Caching images to '{self.cache_dir}' directory.")
-        if log and init:
-            self.set_logger()
-
     @property
     def transformations_dir(self) -> Path:
         """Results directory."""
@@ -279,26 +269,11 @@ class IWsiReg(Workflow):
 
         # add modality information
         with MeasureTimer() as timer:
-            for name, modality in config["modalities"].items():
-                if not Path(modality["path"]).exists() and raise_on_error:
-                    raise ValueError(f"Modality path '{modality['path']}' does not exist.")
-                preprocessing = modality.get("preprocessing", dict())
-                self.add_modality(
-                    name=name,
-                    path=modality["path"],
-                    preprocessing=Preprocessing(**preprocessing) if preprocessing else None,
-                    channel_names=modality.get("channel_names", None),
-                    channel_colors=modality.get("channel_colors", None),
-                    mask=modality.get("mask", None),
-                    mask_bbox=modality.get("mask_bbox", None),
-                    mask_polygon=modality.get("mask_polygon", None),
-                    output_pixel_size=modality.get("output_pixel_size", None),
-                    pixel_size=modality.get("pixel_size", None),
-                    transform_mask=preprocessing.get("transform_mask", False),
-                    export=Export(**modality["export"]) if modality.get("export") else None,
-                    raise_on_error=raise_on_error,
-                )
-            logger.trace(f"Loaded modalities in {timer()}")
+            self._load_modalities_from_config(config, raise_on_error)
+            # load attachment images
+            self._load_attachment_from_config(config)
+            # load merge
+            self._load_merge_from_config(config)
 
             # add registration paths
             for _key, edge in config["registration_paths"].items():
@@ -313,29 +288,6 @@ class IWsiReg(Workflow):
                     },
                 )
             logger.trace(f"Loaded registration paths in {timer(since_last=True)}")
-
-            # load attachment images
-            if config.get("attachment_images"):
-                for name, attach_to in config["attachment_images"].items():
-                    self.attachment_images[name] = attach_to
-                    logger.trace(f"Added attachment image '{name}' attached to '{attach_to}'")
-                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
-
-            if config.get("attachment_shapes"):
-                for name, shape_dict in config["attachment_shapes"].items():
-                    assert "shape_files" in shape_dict, "Shape dict missing 'shape_files' key."
-                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
-                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
-                    self.attachment_shapes[name] = shape_dict
-                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
-
-            if config.get("attachment_points"):
-                for name, shape_dict in config["attachment_points"].items():
-                    assert "shape_files" in shape_dict, "Shape dict missing 'shape_files' key."
-                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
-                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
-                    self.attachment_points[name] = shape_dict
-                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
 
             # check whether the registered version of the config exists
             if (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
@@ -355,12 +307,6 @@ class IWsiReg(Workflow):
                 else:
                     self.transformations = self._collate_transformations()
                 logger.trace(f"Loaded registered transformations in {timer(since_last=True)}")
-
-            # load merge modalities
-            if config["merge_images"]:
-                for name, merge_modalities in config["merge_images"].items():
-                    self.merge_modalities[name] = merge_modalities
-                logger.trace(f"Loaded merge modalities in {timer(since_last=True)}")
 
     def _load_registered_transform(
         self,
@@ -937,15 +883,16 @@ class IWsiReg(Workflow):
 
     def write(
         self,
-        n_parallel: int = 1,
         fmt: WriterMode = "ome-tiff",
         write_registered: bool = True,
         write_not_registered: bool = True,
+        write_attached: bool = True,
+        write_merged: bool = True,
         remove_merged: bool = True,
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        write_merged: bool = True,
+        n_parallel: int = 1,
         overwrite: bool = False,
     ) -> list | None:
         """Export images after applying transformation."""
@@ -955,115 +902,220 @@ class IWsiReg(Workflow):
             logger.warning("Cannot write images as not all modalities have been registered.")
             return None
 
-        def _get_with_suffix(p: Path) -> Path:
-            if fmt in ["ome-tiff", "ome-tiff-by-plane", "ome-tiff-by-tile"]:
-                return p.parent / (p.name + ".ome.tiff")
-            raise ValueError(f"Writer {fmt} is not supported.")
-
         paths = []
-
         # prepare merge modalities metadata
         merge_modalities = self._find_merge_modalities()
         if merge_modalities:
             logger.trace(f"Merge modalities: {merge_modalities}")
-        modalities = list(self.registration_paths.keys())
-        if modalities:
-            logger.trace(f"Registered modalities: {modalities}")
-        not_registered_modalities = self._find_not_registered_modalities()
-        if not_registered_modalities:
-            logger.trace(f"Not registered modalities: {not_registered_modalities}")
+        reg_modality_list = list(self.registration_paths.keys())
+        if reg_modality_list:
+            logger.trace(f"Registered modalities: {reg_modality_list}")
+
+        not_reg_modality_list = self._find_not_registered_modalities()
+        if not_reg_modality_list:
+            logger.trace(f"Not registered modalities: {not_reg_modality_list}")
 
         if remove_merged:
             for merge_modality in merge_modalities:
                 with suppress(ValueError):
-                    index = modalities.index(merge_modality)
-                    modalities.pop(index)
+                    index = reg_modality_list.index(merge_modality)
+                    reg_modality_list.pop(index)
                     logger.trace(f"Removed {merge_modality} from registered modalities as it will be merged.")
                 with suppress(ValueError):
-                    index = not_registered_modalities.index(merge_modality)
-                    not_registered_modalities.pop(index)
+                    index = not_reg_modality_list.index(merge_modality)
+                    not_reg_modality_list.pop(index)
                     logger.trace(f"Removed {merge_modality} from not registered modalities as it will be merged.")
 
         # export non-registered nodes
         if write_not_registered:
-            # preprocess and save unregistered nodes
-            to_write = []
-            for modality in tqdm(not_registered_modalities, desc="Exporting not-registered images..."):
-                if modality in merge_modalities and remove_merged:
-                    continue
-                try:
-                    image_modality, transformations, output_path = self._prepare_not_registered_image_transform(
-                        modality,
-                        to_original_size=to_original_size,
-                    )
-                    if _get_with_suffix(output_path).exists() and not overwrite:
-                        logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
-                        continue
-                    logger.trace(f"Exporting {modality} to {output_path}... (registered)")
-                    to_write.append((image_modality, transformations, output_path, fmt, tile_size, as_uint8))
-                except KeyError:
-                    logger.warning(f"Could not find transformation data for {modality}.")
-            if to_write:
-                if n_parallel > 1:
-                    with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
-                        res = pool.imap(self._transform_write_image, to_write)
-                    paths.extend(list(res))
-                else:
-                    for args in tqdm(to_write, desc="Exporting not-registered modalities..."):
-                        path = self._transform_write_image(*args)
-                        paths.append(path)
+            self._export_not_registered_images(
+                not_reg_modality_list, fmt, to_original_size, tile_size, as_uint8, n_parallel, overwrite
+            )
 
         # export modalities
         if write_registered:
-            to_write = []
-            for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
-                image_modality, _, output_path = self._prepare_registered_image_transform(
-                    modality, attachment=False, to_original_size=to_original_size
-                )
+            self._export_registered_images(
+                reg_modality_list, fmt, to_original_size, tile_size, as_uint8, n_parallel, overwrite
+            )
 
-                if _get_with_suffix(output_path).exists() and not overwrite:
-                    logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
+        if write_attached:
+            self._export_attachment_shapes(n_parallel, overwrite)
+            self._export_attachment_points(n_parallel, overwrite)
+            self._export_attachment_images(
+                merge_modalities, remove_merged, fmt, to_original_size, tile_size, as_uint8, overwrite
+            )
+
+        # export merge modalities
+        if write_merged and self.merge_modalities:
+            path = self._transform_write_merge_images(
+                to_original_size=to_original_size, as_uint8=as_uint8, overwrite=overwrite
+            )
+            paths.append(path)
+        return paths
+
+    def _export_not_registered_images(
+        self,
+        modalities: list[str],
+        fmt: str | WriterMode = "ome-tiff",
+        to_original_size: bool = True,
+        tile_size: int = 512,
+        as_uint8: bool | None = None,
+        n_parallel: int = 1,
+        overwrite: bool = False,
+    ) -> list[Path]:
+        # preprocess and save unregistered nodes
+        paths = []
+        to_write = []
+        for modality in tqdm(modalities, desc="Exporting not-registered images..."):
+            try:
+                image_modality, transformations, output_path = self._prepare_not_registered_image_transform(
+                    modality,
+                    to_original_size=to_original_size,
+                )
+                if _get_with_suffix(output_path, fmt).exists() and not overwrite:
+                    logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
                     continue
                 logger.trace(f"Exporting {modality} to {output_path}... (registered)")
-                to_write.append(
-                    (
-                        image_modality.name,
-                        None,
-                        output_path,
-                        fmt,
-                        tile_size,
-                        as_uint8,
-                        lambda: (False, None, to_original_size),
-                    )
+                to_write.append((image_modality, transformations, output_path, fmt, tile_size, as_uint8))
+            except KeyError:
+                logger.warning(f"Could not find transformation data for {modality}.")
+        if to_write:
+            if n_parallel > 1:
+                with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
+                    res = pool.imap(self._transform_write_image, to_write)
+                paths.extend(list(res))
+            else:
+                for args in tqdm(to_write, desc="Exporting not-registered modalities..."):
+                    path = self._transform_write_image(*args)
+                    paths.append(path)
+        return paths
+
+    def _export_registered_images(
+        self,
+        modalities: list[str],
+        fmt: str | WriterMode = "ome-tiff",
+        to_original_size: bool = True,
+        tile_size: int = 512,
+        as_uint8: bool | None = None,
+        n_parallel: int = 1,
+        overwrite: bool = False,
+    ) -> list[Path]:
+        paths = []
+        to_write = []
+        for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
+            image_modality, _, output_path = self._prepare_registered_image_transform(
+                modality, attachment=False, to_original_size=to_original_size
+            )
+
+            if _get_with_suffix(output_path, fmt).exists() and not overwrite:
+                logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
+                continue
+            logger.trace(f"Exporting {modality} to {output_path}... (registered)")
+            to_write.append(
+                (
+                    image_modality.name,
+                    None,
+                    output_path,
+                    fmt,
+                    tile_size,
+                    as_uint8,
+                    lambda: (False, None, to_original_size),
                 )
-            if to_write:
-                if n_parallel > 1:
-                    with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
-                        res = pool.imap(self._transform_write_image, to_write)
-                    paths.extend(list(res))
+            )
+        if to_write:
+            if n_parallel > 1:
+                with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
+                    res = pool.imap(self._transform_write_image, to_write)
+                paths.extend(list(res))
+            else:
+                for args in tqdm(to_write, desc="Exporting registered modalities (registered)..."):
+                    path = self._transform_write_image(*args)
+                    paths.append(path)
+        return paths
+
+    def _export_attachment_shapes(self, n_parallel: int = 1, overwrite: bool = False) -> list[Path]:
+        from image2image_reg.elastix.utilities import transform_attached_shape
+
+        paths = []
+        # export attachment modalities
+        with MeasureTimer() as timer:
+            for name, attached_shape_dict in tqdm(
+                self.attachment_shapes.items(), desc="Exporting attachment shapes..."
+            ):
+                attached_to = attached_shape_dict["attach_to"]
+                # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
+                shape_pixel_size = attached_shape_dict["pixel_size"]
+                attach_to_modality = self.modalities[attached_to]
+                if self._is_being_registered(attach_to_modality):
+                    modality, transform_sequence, _ = self._prepare_registered_image_transform(attach_to_modality.name)
                 else:
-                    for args in tqdm(to_write, desc="Exporting registered modalities (registered)..."):
-                        path = self._transform_write_image(*args)
-                        paths.append(path)
+                    modality, transform_sequence, _ = self._prepare_not_registered_image_transform(
+                        attach_to_modality.name
+                    )
 
-            # # export attachment modalities
-            # for attach_to_modality_key, attached_shape_dict in tqdm(
-            #     self.attachment_shapes.items(), desc="Exporting attachment shapes..."
-            # ):
-            #     attach_to_modality = self.modalities[attach_to_modality_key]
-            #     for shape_file in attached_shape_dict["shape_files"]:
-            #         attached_modality_key = Path(shape_file).stem
-            #         suffix = Path(shape_file).suffix
-            #         output_path = (
-            #             self.image_dir
-            #             / f"{self.name}-{attached_modality_key}_to_{attach_to_modality_key}_registered{suffix}"
-            #         )
-            #         if _get_with_suffix(output_path).exists() and not overwrite:
-            #             logger.trace(f"Skipping {attach_to_modality_key} as it already exists ({output_path}).")
+                for shape_file in attached_shape_dict["files"]:
+                    logger.trace(f"Exporting {shape_file} to {attached_to}...")
+                    shape_file_name = Path(shape_file).stem
+                    suffix = Path(shape_file).suffix
+                    output_path = self.image_dir / f"{self.name}-{shape_file_name}_to_{attached_to}_registered{suffix}"
+                    if output_path.exists() and not overwrite:
+                        logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
+                    path = transform_attached_shape(transform_sequence, shape_file, shape_pixel_size, output_path)
+                    logger.trace(f"Exported {shape_file} to {attached_to}...")
+                    paths.append(path)
+        if paths:
+            logger.info(f"Exporting attachment points took {timer()}.")
+        return paths
 
-            # attachment images
-            to_write = []
-            # keys are: attached image - attached to image (the one that was registered)
+    def _export_attachment_points(self, n_parallel: int = 1, overwrite: bool = False):
+        from image2image_reg.elastix.utilities import transform_attached_point
+
+        paths = []
+        # export attachment modalities
+        with MeasureTimer() as timer:
+            for name, attached_shape_dict in tqdm(
+                self.attachment_points.items(), desc="Exporting attachment shapes..."
+            ):
+                attached_to = attached_shape_dict["attach_to"]
+                # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
+                shape_pixel_size = attached_shape_dict["pixel_size"]
+                attach_to_modality = self.modalities[attached_to]
+                if self._is_being_registered(attach_to_modality):
+                    modality, transform_sequence, _ = self._prepare_registered_image_transform(attach_to_modality.name)
+                else:
+                    modality, transform_sequence, _ = self._prepare_not_registered_image_transform(
+                        attach_to_modality.name
+                    )
+
+                for shape_file in attached_shape_dict["files"]:
+                    logger.trace(f"Exporting {shape_file} to {attached_to}...")
+                    shape_file_name = Path(shape_file).stem
+                    suffix = Path(shape_file).suffix
+                    output_path = self.image_dir / f"{self.name}-{shape_file_name}_to_{attached_to}_registered{suffix}"
+                    if output_path.exists() and not overwrite:
+                        logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
+                    path = transform_attached_point(transform_sequence, shape_file, shape_pixel_size, output_path)
+                    logger.trace(f"Exported {shape_file} to {attached_to}...")
+                    paths.append(path)
+        if paths:
+            logger.info(f"Exporting attachment points took {timer()}.")
+        return paths
+
+    def _export_attachment_images(
+        self,
+        merge_modalities: list[str],
+        remove_merged: bool,
+        fmt: str | WriterMode = "ome-tiff",
+        to_original_size: bool = True,
+        tile_size: int = 512,
+        as_uint8: bool | None = None,
+        overwrite: bool = False,
+    ) -> list[Path]:
+        # attachment images
+        paths = []
+        to_write = []
+        # keys are: attached image - attached to image (the one that was registered)
+        with MeasureTimer() as timer:
             for attached_modality_key, attach_to_modality_key in tqdm(
                 self.attachment_images.items(), desc="Exporting attachment images..."
             ):
@@ -1084,7 +1136,7 @@ class IWsiReg(Workflow):
                         attachment_modality=attached_modality,
                         to_original_size=to_original_size,
                     )
-                if _get_with_suffix(output_path).exists() and not overwrite:
+                if _get_with_suffix(output_path, fmt).exists() and not overwrite:
                     logger.trace(f"Skipping {attach_to_modality_key} as it already exists ({output_path}).")
                     continue
                 logger.trace(f"Exporting {attached_modality} to {output_path}... (attached)")
@@ -1108,13 +1160,8 @@ class IWsiReg(Workflow):
                 for args in tqdm(to_write, desc="Exporting attachment modalities..."):
                     path = self._transform_write_image(*args)
                     paths.append(path)
-
-        # export merge modalities
-        if write_merged and self.merge_modalities:
-            path = self._transform_write_merge_images(
-                to_original_size=to_original_size, as_uint8=as_uint8, overwrite=overwrite
-            )
-            paths.append(path)
+        if paths:
+            logger.info(f"Exporting attachment images took {timer()}.")
         return paths
 
     def _prepare_registered_image_transform(
@@ -1166,7 +1213,7 @@ class IWsiReg(Workflow):
         attachment: bool = False,
         attachment_modality: Modality | None = None,
         to_original_size: bool = True,
-    ):
+    ) -> tuple[Modality, TransformSequence, Path]:
         from image2image_reg.utils.transformation import identity_elx_transform
         from image2image_reg.wrapper import ImageWrapper
 
@@ -1534,43 +1581,53 @@ class IWsiReg(Workflow):
 
         ValisReg.from_wsireg(self, output_dir)
 
-    # def _create_initial_overlap_image(self):
-    #     """Create image showing how images overlap before registration"""
-    #     from itertools import combinations
-    #
-    #     from image2image_reg.utils.visuals import color_multichannel, get_n_colors, jzazbz_cmap
-    #
-    #     min_r = np.inf
-    #     max_r = 0
-    #     min_c = np.inf
-    #     max_c = 0
-    #     composite_img_list = [None] * len(self.modalities)
-    #     for src_modality, tgt_modality in combinations(self.modalities.values(), 2):
-    #
-    #         img = img_obj.image
-    #         padded_img = transform.warp(img, img_obj.T, preserve_range=True, output_shape=img_obj.padded_shape_rc)
-    #
-    #         composite_img_list[i] = padded_img
-    #
-    #         img_corners_rc = warp_tools.get_corners_of_image(img.shape[0:2])
-    #         warped_corners_xy = warp_tools.warp_xy(img_corners_rc[:, ::-1], img_obj.T)
-    #         min_r = min(warped_corners_xy[:, 1].min(), min_r)
-    #         max_r = max(warped_corners_xy[:, 1].max(), max_r)
-    #         min_c = min(warped_corners_xy[:, 0].min(), min_c)
-    #         max_c = max(warped_corners_xy[:, 0].max(), max_c)
-    #
-    #     composite_img = np.dstack(composite_img_list)
-    #     cmap = jzazbz_cmap()
-    #     channel_colors = get_n_colors(cmap, composite_img.shape[2])
-    #     overlap_img = color_multichannel(
-    #         composite_img, channel_colors, rescale_channels=True, normalize_by="channel", cspace="CAM16UCS"
-    #     )
-    #
-    #     min_r = int(min_r)
-    #     max_r = int(np.ceil(max_r))
-    #     min_c = int(min_c)
-    #     max_c = int(np.ceil(max_c))
-    #     overlap_img = overlap_img[min_r:max_r, min_c:max_c]
-    #     overlap_img = (255 * overlap_img).astype(np.uint8)
-    #
-    #     return overlap_img
+        # def _create_initial_overlap_image(self):
+        #     """Create image showing how images overlap before registration"""
+        #     from itertools import combinations
+        #
+        #     from image2image_reg.utils.visuals import color_multichannel, get_n_colors, jzazbz_cmap
+        #
+        #     min_r = np.inf
+        #     max_r = 0
+        #     min_c = np.inf
+        #     max_c = 0
+        #     composite_img_list = [None] * len(self.modalities)
+        #     for src_modality, tgt_modality in combinations(self.modalities.values(), 2):
+        #
+        #         img = img_obj.image
+        #         padded_img = transform.warp(img, img_obj.T, preserve_range=True, output_shape=img_obj.padded_shape_rc)
+        #
+        #         composite_img_list[i] = padded_img
+        #
+        #         img_corners_rc = warp_tools.get_corners_of_image(img.shape[0:2])
+        #         warped_corners_xy = warp_tools.warp_xy(img_corners_rc[:, ::-1], img_obj.T)
+        #         min_r = min(warped_corners_xy[:, 1].min(), min_r)
+        #         max_r = max(warped_corners_xy[:, 1].max(), max_r)
+        #         min_c = min(warped_corners_xy[:, 0].min(), min_c)
+        #         max_c = max(warped_corners_xy[:, 0].max(), max_c)
+        #
+        #     composite_img = np.dstack(composite_img_list)
+        #     cmap = jzazbz_cmap()
+        #     channel_colors = get_n_colors(cmap, composite_img.shape[2])
+        #     overlap_img = color_multichannel(
+        #         composite_img, channel_colors, rescale_channels=True, normalize_by="channel", cspace="CAM16UCS"
+        #     )
+        #
+        #     min_r = int(min_r)
+        #     max_r = int(np.ceil(max_r))
+        #     min_c = int(min_c)
+        #     max_c = int(np.ceil(max_c))
+        #     overlap_img = overlap_img[min_r:max_r, min_c:max_c]
+        #     overlap_img = (255 * overlap_img).astype(np.uint8)
+        #
+        #     return overlap_img
+
+
+def _get_with_suffix(p: Path, fmt: str) -> Path:
+    if fmt.startswith("."):
+        fmt = fmt[1:]
+    if fmt in ["ome-tiff", "ome-tiff-by-plane", "ome-tiff-by-tile"]:
+        return p.parent / (p.name + ".ome.tiff")
+    elif fmt in ["csv", "tsv", "txt", "geojson"]:
+        return p.parent / (p.name + "." + fmt)
+    raise ValueError(f"Writer {fmt} is not supported.")

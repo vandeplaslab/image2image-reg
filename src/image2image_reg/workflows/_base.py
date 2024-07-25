@@ -7,6 +7,7 @@ import typing as ty
 from pathlib import Path
 
 import numpy as np
+from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
 
@@ -62,12 +63,15 @@ class Workflow:
         # setup cache directory
         if init:
             self.project_dir.mkdir(exist_ok=True, parents=True)
-        self.cache_dir = self.project_dir / "Cache"
-        if self.cache_images and init:
-            self.cache_dir.mkdir(exist_ok=True, parents=True)
-            logger.trace(f"Caching images to '{self.cache_dir}' directory.")
         if log and init:
             self.set_logger()
+
+    @property
+    def cache_dir(self) -> Path:
+        """Return cache directory."""
+        cache_dir = self.project_dir / "Cache"
+        cache_dir.mkdir(exist_ok=True, parents=True)
+        return cache_dir
 
     @property
     def is_registered(self) -> bool:
@@ -470,7 +474,9 @@ class Workflow:
             raise ValueError("Modality does not exist. Please add it before trying to add an attachment.")
         self.add_attachment_geojson(attach_to_modality, name, path)
 
-    def add_attachment_geojson(self, attach_to: str, name: str, paths: list[PathLike]) -> None:
+    def add_attachment_geojson(
+        self, attach_to: str, name: str, paths: PathLike | list[PathLike], pixel_size: float | None = None
+    ) -> None:
         """
         Add attached shapes.
 
@@ -484,20 +490,27 @@ class Workflow:
             list of shape data in geoJSON format or list of dicts containing the following keys:
             "array" = np.ndarray of xy coordinates, "shape_type" = geojson shape type (Polygon, MultiPolygon, etc.),
             "shape_name" = class of the shape("tumor","normal",etc.)
+        pixel_size : float, optional
+            spatial resolution of shape data's associated image in units per px (i.e. 0.9 um / px)
         """
         if attach_to not in self.modalities:
             raise ValueError(
                 f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment"
                 f" images."
             )
+        if isinstance(paths, (str, Path)):
+            paths = [paths]
+
         paths_: list[Path] = []
         for path in paths:
             path = Path(path)
             if not path.exists():
                 raise ValueError(f"Path '{path}' does not exist.")
+            if path.suffix not in [".json", ".geojson"]:
+                raise ValueError("Attachment must be in GeoJSON format.")
             paths_.append(path.resolve())
-
-        pixel_size = self.modalities[attach_to].pixel_size
+        if pixel_size is None:
+            pixel_size = self.modalities[attach_to].pixel_size
         self._add_geojson_set(attach_to, name, paths_, pixel_size)
 
     def _add_geojson_set(self, attach_to: str, name: str, paths: list[Path], pixel_size: float) -> None:
@@ -520,13 +533,18 @@ class Workflow:
         if name in self.attachment_shapes:
             raise ValueError(f"Shape set with name '{name}' already exists. Please use a different name.")
         self.attachment_shapes[name] = {
-            "shape_files": [str(p) for p in paths],
+            "files": [str(p) for p in paths],
             "pixel_size": pixel_size,
             "attach_to": attach_to,
         }
-        logger.trace(f"Added shape set '{name}'.")
+        logger.trace(
+            f"Added shape set '{name}' with {len(paths)} files, pixel size of {pixel_size:.3f}"
+            f" and attached to {attach_to}."
+        )
 
-    def auto_add_attachment_points(self, attach_to_modality: str, name: str, path: PathLike) -> None:
+    def auto_add_attachment_points(
+        self, attach_to: str, name: str, path: PathLike, pixel_size: float | None = None
+    ) -> None:
         """Add modality."""
         from image2image_io.readers import is_supported
 
@@ -540,19 +558,23 @@ class Workflow:
             raise ValueError("Path does not exist.")
         if not is_supported(path):
             raise ValueError("Unsupported file format.")
-        if Path(path).suffix not in [".csv", ".txt", ".parquet"]:
+        if Path(path).suffix not in [".csv", ".txt", ".tsv", ".parquet"]:
             raise ValueError("Attachment must be in Points format.")
-        if attach_to_modality not in self.modalities:
+        if attach_to not in self.modalities:
             raise ValueError("Modality does not exist. Please add it before trying to add an attachment.")
-        self.add_attachment_points(attach_to_modality, name, path)
+        if pixel_size is None:
+            pixel_size = self.modalities[attach_to].pixel_size
+        self.add_attachment_points(attach_to, name, path, pixel_size)
 
-    def add_attachment_points(self, attach_to_modality: str, name: str, paths: list[PathLike]) -> None:
+    def add_attachment_points(
+        self, attach_to: str, name: str, paths: PathLike | list[PathLike], pixel_size: float | None = None
+    ) -> None:
         """
         Add attached shapes.
 
         Parameters
         ----------
-        attach_to_modality : str
+        attach_to : str
             image modality to which the shapes are attached
         name : str
             Unique name identifier for the shape set
@@ -560,10 +582,15 @@ class Workflow:
             list of shape data in geoJSON format or list of dicts containing the following keys:
             "array" = np.ndarray of xy coordinates, "shape_type" = geojson shape type (Polygon, MultiPolygon, etc.),
             "shape_name" = class of the shape("tumor","normal",etc.)
+        pixel_size : float
+            spatial resolution of shape data's associated image in units per px (i.e. 0.9 um / px)
         """
-        if attach_to_modality not in self.modalities:
+        if isinstance(paths, (str, Path)):
+            paths = [paths]
+
+        if attach_to not in self.modalities:
             raise ValueError(
-                f"The specified modality '{attach_to_modality}' does not exist. Please add it before adding attachment"
+                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment"
                 f" objects."
             )
         paths_: list[Path] = []
@@ -571,18 +598,20 @@ class Workflow:
             path = Path(path)
             if not path.exists():
                 raise ValueError(f"Path '{path}' does not exist.")
+            if Path(path).suffix not in [".csv", ".txt", ".tsv", ".parquet"]:
+                raise ValueError("Attachment must be in Points format.")
             paths_.append(path.resolve())
+        if pixel_size is None:
+            pixel_size = self.modalities[attach_to].pixel_size
+        self._add_points_set(attach_to, name, paths_, pixel_size)
 
-        pixel_size = self.modalities[attach_to_modality].pixel_size
-        self._add_points_set(attach_to_modality, name, paths_, pixel_size)
-
-    def _add_points_set(self, attach_to_modality: str, name: str, paths: list[Path], pixel_size: float) -> None:
+    def _add_points_set(self, attach_to: str, name: str, paths: list[Path], pixel_size: float) -> None:
         """
         Add a shape set to the graph.
 
         Parameters
         ----------
-        attach_to_modality : str
+        attach_to : str
             image modality to which the points are attached
         name : str
             Unique name identifier for the shape set
@@ -596,11 +625,14 @@ class Workflow:
         if name in self.attachment_points:
             raise ValueError(f"Shape set with name '{name}' already exists. Please use a different name.")
         self.attachment_points[name] = {
-            "point_files": paths,
+            "files": paths,
             "pixel_size": pixel_size,
-            "attach_to_modality": attach_to_modality,
+            "attach_to": attach_to,
         }
-        logger.trace(f"Added points set '{name}'.")
+        logger.trace(
+            f"Added points set '{name}' with {len(paths)} files, pixel size of {pixel_size:.3f}"
+            f" and attached to {attach_to}."
+        )
 
     def auto_add_merge_modalities(self, name: str):
         """Add merge modalities."""
@@ -620,3 +652,67 @@ class Workflow:
         self.set_logger()
         self.register()
         self.write()
+
+    def _load_modalities_from_config(self, config: dict, raise_on_error: bool = True) -> None:
+        with MeasureTimer() as timer:
+            for name, modality in config["modalities"].items():
+                if not Path(modality["path"]).exists() and raise_on_error:
+                    raise ValueError(f"Modality path '{modality['path']}' does not exist.")
+                preprocessing = modality.get("preprocessing", dict())
+                self.add_modality(
+                    name=name,
+                    path=modality["path"],
+                    preprocessing=Preprocessing(**preprocessing) if preprocessing else None,
+                    channel_names=modality.get("channel_names", None),
+                    channel_colors=modality.get("channel_colors", None),
+                    mask=modality.get("mask", None),
+                    mask_bbox=modality.get("mask_bbox", None),
+                    mask_polygon=modality.get("mask_polygon", None),
+                    output_pixel_size=modality.get("output_pixel_size", None),
+                    pixel_size=modality.get("pixel_size", 1.0),
+                    transform_mask=preprocessing.get("transform_mask", False),
+                    export=Export(**modality["export"]) if modality.get("export") else None,
+                    raise_on_error=raise_on_error,
+                )
+            logger.trace(f"Loaded modalities in {timer()}")
+
+    def _load_attachment_from_config(self, config: dict) -> None:
+        # load attachment images
+        with MeasureTimer() as timer:
+            if config.get("attachment_images"):
+                for name, attach_to in config["attachment_images"].items():
+                    self.attachment_images[name] = attach_to
+                    logger.trace(f"Added attachment image '{name}' attached to '{attach_to}'")
+                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
+
+            if config.get("attachment_shapes"):
+                for name, shape_dict in config["attachment_shapes"].items():
+                    if "shape_files" in shape_dict:
+                        shape_dict["files"] = shape_dict.pop("shape_files")
+                    assert "files" in shape_dict, "Shape dict missing 'files' key."
+                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
+                    if "attach_to_modality" in shape_dict:
+                        shape_dict["attach_to"] = shape_dict.pop("attach_to_modality")
+                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    self.attachment_shapes[name] = shape_dict
+                logger.trace(f"Loaded attachment shapes in {timer(since_last=True)}")
+
+            if config.get("attachment_points"):
+                for name, shape_dict in config["attachment_points"].items():
+                    if "point_files" in shape_dict:
+                        shape_dict["files"] = shape_dict.pop("point_files")
+                    assert "files" in shape_dict, "Shape dict missing 'files' key."
+                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
+                    if "attach_to_modality" in shape_dict:
+                        shape_dict["attach_to"] = shape_dict.pop("attach_to_modality")
+                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    self.attachment_points[name] = shape_dict
+                logger.trace(f"Loaded attachment points in {timer(since_last=True)}")
+
+    def _load_merge_from_config(self, config: dict) -> None:
+        # load merge modalities
+        with MeasureTimer() as timer:
+            if config["merge_images"]:
+                for name, merge_modalities in config["merge_images"].items():
+                    self.merge_modalities[name] = merge_modalities
+                logger.trace(f"Loaded merge modalities in {timer(since_last=True)}")

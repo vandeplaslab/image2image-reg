@@ -11,8 +11,10 @@ from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from koyo.utilities import is_installed
 from loguru import logger
+from tqdm import tqdm
 
 from image2image_reg._typing import ValisRegConfig
+from image2image_reg.enums import WriterMode
 from image2image_reg.models import Export, Preprocessing
 from image2image_reg.workflows._base import Workflow
 
@@ -151,55 +153,11 @@ class ValisReg(Workflow):
 
         # add modality information
         with MeasureTimer() as timer:
-            for name, modality in config["modalities"].items():
-                if not Path(modality["path"]).exists() and raise_on_error:
-                    raise ValueError(f"Modality path '{modality['path']}' does not exist.")
-                preprocessing = modality.get("preprocessing", dict())
-                self.add_modality(
-                    name=name,
-                    path=modality["path"],
-                    preprocessing=Preprocessing(**preprocessing) if preprocessing else None,
-                    channel_names=modality.get("channel_names", None),
-                    channel_colors=modality.get("channel_colors", None),
-                    mask=modality.get("mask", None),
-                    mask_bbox=modality.get("mask_bbox", None),
-                    mask_polygon=modality.get("mask_polygon", None),
-                    output_pixel_size=modality.get("output_pixel_size", None),
-                    pixel_size=modality.get("pixel_size", None),
-                    transform_mask=preprocessing.get("transform_mask", False),
-                    export=Export(**modality["export"]) if modality.get("export") else None,
-                    raise_on_error=raise_on_error,
-                )
-            logger.trace(f"Loaded modalities in {timer()}")
-
+            self._load_modalities_from_config(config, raise_on_error)
             # load attachment images
-            if config.get("attachment_images"):
-                for name, attach_to in config["attachment_images"].items():
-                    self.attachment_images[name] = attach_to
-                    logger.trace(f"Added attachment image '{name}' attached to '{attach_to}'")
-                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
-
-            if config.get("attachment_shapes"):
-                for name, shape_dict in config["attachment_shapes"].items():
-                    assert "shape_files" in shape_dict, "Shape dict missing 'shape_files' key."
-                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
-                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
-                    self.attachment_shapes[name] = shape_dict
-                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
-
-            if config.get("attachment_points"):
-                for name, shape_dict in config["attachment_points"].items():
-                    assert "shape_files" in shape_dict, "Shape dict missing 'shape_files' key."
-                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
-                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
-                    self.attachment_points[name] = shape_dict
-                logger.trace(f"Loaded attachment images in {timer(since_last=True)}")
-
-            # load merge modalities
-            if config["merge_images"]:
-                for name, merge_modalities in config["merge_images"].items():
-                    self.merge_modalities[name] = merge_modalities
-                logger.trace(f"Loaded merge modalities in {timer(since_last=True)}")
+            self._load_attachment_from_config(config)
+            # load merge
+            self._load_merge_from_config(config)
 
     def print_summary(self, func: ty.Callable = logger.info) -> None:
         """Print summary about the project."""
@@ -349,9 +307,20 @@ class ValisReg(Workflow):
     def registrar(self) -> ty.Any:
         """Load registrar or retrieve it."""
         if self._registrar is None:
+            from valis.valtils import get_name
+
             from image2image_reg.valis.utilities import get_valis_registrar_alt
 
             self._registrar = get_valis_registrar_alt(self.project_dir, self.name, init_jvm=True)
+            if self._registrar:
+                for modality in self.modalities.values():
+                    try:
+                        slide_obj = self._registrar.get_slide(get_name(str(modality.path)))
+                        if slide_obj and not Path(slide_obj.src_f).exists() and modality.path.exists():
+                            slide_obj.src_f = str(modality.path)
+                            logger.info(f"Set source file for '{modality.name}' to '{slide_obj.src_f}'")
+                    except UnboundLocalError:
+                        pass
             logger.trace(f"Loaded registrar from '{self.project_dir}'.")
         return self._registrar
 
@@ -464,32 +433,147 @@ class ValisReg(Workflow):
                 raise exc
         logger.info(f"Completed registration in {main_timer()}")
 
-    def write(self, **kwargs: ty.Any) -> list | None:
+    def write(
+        self,
+        n_parallel: int = 1,
+        fmt: WriterMode = "ome-tiff",
+        write_registered: bool = True,
+        write_not_registered: bool = True,
+        write_attached: bool = True,
+        write_merged: bool = True,
+        remove_merged: bool = True,
+        to_original_size: bool = True,
+        tile_size: int = 512,
+        as_uint8: bool | None = None,
+        overwrite: bool = False,
+        **kwargs: ty.Any,
+    ) -> list | None:
         """Export images after applying transformation."""
-        from image2image_reg.valis.utilities import get_slide_path, transform_attached_image, transform_registered_image
-
         if not self.registrar:
             raise ValueError("Registrar not found. Please register first.")
 
+        # # export images to OME-TIFFs
         paths = []
-        # export images to OME-TIFFs
+        if write_registered:
+            self._export_registered_images(fmt, tile_size, as_uint8, overwrite)
+        #
+        if write_attached:
+            self._export_attachment_images(fmt, tile_size, as_uint8, overwrite)
+            self._export_attachment_points(n_parallel, overwrite)
+            self._export_attachment_shapes(n_parallel, overwrite)
+        return paths
+
+    def _export_registered_images(
+        self,
+        fmt: str | WriterMode = "ome-tiff",
+        tile_size: int = 512,
+        as_uint8: bool | None = None,
+        overwrite: bool = False,
+    ) -> list[Path]:
+        from image2image_reg.valis.utilities import transform_registered_image
+
+        paths = []
         with MeasureTimer() as timer:
-            registered_dir = self.image_dir
-            registered_dir.mkdir(exist_ok=True, parents=True)
             paths_ = transform_registered_image(
-                self.registrar, registered_dir, non_rigid_reg=self.non_rigid_registration
+                self.registrar,
+                self.image_dir,
+                non_rigid_reg=self.non_rigid_registration,
+                as_uint8=as_uint8,
+                tile_size=tile_size,
+                overwrite=overwrite,
             )
             paths.extend(paths_)
-        logger.info(f"Exported registered images in {timer()}")
+        if paths:
+            logger.info(f"Exported registered images in {timer()}")
+        return paths
+
+    def _export_attachment_shapes(self, n_parallel: int = 1, overwrite: bool = False) -> list[Path]:
+        from image2image_reg.valis.utilities import transform_attached_shapes
+
+        paths = []
+        # export attachment modalities
+        with MeasureTimer() as timer:
+            for name, attached_dict in tqdm(self.attachment_shapes.items(), desc="Exporting attachment shapes..."):
+                attached_to = attached_dict["attach_to"]
+                # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
+                shape_pixel_size = attached_dict["pixel_size"]
+                attach_to_modality = self.modalities[attached_to]
+
+                paths_ = transform_attached_shapes(
+                    self.registrar,
+                    attach_to_modality.path,
+                    self.image_dir,
+                    attached_dict["files"],
+                    shape_pixel_size,
+                    overwrite=overwrite,
+                )
+                paths.extend(paths_)
+        if paths:
+            logger.info(f"Exported attached shapes in {timer()}")
+        return paths
+
+    def _export_attachment_points(self, n_parallel: int = 1, overwrite: bool = False) -> list[Path]:
+        from image2image_reg.valis.utilities import transform_attached_points
+
+        paths = []
+        # export attachment modalities
+        with MeasureTimer() as timer:
+            for name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment shapes..."):
+                attached_to = attached_dict["attach_to"]
+                # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
+                shape_pixel_size = attached_dict["pixel_size"]
+                attach_to_modality = self.modalities[attached_to]
+
+                paths_ = transform_attached_points(
+                    self.registrar,
+                    attach_to_modality.path,
+                    self.image_dir,
+                    attached_dict["files"],
+                    shape_pixel_size,
+                    overwrite=overwrite,
+                )
+                paths.extend(paths_)
+        if paths:
+            logger.info(f"Exported attached points in {timer()}")
+        return paths
+
+    def _export_attachment_images(
+        self,
+        fmt: str | WriterMode = "ome-tiff",
+        tile_size: int = 512,
+        as_uint8: bool | None = None,
+        overwrite: bool = False,
+    ) -> list[Path]:
+        from image2image_reg.valis.utilities import transform_attached_image
 
         # export attached images to OME-TIFFs
+        paths = []
         with MeasureTimer() as timer:
-            attached_images = kwargs.get("attachment_images", {})
-            for src_name, attachments in attached_images.items():
-                src_path = get_slide_path(self.registrar, src_name)
-                paths_ = transform_attached_image(self.registrar, src_path, attachments, registered_dir)
+            attached_images_ = self.attachment_images
+            # create mapping of attached_to and images that should be transformed
+            attached_images = {}
+            for src_name, attached_to in attached_images_.items():
+                if attached_to not in attached_images:
+                    attached_images[attached_to] = []
+                attached_images[attached_to].append(self.modalities[src_name].path)
+            names = list(attached_images.keys())
+            for name in names:
+                attached_images[name] = list(set(attached_images[name]))
+                logger.trace(f"Exporting {len(attached_images[name])} images attached to '{name}'")
+
+            for attached_to, sources in attached_images.items():
+                paths_ = transform_attached_image(
+                    self.registrar,
+                    attached_to,
+                    sources,
+                    self.image_dir,
+                    as_uint8=as_uint8,
+                    tile_size=tile_size,
+                    overwrite=overwrite,
+                )
                 paths.extend(paths_)
-        logger.info(f"Exported attached images in {timer()}")
+        if paths:
+            logger.info(f"Exported attached images in {timer()}")
         return paths
 
     def _get_config(self, **kwargs: ty.Any) -> dict:
@@ -585,7 +669,7 @@ def valis_init_configuration(
     from natsort import natsorted, ns
     from valis import valtils
 
-    from image2image_reg.valis.utilities import get_feature_detector_str
+    from image2image_reg.valis.utilities import get_feature_detector_str, get_preprocessing_for_path
 
     logger.info(f"Creating configuration for '{project_name}' in '{output_dir}'")
 

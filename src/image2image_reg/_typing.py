@@ -59,7 +59,7 @@ class SerializedRegisteredRegistrationNode(ty.TypedDict):
 class AttachedShapeOrPointDict(ty.TypedDict):
     """Attached shape dictionary."""
 
-    shape_files: list[str]
+    files: list[str]
     pixel_size: float
     attach_to: str
 

@@ -23,6 +23,10 @@ from image2image_reg.enums import ValisDetectorMethod, ValisMatcherMethod, Valis
 from ._common import (
     ALLOW_EXTRA_ARGS,
     as_uint8_,
+    attach_image_,
+    attach_points_,
+    attach_shapes_,
+    attach_to_,
     fmt_,
     modality_multi_,
     modality_single_,
@@ -30,16 +34,18 @@ from ._common import (
     output_dir_,
     overwrite_,
     parallel_mode_,
+    pixel_size_opt_,
     project_path_multi_,
     project_path_single_,
     remove_merged_,
+    write_attached_,
     write_merged_,
     write_not_registered_,
     write_registered_,
 )
 
 
-def cli_parse_method(ctx, param, value: str) -> str:
+def cli_parse_method(ctx, param, value: list[str]) -> list[str]:
     """Parse pre-processing."""
     return [
         {
@@ -130,8 +136,8 @@ if is_installed("valis"):
         name: str,
         cache: bool,
         merge: bool,
-        detect: bool,
-        match: bool,
+        detect: str,
+        match: str,
         reflect: bool,
         micro: bool,
         fraction: float,
@@ -154,7 +160,7 @@ if is_installed("valis"):
 
     @project_path_single_
     @valis.command("about", help_group="Project")
-    def about_cmd(project_dir: ty.Sequence[str]) -> None:
+    def about_cmd(project_dir: str) -> None:
         """Print information about the registration project."""
         from image2image_reg.cli.i2reg import about_runner
 
@@ -234,89 +240,44 @@ if is_installed("valis"):
             reference=reference,
         )
 
-    @click.option(
-        "-i",
-        "--image",
-        help="Path to image/GeoJSON/points file that should be attached to the <attach_to> modality.",
-        type=click.UNPROCESSED,
-        show_default=True,
-        multiple=True,
-        required=False,
-        callback=cli_parse_paths_sort,
-    )
+    @attach_image_
     @modality_multi_
-    @click.option(
-        "-a",
-        "--attach_to",
-        help="Name of the modality to which the attachment should be added.",
-        type=click.STRING,
-        show_default=True,
-        multiple=False,
-        required=True,
-    )
+    @attach_to_
     @project_path_single_
-    @valis.command("add-attachment", help_group="Project")
+    @valis.command("attach-image", help_group="Project")
     def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
         """Add attachment image to registered modality."""
         from image2image_reg.cli.i2reg import add_attachment_runner
 
         add_attachment_runner(project_dir, attach_to, name, image, valis=True)
 
-    @click.option(
-        "-f",
-        "--file",
-        help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
-        type=click.UNPROCESSED,
-        show_default=True,
-        multiple=True,
-        required=True,
-        callback=cli_parse_paths_sort,
-    )
+    @pixel_size_opt_
+    @attach_points_
     @modality_single_
-    @click.option(
-        "-a",
-        "--attach_to",
-        help="Name of the modality to which the attachment should be added.",
-        type=click.STRING,
-        show_default=True,
-        multiple=False,
-        required=True,
-    )
+    @attach_to_
     @project_path_single_
-    @valis.command("add-points", help_group="Project")
-    def add_points_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
+    @valis.command("attach-points", help_group="Project")
+    def add_points_cmd(
+        project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
+    ) -> None:
         """Add attachment points (csv/tsv/txt) to registered modality."""
         from image2image_reg.cli.i2reg import add_points_runner
 
-        add_points_runner(project_dir, attach_to, name, file, valis=True)
+        add_points_runner(project_dir, attach_to, name, file, pixel_size, valis=True)
 
-    @click.option(
-        "-f",
-        "--file",
-        help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
-        type=click.UNPROCESSED,
-        show_default=True,
-        multiple=True,
-        required=True,
-        callback=cli_parse_paths_sort,
-    )
+    @pixel_size_opt_
+    @attach_shapes_
     @modality_single_
-    @click.option(
-        "-a",
-        "--attach_to",
-        help="Name of the modality to which the attachment should be added.",
-        type=click.STRING,
-        show_default=True,
-        multiple=False,
-        required=True,
-    )
+    @attach_to_
     @project_path_single_
-    @valis.command("add-shape", help_group="Project")
-    def add_shape_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
+    @valis.command("attach-shape", help_group="Project")
+    def add_shape_cmd(
+        project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
+    ) -> None:
         """Add attachment shape (GeoJSON) to registered modality."""
         from image2image_reg.cli.i2reg import add_shape_runner
 
-        add_shape_runner(project_dir, attach_to, name, file, valis=True)
+        add_shape_runner(project_dir, attach_to, name, file, pixel_size, valis=True)
 
     @click.option(
         "--auto",
@@ -350,6 +311,7 @@ if is_installed("valis"):
     @as_uint8_
     @remove_merged_
     @write_merged_
+    @write_attached_
     @write_not_registered_
     @write_registered_
     @fmt_
@@ -369,6 +331,7 @@ if is_installed("valis"):
         fmt: WriterMode,
         write_registered: bool,
         write_not_registered: bool,
+        write_attached: bool,
         write_merged: bool,
         remove_merged: bool,
         as_uint8: bool | None,
@@ -382,9 +345,10 @@ if is_installed("valis"):
             write_images=write,
             fmt=fmt,
             write_registered=write_registered,
+            write_not_registered=write_not_registered,
+            write_attached=write_attached,
             write_merged=write_merged,
             remove_merged=remove_merged,
-            write_not_registered=write_not_registered,
             as_uint8=as_uint8,
             n_parallel=n_parallel,
             parallel_mode=parallel_mode,
@@ -397,6 +361,7 @@ if is_installed("valis"):
         fmt: WriterMode,
         write_registered: bool,
         write_not_registered: bool,
+        write_attached: bool,
         write_merged: bool,
         remove_merged: bool,
         as_uint8: bool | None,
@@ -418,6 +383,7 @@ if is_installed("valis"):
                 fmt=fmt,
                 write_registered=write_registered,
                 write_not_registered=write_not_registered,
+                write_attached=write_attached,
                 write_merged=write_merged,
                 remove_merged=remove_merged,
                 as_uint8=as_uint8,
@@ -432,6 +398,7 @@ if is_installed("valis"):
         fmt: WriterMode = "ome-tiff",
         write_registered: bool = True,
         write_not_registered: bool = True,
+        write_attached: bool = True,
         write_merged: bool = True,
         remove_merged: bool = True,
         as_uint8: bool | None = False,
@@ -469,6 +436,7 @@ if is_installed("valis"):
                                 fmt,
                                 write_registered,
                                 write_not_registered,
+                                write_attached,
                                 write_merged,
                                 remove_merged,
                                 as_uint8,
@@ -488,6 +456,7 @@ if is_installed("valis"):
                         fmt,
                         write_registered,
                         write_not_registered,
+                        write_attached,
                         write_merged,
                         remove_merged,
                         as_uint8,
@@ -510,6 +479,7 @@ if is_installed("valis"):
     @as_uint8_
     @remove_merged_
     @write_merged_
+    @write_attached_
     @write_not_registered_
     @write_registered_
     @fmt_
@@ -520,6 +490,7 @@ if is_installed("valis"):
         fmt: WriterMode,
         write_registered: bool,
         write_not_registered: bool,
+        write_attached: bool,
         write_merged: bool,
         remove_merged: bool,
         as_uint8: bool | None,
@@ -533,6 +504,7 @@ if is_installed("valis"):
             fmt=fmt,
             write_registered=write_registered,
             write_not_registered=write_not_registered,
+            write_attached=write_attached,
             write_merged=write_merged,
             remove_merged=remove_merged,
             as_uint8=as_uint8,
@@ -546,6 +518,7 @@ if is_installed("valis"):
         fmt: WriterMode = "ome-tiff",
         write_registered: bool = True,
         write_not_registered: bool = True,
+        write_attached: bool = True,
         write_merged: bool = True,
         remove_merged: bool = True,
         as_uint8: bool | None = False,
@@ -554,7 +527,12 @@ if is_installed("valis"):
         overwrite: bool = False,
     ) -> None:
         """Register images."""
+        import os
+
         from mpire import WorkerPool
+
+        # limit Vips concurrency to avoid memory issues
+        os.environ["VIPS_CONCURRENCY"] = "6"
 
         if not write_merged:
             remove_merged = False
@@ -567,6 +545,7 @@ if is_installed("valis"):
             Parameter(
                 "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
             ),
+            Parameter("Write attached modalities", "--write_attached/--no_write_attached", write_attached),
             Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
             Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
             Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
@@ -584,6 +563,7 @@ if is_installed("valis"):
                                 fmt,
                                 write_registered,
                                 write_not_registered,
+                                write_attached,
                                 write_merged,
                                 remove_merged,
                                 as_uint8,
@@ -600,6 +580,7 @@ if is_installed("valis"):
                         fmt,
                         write_registered,
                         write_not_registered,
+                        write_attached,
                         write_merged,
                         remove_merged,
                         as_uint8,
@@ -614,13 +595,19 @@ if is_installed("valis"):
         fmt: WriterMode,
         write_registered: bool,
         write_not_registered: bool,
+        write_attached: bool,
         write_merged: bool,
         remove_merged: bool,
         as_uint8: bool | None,
         n_parallel: int = 1,
         overwrite: bool = False,
     ) -> PathLike:
+        import os
+
         from image2image_reg.workflows import ValisReg
+
+        # limit Vips concurrency to avoid memory issues
+        os.environ["VIPS_CONCURRENCY"] = "6"
 
         obj = ValisReg.from_path(path)
         obj.set_logger()
@@ -631,6 +618,7 @@ if is_installed("valis"):
             fmt=fmt,
             write_registered=write_registered,
             write_not_registered=write_not_registered,
+            write_attached=write_attached,
             write_merged=write_merged,
             remove_merged=remove_merged,
             as_uint8=as_uint8,

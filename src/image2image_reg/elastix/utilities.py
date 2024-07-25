@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+from koyo.typing import PathLike
 
 from image2image_reg.models import TransformSequence
 
@@ -118,3 +121,44 @@ def _transform_points_df(
         df.insert(df.columns.get_loc(x_key), f"{x_key}{suffix}", x)
         df.insert(df.columns.get_loc(y_key), f"{y_key}{suffix}", y)
     return df
+
+
+def transform_attached_point(
+    transform_sequence: TransformSequence, path: PathLike, pixel_size: float, output_path: PathLike
+) -> Path:
+    """Transform points data."""
+    from image2image_io.readers.points_reader import read_points
+    from image2image_io.readers.utilities import get_column_name
+
+    is_in_px = pixel_size == 1.0
+
+    # read data
+    path = Path(path)
+    df = read_points(path, return_df=True)
+    x_key = get_column_name(df, ["x", "x_location", "x_centroid", "x:x", "vertex_x"])
+    y_key = get_column_name(df, ["y", "y_location", "y_centroid", "y:y", "vertex_y"])
+    if x_key not in df.columns or y_key not in df.columns:
+        raise ValueError(f"Invalid columns: {df.columns}")
+
+    df_transformed = transform_points_df(
+        transform_sequence,
+        df.copy(),
+        in_px=is_in_px,
+        as_px=is_in_px,
+        x_key=x_key,
+        y_key=y_key,
+        replace=True,
+    )
+    if path.suffix in [".csv", ".txt", ".tsv"]:
+        sep = {"csv": ",", "txt": "\t", "tsv": "\t"}[path.suffix[1:]]
+        df_transformed.to_csv(output_path, index=False, sep=sep)
+    elif path.suffix == ".parquet":
+        df_transformed.to_parquet(output_path, index=False)
+    return Path(output_path)
+
+
+def transform_attached_shape(
+    transform_sequence: TransformSequence, path: PathLike, pixel_size: float, output_path: PathLike
+) -> Path:
+    """Transform points data."""
+    raise NotImplementedError("Not implemented yet.")

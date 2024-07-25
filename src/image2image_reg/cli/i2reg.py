@@ -26,6 +26,10 @@ from ._common import (
     ALLOW_EXTRA_ARGS,
     arg_split_bbox,
     as_uint8_,
+    attach_image_,
+    attach_points_,
+    attach_shapes_,
+    attach_to_,
     files_,
     fmt_,
     get_preprocessing,
@@ -37,9 +41,11 @@ from ._common import (
     output_dir_,
     overwrite_,
     parallel_mode_,
+    pixel_size_opt_,
     project_path_multi_,
     project_path_single_,
     remove_merged_,
+    write_attached_,
     write_merged_,
     write_not_registered_,
     write_registered_,
@@ -392,28 +398,11 @@ def add_path_runner(
     obj.save()
 
 
-@click.option(
-    "-i",
-    "--image",
-    help="Path to image/GeoJSON/points file that should be attached to the <attach_to> modality.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    multiple=True,
-    required=False,
-    callback=cli_parse_paths_sort,
-)
-@modality_single_
-@click.option(
-    "-a",
-    "--attach_to",
-    help="Name of the modality to which the attachment should be added.",
-    type=click.STRING,
-    show_default=True,
-    multiple=False,
-    required=True,
-)
+@attach_image_
+@modality_multi_
+@attach_to_
 @project_path_single_
-@elastix.command("add-attachment", help_group="Project")
+@elastix.command("attach-image", help_group="Project")
 def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
     """Add attachment image to registered modality."""
     add_attachment_runner(project_dir, attach_to, name, image)
@@ -448,35 +437,21 @@ def add_attachment_runner(
     obj.save()
 
 
-@click.option(
-    "-f",
-    "--file",
-    help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    multiple=True,
-    required=True,
-    callback=cli_parse_paths_sort,
-)
+@pixel_size_opt_
+@attach_points_
 @modality_single_
-@click.option(
-    "-a",
-    "--attach_to",
-    help="Name of the modality to which the attachment should be added.",
-    type=click.STRING,
-    show_default=True,
-    multiple=False,
-    required=True,
-)
+@attach_to_
 @project_path_single_
-@elastix.command("add-points", help_group="Project")
-def add_points_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
+@elastix.command("attach-points", help_group="Project")
+def add_points_cmd(
+    project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
+) -> None:
     """Add attachment points (csv/tsv/txt) to registered modality."""
-    add_points_runner(project_dir, attach_to, name, file)
+    add_points_runner(project_dir, attach_to, name, file, pixel_size)
 
 
 def add_points_runner(
-    project_dir: str, attach_to: str, name: str, paths: list[str | Path], valis: bool = False
+    project_dir: str, attach_to: str, name: str, paths: list[str | Path], pixel_size: float | None, valis: bool = False
 ) -> None:
     """Add attachment modality."""
     from image2image_reg.workflows import IWsiReg, ValisReg
@@ -489,40 +464,29 @@ def add_points_runner(
         Parameter("Attach to", "-a/--attach_to", attach_to),
         Parameter("Name", "-n/--name", name),
         Parameter("Point Files", "-f/--file", paths),
+        Parameter("Pixel size", "-s/--pixel_size", pixel_size),
     )
     obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
-    obj.add_attachment_points(attach_to, name, paths)
+    obj.add_attachment_points(attach_to, name, paths, pixel_size)
     obj.save()
 
 
-@click.option(
-    "-f",
-    "--file",
-    help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    multiple=True,
-    required=True,
-    callback=cli_parse_paths_sort,
-)
+@pixel_size_opt_
+@attach_shapes_
 @modality_single_
-@click.option(
-    "-a",
-    "--attach_to",
-    help="Name of the modality to which the attachment should be added.",
-    type=click.STRING,
-    show_default=True,
-    multiple=False,
-    required=True,
-)
+@attach_to_
 @project_path_single_
-@elastix.command("add-shape", help_group="Project")
-def add_shape_cmd(project_dir: str, attach_to: str, name: str, file: list[str | Path]) -> None:
+@elastix.command("attach-shape", help_group="Project")
+def add_shape_cmd(
+    project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
+) -> None:
     """Add attachment shape (GeoJSON) to registered modality."""
-    add_shape_runner(project_dir, attach_to, name, file)
+    add_shape_runner(project_dir, attach_to, name, file, pixel_size)
 
 
-def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[str | Path], valis: bool = False) -> None:
+def add_shape_runner(
+    project_dir: str, attach_to: str, name: str, paths: list[str | Path], pixel_size: float | None, valis: bool = False
+) -> None:
     """Add attachment modality."""
     from image2image_reg.workflows import IWsiReg, ValisReg
 
@@ -534,6 +498,7 @@ def add_shape_runner(project_dir: str, attach_to: str, name: str, paths: list[st
         Parameter("Attach to", "-a/--attach_to", attach_to),
         Parameter("Name", "-n/--name", name),
         Parameter("Shape files", "-f/--file", paths),
+        Parameter("Pixel size", "-s/--pixel_size", pixel_size),
     )
     obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.add_attachment_geojson(attach_to, name, paths)
@@ -638,6 +603,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
 @original_size_
 @remove_merged_
 @write_merged_
+@write_attached_
 @write_not_registered_
 @write_registered_
 @fmt_
@@ -665,6 +631,7 @@ def register_cmd(
     fmt: WriterMode,
     write_registered: bool,
     write_not_registered: bool,
+    write_attached: bool,
     write_merged: bool,
     remove_merged: bool,
     original_size: bool,
@@ -680,9 +647,10 @@ def register_cmd(
         write_images=write,
         fmt=fmt,
         write_registered=write_registered,
+        write_not_registered=write_not_registered,
+        write_attached=write_attached,
         write_merged=write_merged,
         remove_merged=remove_merged,
-        write_not_registered=write_not_registered,
         original_size=original_size,
         as_uint8=as_uint8,
         n_parallel=n_parallel,
@@ -698,6 +666,7 @@ def register_runner(
     fmt: WriterMode = "ome-tiff",
     write_registered: bool = True,
     write_not_registered: bool = True,
+    write_attached: bool = True,
     write_merged: bool = True,
     remove_merged: bool = True,
     original_size: bool = False,
@@ -738,6 +707,7 @@ def register_runner(
                             fmt,
                             write_registered,
                             write_not_registered,
+                            write_attached,
                             write_merged,
                             remove_merged,
                             original_size,
@@ -759,6 +729,7 @@ def register_runner(
                         fmt,
                         write_registered,
                         write_not_registered,
+                        write_attached,
                         write_merged,
                         remove_merged,
                         original_size,
@@ -784,6 +755,7 @@ def _register(
     fmt: WriterMode,
     write_registered: bool,
     write_not_registered: bool,
+    write_attached: bool,
     write_merged: bool,
     remove_merged: bool,
     original_size: bool,
@@ -801,6 +773,7 @@ def _register(
             fmt=fmt,
             write_registered=write_registered,
             write_not_registered=write_not_registered,
+            write_attached=write_attached,
             write_merged=write_merged,
             remove_merged=remove_merged,
             to_original_size=original_size,
@@ -818,6 +791,7 @@ def _register(
 @original_size_
 @remove_merged_
 @write_merged_
+@write_attached_
 @write_not_registered_
 @write_registered_
 @fmt_
@@ -829,6 +803,7 @@ def export_cmd(
     write_registered: bool,
     write_not_registered: bool,
     write_merged: bool,
+    write_attached: bool,
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
@@ -843,6 +818,7 @@ def export_cmd(
         write_registered=write_registered,
         write_not_registered=write_not_registered,
         write_merged=write_merged,
+        write_attached=write_attached,
         remove_merged=remove_merged,
         original_size=original_size,
         as_uint8=as_uint8,
@@ -857,6 +833,7 @@ def export_runner(
     fmt: WriterMode = "ome-tiff",
     write_registered: bool = True,
     write_not_registered: bool = True,
+    write_attached: bool = True,
     write_merged: bool = True,
     remove_merged: bool = True,
     original_size: bool = False,

@@ -65,6 +65,7 @@ def preprocess_dask_array(
     is_rgb: bool | None = None,
 ) -> sitk.Image:
     """Pre-process dask array."""
+    logger.trace(f"Pre-processing array of shape {array.shape}")
     is_rgb = is_rgb if isinstance(is_rgb, bool) else guess_rgb(array.shape)
     with MeasureTimer() as timer:
         # perform max intensity projection
@@ -97,6 +98,7 @@ def preprocess_valis_array(
     array: da.core.Array, channel_names: list[str], is_rgb: bool, preprocessing: Preprocessing | None = None
 ) -> sitk.Image:
     """Pre-process dask array."""
+    logger.trace(f"Pre-processing array of shape {array.shape}")
     with MeasureTimer() as timer:
         # perform max intensity projection
         if is_rgb:

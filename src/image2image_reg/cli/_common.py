@@ -65,6 +65,14 @@ write_not_registered_ = click.option(
     default=False,
     show_default=True,
 )
+write_attached_ = click.option(
+    "-a/-A",
+    "--write_attached/--no_write_attached",
+    help="Write attached modalities.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
 write_registered_ = click.option(
     "-r/-R",
     "--write_registered/--no_write_registered",
@@ -169,6 +177,54 @@ output_dir_ = click.option(
     type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
     show_default=True,
     required=True,
+)
+pixel_size_opt_ = click.option(
+    "-s",
+    "--pixel_size",
+    help="Pixel size in micrometers.",
+    type=click.FLOAT,
+    show_default=True,
+    required=False,
+    default=None,
+)
+attach_to_ = click.option(
+    "-a",
+    "--attach_to",
+    help="Name of the modality to which the attachment should be added.",
+    type=click.STRING,
+    show_default=True,
+    multiple=False,
+    required=True,
+)
+attach_image_ = click.option(
+    "-i",
+    "--image",
+    help="Path to image file that should be attached to the <attach_to> modality.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths_sort,
+)
+attach_points_ = click.option(
+    "-f",
+    "--file",
+    help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths_sort,
+)
+attach_shapes_ = click.option(
+    "-f",
+    "--file",
+    help="Path to GeoJSON file that should be attached to the <attach_to> modality.",
+    type=click.UNPROCESSED,
+    show_default=True,
+    multiple=True,
+    required=True,
+    callback=cli_parse_paths_sort,
 )
 
 
