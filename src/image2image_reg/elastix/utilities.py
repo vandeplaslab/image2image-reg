@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -161,4 +162,16 @@ def transform_attached_shape(
     transform_sequence: TransformSequence, path: PathLike, pixel_size: float, output_path: PathLike
 ) -> Path:
     """Transform points data."""
-    raise NotImplementedError("Not implemented yet.")
+    import json
+
+    from image2image_io.readers.shapes_reader import ShapesReader
+
+    is_in_px = pixel_size == 1.0
+    reader = ShapesReader(path)
+    geojson_data = deepcopy(reader.geojson_data)
+    for shape in geojson_data:
+        array = shape["array"]
+        shape["array"] = transform_points(transform_sequence, array[:, 0], array[:, 1], in_px=is_in_px, as_px=is_in_px)
+
+    with open(output_path, "w") as f:
+        json.dump(geojson_data, f, indent=1)
