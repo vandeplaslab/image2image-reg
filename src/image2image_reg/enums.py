@@ -31,6 +31,17 @@ class CoordinateFlip(str, Enum):
     VERTICAL = "v"
 
 
+NetworkTypes = ty.Literal[
+    "random",
+    "kk",
+    "planar",
+    "spring",
+    "spectral",
+    "shell",
+    "circular",
+    "spiral",
+    "arf",
+]
 ArrayLike = (np.ndarray, da.core.Array, zarr.Array)
 WriterMode = ty.Literal["sitk", "ome-zarr", "ome-tiff", "ome-tiff-by-plane", "ome-tiff-by-tile"]
 ValisPreprocessingMethod = ty.Literal[
