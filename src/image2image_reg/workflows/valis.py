@@ -15,7 +15,6 @@ from tqdm import tqdm
 
 from image2image_reg._typing import ValisRegConfig
 from image2image_reg.enums import WriterMode
-from image2image_reg.models import Export, Preprocessing
 from image2image_reg.workflows._base import Workflow
 
 if ty.TYPE_CHECKING:
@@ -324,7 +323,7 @@ class ValisReg(Workflow):
         if self._registrar is None:
             from valis.valtils import get_name
 
-            from image2image_reg.valis.utilities import get_valis_registrar_alt
+            from image2image_reg.valis.utilities import get_valis_registrar_alt, update_registrar_paths
 
             self._registrar = get_valis_registrar_alt(self.project_dir, self.name, init_jvm=True)
             if self._registrar:
@@ -336,6 +335,7 @@ class ValisReg(Workflow):
                             logger.info(f"Set source file for '{modality.name}' to '{slide_obj.src_f}'")
                     except UnboundLocalError:
                         pass
+                update_registrar_paths(self._registrar, self.project_dir)
             logger.trace(f"Loaded registrar from '{self.project_dir}'.")
         return self._registrar
 
@@ -377,10 +377,7 @@ class ValisReg(Workflow):
                 # get registrar
                 registrar_path = self.project_dir / "data" / f"{self.name}_registrar.pickle"
                 if registrar_path.exists():
-                    import pickle
-
-                    with open(registrar_path, "rb") as f:
-                        registrar = pickle.load(f)
+                    registrar = self.registrar
                     logger.info(f"Loaded registrar from '{registrar_path}'.")
                 else:
                     registrar = registration.Valis(
