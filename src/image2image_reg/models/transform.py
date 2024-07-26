@@ -5,6 +5,7 @@ from warnings import warn
 
 import numpy as np
 import SimpleITK as sitk
+from tqdm import tqdm
 
 from image2image_reg.utils.convert import convert_to_itk
 
@@ -85,7 +86,12 @@ class TransformMixin:
         self.inverse_transform = displacement_field
 
     def transform_points(
-        self, points: np.ndarray, is_px: bool = True, source_pixel_size: float = 1, px: bool = True
+        self,
+        points: np.ndarray,
+        is_px: bool = True,
+        source_pixel_size: float = 1,
+        px: bool = True,
+        silent: bool = False,
     ) -> np.ndarray:
         """
         Transform point sets using the transformation chain.
@@ -107,6 +113,7 @@ class TransformMixin:
         transformed_points: np.ndarray
             Transformed points
         """
+        inv_pixel_size = 1 / self.output_spacing[0]
         if not self.output_spacing:
             raise ValueError("Output spacing not set, call `set_output_spacing` first")
         if is_px:
@@ -114,15 +121,14 @@ class TransformMixin:
 
         points = np.asarray(points).tolist()
         transformed_points = []
-        for point in points:
-            # if is_px:
-            #     point = point * source_pixel_size
-            for _index, transform in enumerate(self.transforms):
-                point = transform.inverse_transform.TransformPoint(point)
+        for point in tqdm(points, desc="Transforming points", leave=False, disable=silent):
+            point = self.inverse_final_transform.TransformPoint(point)
+            # for _index, transform in enumerate(self.transforms):
+            #     point = transform.inverse_transform.TransformPoint(point)
             transformed_point = np.array(point)
 
             if px:
-                transformed_point *= 1 / self.output_spacing[0]
+                transformed_point *= inv_pixel_size
             transformed_points.append(transformed_point)
         return np.stack(transformed_points)
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from koyo.typing import PathLike
+from tqdm import tqdm
 
 from image2image_reg.models import TransformSequence
 
@@ -16,6 +17,8 @@ def transform_points(
     y: np.ndarray,
     in_px: bool = False,
     as_px: bool = False,
+    source_pixel_size: float = 1.0,
+    silent: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Transform points.
 
@@ -31,8 +34,14 @@ def transform_points(
         Whether input coordinates are in pixels or physical units, by default False
     as_px : bool, optional
         Whether to return coordinates in pixels or physical units, by default False
+    source_pixel_size : float, optional
+        Pixel size of the source image, by default 1.0
+    silent : bool, optional
+        Whether to show progress bar, by default False
     """
-    transformed_xy = seq.transform_points(np.c_[x, y], is_px=in_px, px=as_px)
+    transformed_xy = seq.transform_points(
+        np.c_[x, y], is_px=in_px, px=as_px, source_pixel_size=source_pixel_size, silent=silent
+    )
     return transformed_xy[:, 0], transformed_xy[:, 1]
 
 
@@ -45,6 +54,8 @@ def transform_points_df(
     y_key: str = "y",
     suffix: str = "_transformed",
     replace: bool = False,
+    source_pixel_size: float = 1.0,
+    silent: bool = False,
 ) -> pd.DataFrame:
     """Transform points in a dataframe.
 
@@ -58,8 +69,30 @@ def transform_points_df(
         Whether input coordinates are in pixels or physical units, by default False
     as_px : bool, optional
         Whether to return coordinates in pixels or physical units, by default False
+    x_key : str, optional
+        X column key, by default "x"
+    y_key : str, optional
+        Y column key, by default "y"
+    suffix : str, optional
+        Suffix to add to the transformed columns, by default "_transformed"
+    replace : bool, optional
+        Whether to replace the original columns with the transformed ones, by default False
+    source_pixel_size : float, optional
+        Pixel size of the source image, by default 1.0
+    silent : bool, optional
+        Whether to show progress bar, by default False
     """
-    return _transform_points_df(seq, df, x_key, y_key, in_px=in_px, as_px=as_px, suffix=suffix, replace=replace)
+    return _transform_points_df(
+        seq,
+        df,
+        x_key,
+        y_key,
+        in_px=in_px,
+        as_px=as_px,
+        suffix=suffix,
+        replace=replace,
+        source_pixel_size=source_pixel_size,
+    )
 
 
 def transform_vertices_df(
@@ -71,6 +104,8 @@ def transform_vertices_df(
     y_key: str = "vertex_y",
     suffix: str = "_transformed",
     replace: bool = False,
+    source_pixel_size: float = 1.0,
+    silent: bool = False,
 ) -> pd.DataFrame:
     """Transform points in a dataframe.
 
@@ -84,8 +119,30 @@ def transform_vertices_df(
         Whether input coordinates are in pixels or physical units, by default False
     as_px : bool, optional
         Whether to return coordinates in pixels or physical units, by default False
+    x_key : str, optional
+        X column key, by default "vertex_x"
+    y_key : str, optional
+        Y column key, by default "vertex_y"
+    suffix : str, optional
+        Suffix to add to the transformed columns, by default "_transformed"
+    replace : bool, optional
+        Whether to replace the original columns with the transformed ones, by default False
+    source_pixel_size : float, optional
+        Pixel size of the source image, by default 1.0
+    silent : bool, optional
+        Whether to show progress bar, by default False
     """
-    return _transform_points_df(seq, df, x_key, y_key, in_px=in_px, as_px=as_px, suffix=suffix, replace=replace)
+    return _transform_points_df(
+        seq,
+        df,
+        x_key,
+        y_key,
+        in_px=in_px,
+        as_px=as_px,
+        suffix=suffix,
+        replace=replace,
+        source_pixel_size=source_pixel_size,
+    )
 
 
 def _transform_points_df(
@@ -97,6 +154,7 @@ def _transform_points_df(
     as_px: bool = False,
     suffix: str = "_transformed",
     replace: bool = False,
+    source_pixel_size: float = 1.0,
 ) -> pd.DataFrame:
     if x_key not in df.columns or y_key not in df.columns:
         raise ValueError(f"Dataframe must have '{x_key}' and '{y_key}' columns.")
@@ -105,7 +163,7 @@ def _transform_points_df(
 
     x = df[x_key].values
     y = df[y_key].values
-    x, y = transform_points(seq, x, y, in_px=in_px, as_px=as_px)
+    x, y = transform_points(seq, x, y, in_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size)
 
     # remove transformed columns if they exist
     if f"{x_key}{suffix}" in df.columns:
@@ -169,9 +227,36 @@ def transform_attached_shape(
     is_in_px = pixel_size == 1.0
     reader = ShapesReader(path)
     geojson_data = deepcopy(reader.geojson_data)
-    for shape in geojson_data:
-        array = shape["array"]
-        shape["array"] = transform_points(transform_sequence, array[:, 0], array[:, 1], in_px=is_in_px, as_px=is_in_px)
+    if isinstance(geojson_data, list):
+        if "type" in geojson_data[0] and geojson_data[0]["type"] == "Feature":
+            geojson_data = _transform_geojson_features(geojson_data, transform_sequence, in_px=is_in_px, as_px=is_in_px)
+        else:
+            raise ValueError("Invalid GeoJSON data.")
 
     with open(output_path, "w") as f:
         json.dump(geojson_data, f, indent=1)
+
+
+def _transform_geojson_features(
+    geojson_data: list[dict], transform_sequence: TransformSequence, in_px: bool, as_px: bool
+) -> list[dict]:
+    result = []
+    for feature in geojson_data:
+        geometry = feature["geometry"]
+        if geometry["type"] == "Point":
+            x, y = geometry["coordinates"]
+            x, y = transform_points(transform_sequence, [x], [y], in_px=in_px, as_px=as_px)
+            geometry["coordinates"] = [x[0], y[0]]
+        elif geometry["type"] == "Polygon":
+            for i, ring in enumerate(tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False)):
+                x, y = np.array(ring).T
+                x, y = transform_points(transform_sequence, x, y, in_px=in_px, as_px=as_px, silent=True)
+                geometry["coordinates"][i] = np.c_[x, y].tolist()
+        elif geometry["type"] == "MultiPolygon":
+            for j, polygon in enumerate(geometry["coordinates"]):
+                for i, ring in enumerate(tqdm(polygon, desc="Transforming MultiPolygon", leave=False)):
+                    x, y = np.array(ring).T
+                    x, y = transform_points(transform_sequence, x, y, in_px=in_px, as_px=as_px, silent=True)
+                    geometry["coordinates"][j][i] = np.c_[x, y].tolist()
+        result.append(feature)
+    return result

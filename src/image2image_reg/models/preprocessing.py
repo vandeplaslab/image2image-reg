@@ -192,10 +192,10 @@ class Preprocessing(BaseModel):
             text += f"x{self.downsample} downsample"
             tooltip += f"Downsample: x{self.downsample}\n"
         if self.is_masked():
-            text += "mask was specified"
+            text += "masked"
             tooltip += "Using mask during registration\n"
         if self.is_cropped():
-            text += "crop was specified"
+            text += "cropped"
             tooltip += "Cropping image\n"
         if tooltip.endswith("\n"):
             tooltip = tooltip[:-1]

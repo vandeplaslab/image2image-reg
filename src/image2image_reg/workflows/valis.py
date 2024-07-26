@@ -115,7 +115,7 @@ class ValisReg(Workflow):
         feature_matcher: str = "RANSAC",
     ) -> ValisReg:
         """Create Valis configuration from IWsiReg object."""
-        obj = cls(
+        valis = cls(
             obj.name,
             output_dir=output_dir,
             merge=obj.merge_images,
@@ -128,15 +128,25 @@ class ValisReg(Workflow):
         )
         # add modalities
         for modality in obj.modalities.values():
-            obj.modalities[modality.name] = deepcopy(modality)
-            obj.modalities[modality.name].preprocessing.method = "I2RegPreprocessor"
+            valis.modalities[modality.name] = deepcopy(modality)
+            valis.modalities[modality.name].preprocessing.method = "I2RegPreprocessor"
+
+        # try to get reference
+        references = []
+        for source, targets in obj.registration_paths.items():
+            references.append(targets[-1])  # last node is the final target
+        references = list(set(references))
+        if references and len(references) == 1:
+            reference = references[0]
+            valis.set_reference(name=reference)
+
         # copy other attributes
-        obj.attachment_images = deepcopy(obj.attachment_images)
-        obj.attachment_shapes = deepcopy(obj.attachment_shapes)
-        obj.attachment_points = deepcopy(obj.attachment_points)
-        obj.merge_modalities = deepcopy(obj.merge_modalities)
-        obj.save()
-        return obj
+        valis.attachment_images = deepcopy(obj.attachment_images)
+        valis.attachment_shapes = deepcopy(obj.attachment_shapes)
+        valis.attachment_points = deepcopy(obj.attachment_points)
+        valis.merge_modalities = deepcopy(obj.merge_modalities)
+        valis.save()
+        return valis
 
     def load_from_i2valis(self, raise_on_error: bool = True) -> None:
         """Load data from image2image-reg project file."""
@@ -272,7 +282,12 @@ class ValisReg(Workflow):
         """Return list of file paths."""
         from natsort import natsorted
 
+        # get all modality paths
         filelist = [modality.path for modality in self.modalities.values()]
+        # remove any images that are in the attachment dictionary
+        for src_name, _ in self.attachment_images.items():
+            filelist.remove(self.modalities[src_name].path)
+        # sort images
         filelist = natsorted(filelist)
         filelist = [Path(path) for path in filelist]
         for path in filelist:
