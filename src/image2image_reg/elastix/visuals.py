@@ -137,7 +137,7 @@ def draw_workflow(
     ax.clear()
     ax.axis("off")
     ax.set_title("")
-    ax.margins(x=0.1, y=0.1)
+    ax.margins(x=0.2, y=0.2)
     g = nx.DiGraph()
     g_layout = nx.DiGraph()
 
