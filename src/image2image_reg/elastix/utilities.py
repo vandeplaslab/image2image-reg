@@ -248,13 +248,15 @@ def _transform_geojson_features(
             x, y = transform_points(transform_sequence, [x], [y], in_px=in_px, as_px=as_px)
             geometry["coordinates"] = [x[0], y[0]]
         elif geometry["type"] == "Polygon":
-            for i, ring in enumerate(tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False)):
+            for i, ring in enumerate(
+                tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, miniters=500)
+            ):
                 x, y = np.array(ring).T
                 x, y = transform_points(transform_sequence, x, y, in_px=in_px, as_px=as_px, silent=True)
                 geometry["coordinates"][i] = np.c_[x, y].tolist()
         elif geometry["type"] == "MultiPolygon":
             for j, polygon in enumerate(geometry["coordinates"]):
-                for i, ring in enumerate(tqdm(polygon, desc="Transforming MultiPolygon", leave=False)):
+                for i, ring in enumerate(tqdm(polygon, desc="Transforming MultiPolygon", leave=False, miniters=500)):
                     x, y = np.array(ring).T
                     x, y = transform_points(transform_sequence, x, y, in_px=in_px, as_px=as_px, silent=True)
                     geometry["coordinates"][j][i] = np.c_[x, y].tolist()

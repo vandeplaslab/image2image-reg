@@ -245,9 +245,14 @@ class Preprocessing(BaseModel):
         return data
 
     @classmethod
-    def basic(cls) -> "Preprocessing":
+    def basic(cls, valis: bool = False) -> "Preprocessing":
         """Basic image preprocessing."""
-        return cls(image_type=ImageType.DARK, as_uint8=True, max_intensity_projection=True)
+        return cls(
+            image_type=ImageType.DARK,
+            as_uint8=True,
+            max_intensity_projection=True,
+            method="I2RegPreprocessor" if valis else None,
+        )
 
     @classmethod
     def fluorescence(cls, valis: bool = False) -> "Preprocessing":
@@ -257,7 +262,7 @@ class Preprocessing(BaseModel):
             as_uint8=True,
             max_intensity_projection=True,
             contrast_enhance=True,
-            method="MaxIntensityProjection" if valis else None,
+            method="I2RegPreprocessor" if valis else None,
         )
 
     @classmethod
@@ -268,7 +273,7 @@ class Preprocessing(BaseModel):
             as_uint8=True,
             max_intensity_projection=False,
             invert_intensity=True,
-            method="ColorfulStandardizer" if valis else None,
+            method="I2RegPreprocessor" if valis else None,
         )
 
     @validator("mask_bbox", "crop_bbox", pre=True)

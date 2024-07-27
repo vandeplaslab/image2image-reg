@@ -106,6 +106,8 @@ class TransformMixin:
             spacing of the pixels associated with pt_data if they are not in physical coordinate space
         px: bool
             return transformed points to pixel indices in the output_spacing's reference space.
+        silent: bool
+            Whether to show progress bar
 
 
         Returns
@@ -113,6 +115,7 @@ class TransformMixin:
         transformed_points: np.ndarray
             Transformed points
         """
+        # TODO: this is actually quite slow so let's parallelize!
         inv_pixel_size = 1 / self.output_spacing[0]
         if not self.output_spacing:
             raise ValueError("Output spacing not set, call `set_output_spacing` first")
@@ -121,7 +124,7 @@ class TransformMixin:
 
         points = np.asarray(points).tolist()
         transformed_points = []
-        for point in tqdm(points, desc="Transforming points", leave=False, disable=silent):
+        for point in tqdm(points, desc="Transforming points", leave=False, disable=silent, miniters=500):
             point = self.inverse_final_transform.TransformPoint(point)
             # for _index, transform in enumerate(self.transforms):
             #     point = transform.inverse_transform.TransformPoint(point)

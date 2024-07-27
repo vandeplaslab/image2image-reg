@@ -577,9 +577,10 @@ class ValisReg(Workflow):
                 logger.trace(f"Exporting {len(attached_images[name])} images attached to '{name}'")
 
             for attached_to, sources in attached_images.items():
+                attached_to_modality = self.modalities[attached_to]
                 paths_ = transform_attached_image(
                     self.registrar,
-                    attached_to,
+                    attached_to_modality.path,
                     sources,
                     self.image_dir,
                     as_uint8=as_uint8,
