@@ -556,7 +556,6 @@ def get_valis_registrar_alt(project_dir: PathLike, name: str, init_jvm: bool = F
         registration.init_jvm()
 
     registrar = None
-    output_dir = Path(project_dir)
     registrar_path = project_dir / "data" / f"{name}_registrar.pickle"
     if registrar_path.exists():
         import pickle
@@ -564,3 +563,14 @@ def get_valis_registrar_alt(project_dir: PathLike, name: str, init_jvm: bool = F
         with open(registrar_path, "rb") as f:
             registrar = pickle.load(f)
     return registrar
+
+
+def update_registrar_paths(registrar: ty.Any, project_dir: PathLike):
+    """Update registrar paths."""
+    project_dir = Path(project_dir)
+    data_dir = Path(registrar.data_dir)
+    if data_dir != project_dir / "data":
+        registrar.data_dir = str(project_dir / "data")
+        registrar.set_dst_paths()
+        for slide_obj in registrar.slide_dict.values():
+            slide_obj.update_results_img_paths()
