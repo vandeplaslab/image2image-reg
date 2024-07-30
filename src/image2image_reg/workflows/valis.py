@@ -101,6 +101,12 @@ class ValisReg(Workflow):
         logger.trace(f"Restored from config in {timer()}")
         return obj
 
+    def to_i2reg(self, output_dir: PathLike) -> IWsiReg:
+        """Export to IWsiReg object."""
+        from image2image_reg.workflows import IWsiReg
+
+        return IWsiReg.from_valis(self, output_dir)
+
     @classmethod
     def from_wsireg(
         cls,
@@ -297,25 +303,33 @@ class ValisReg(Workflow):
         """Set reference image."""
         if not name and not path:
             self._reference = None
-        elif name:
-            if name not in self.modalities:
+        else:
+            modality = self.get_modality(name, path)
+            if not modality:
                 raise ValueError(f"Modality {name} not found.")
-            path = self.modalities[name].path
-            if not Path(path).exists():
-                raise ValueError(f"Path {path} does not exist.")
-            self._reference = path
+            assert modality.path.exists(), f"Path {modality.path} does not exist."
+            self._reference = modality.name
         logger.trace(f"Set reference image to '{self._reference}'.")
 
     @property
-    def reference(self) -> PathLike | None:
+    def reference(self) -> str | None:
         """Get reference image."""
         reference = self._reference
         if reference:
-            filelist = self.filelist
-            reference = Path(reference)
-            assert reference.exists(), f"{reference} does not exist."
-            assert reference in filelist, f"{reference} not in filelist."
+            if Path(reference).exists():
+                reference = self.get_modality(name_or_path=reference).name
+            modality = self.get_modality(reference)
+            assert modality, f"Modality {reference} not found."
+            reference = modality.name
         return reference
+
+    @property
+    def reference_path(self) -> PathLike | None:
+        """Get reference image path."""
+        reference = self.reference
+        if reference:
+            return self.modalities[reference].path
+        return None
 
     @property
     def registrar(self) -> ty.Any:
@@ -350,7 +364,7 @@ class ValisReg(Workflow):
         filelist = [str(s) for s in filelist]
         logger.info(f"Filelist has {len(filelist)} images.")
         # get reference
-        reference = self.reference
+        reference = self.reference_path
         logger.info(f"Reference image: {reference}")
         # get detector
         feature_detector_cls = get_feature_detector(self.feature_detector)
@@ -358,6 +372,7 @@ class ValisReg(Workflow):
         # get matcher
         # feature_matcher_cls = get_feature_matcher(self.feature_matcher)
         # logger.info(f"Feature matcher: {feature_matcher_cls}")
+        logger.info(f"Feature matcher: {self.feature_matcher}")
         # Print configuration
         logger.info(f"Check for reflections: {self.check_for_reflections}")
         logger.info(f"Non-rigid registration: {self.non_rigid_registration}")
@@ -371,7 +386,6 @@ class ValisReg(Workflow):
 
         # initialize java
         registration.init_jvm()
-
         with MeasureTimer() as main_timer:
             try:
                 # get registrar

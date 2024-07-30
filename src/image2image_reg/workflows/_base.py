@@ -195,18 +195,25 @@ class Workflow:
             logger.info(f"Setup logging to file - '{self.log_file!s}'")
             logger.trace(f"Executed command: {sys.argv}")
 
+    def get_modality(
+        self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None
+    ) -> Modality | None:
+        """Get modality."""
+        for modality in self.modalities.values():
+            if name and modality.name == str(name):
+                return modality
+            if path and modality.path == Path(path):
+                return modality
+            if name_or_path and (modality.name == str(name_or_path) or modality.path == Path(name_or_path)):
+                return modality
+        return None
+
     def has_modality(
         self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None
     ) -> bool:
         """Check whether modality has been previously added."""
-        for modality in self.modalities.values():
-            if name and modality.name == name:
-                return True
-            if path and modality.path == path:
-                return True
-            if name_or_path and (modality.name == name_or_path or modality.path == Path(name_or_path)):
-                return True
-        return False
+        modality = self.get_modality(name, path, name_or_path)
+        return modality is not None
 
     def rename_modality(self, old_name: str, new_name: str) -> None:
         """Rename modality."""
