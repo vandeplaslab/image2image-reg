@@ -81,6 +81,14 @@ write_registered_ = click.option(
     default=True,
     show_default=True,
 )
+write_ = click.option(
+    "-w/-W",
+    "--write/--no_write",
+    help="Write images to disk.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
 fmt_ = click.option(
     "-f",
     "--fmt",
@@ -89,14 +97,6 @@ fmt_ = click.option(
     default="ome-tiff",
     show_default=True,
     required=False,
-)
-write_ = click.option(
-    "-w/-W",
-    "--write/--no_write",
-    help="Write images to disk.",
-    is_flag=True,
-    default=True,
-    show_default=True,
 )
 n_parallel_ = click.option(
     "-j",

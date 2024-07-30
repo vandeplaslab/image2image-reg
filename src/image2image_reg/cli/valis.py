@@ -38,6 +38,7 @@ from ._common import (
     project_path_multi_,
     project_path_single_,
     remove_merged_,
+    write_,
     write_attached_,
     write_merged_,
     write_not_registered_,
@@ -315,14 +316,7 @@ if is_installed("valis"):
     @write_not_registered_
     @write_registered_
     @fmt_
-    @click.option(
-        "-w/-W",
-        "--write/--no_write",
-        help="Write images to disk.",
-        is_flag=True,
-        default=True,
-        show_default=True,
-    )
+    @write_
     @project_path_multi_
     @valis.command("register", help_group="Execute")
     def register_cmd(

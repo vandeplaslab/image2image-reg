@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+OLD_TO_NEW_MAP = {}
+
 DEFAULT_REGISTRATION_PARAMETERS_MAP = {
     "rigid": {
         "AutomaticScalesEstimation": ["true"],

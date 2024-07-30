@@ -29,6 +29,7 @@ from image2image_reg.models import Export, Modality, Preprocessing, Registration
 from image2image_reg.workflows._base import Workflow
 
 if ty.TYPE_CHECKING:
+    from image2image_reg.workflows.valis import ValisReg
     from image2image_reg.wrapper import ImageWrapper
 
 # override certain parameters
@@ -1571,11 +1572,36 @@ class IWsiReg(Workflow):
             yaml.dump(config, f, sort_keys=False)
         return filename
 
-    def to_valis(self, output_dir: PathLike) -> None:
+    def to_valis(self, output_dir: PathLike) -> ValisReg:
         """Convert the configuration to ValisReg"""
         from image2image_reg.workflows import ValisReg
 
-        ValisReg.from_wsireg(self, output_dir)
+        return ValisReg.from_wsireg(self, output_dir)
+
+    @classmethod
+    def from_valis(cls, obj: ValisReg, outout_dir: PathLike) -> IWsiReg:
+        """Create IWsiReg from ValisReg"""
+        iwsreg = cls(obj.name, output_dir=outout_dir, cache=obj.cache_images, merge=obj.merge_images)
+
+        # add modalities
+        for modality in obj.modalities.values():
+            iwsreg.modalities[modality.name] = deepcopy(modality)
+            iwsreg.modalities[modality.name].preprocessing.method = None
+
+        reference = obj.reference
+        if reference:
+            for name, modality in obj.modalities.items():
+                if name == reference:
+                    continue
+                iwsreg.add_registration_path(name, reference, ["rigid", "affine", "nl"])
+
+        # copy other attributes
+        iwsreg.attachment_images = deepcopy(obj.attachment_images)
+        iwsreg.attachment_shapes = deepcopy(obj.attachment_shapes)
+        iwsreg.attachment_points = deepcopy(obj.attachment_points)
+        iwsreg.merge_modalities = deepcopy(obj.merge_modalities)
+        iwsreg.save()
+        return iwsreg
 
         # def _create_initial_overlap_image(self):
         #     """Create image showing how images overlap before registration"""
