@@ -971,55 +971,65 @@ def transform_runner(
 
 
 @click.option(
-    "-R",
-    "--no_progress",
+    "--all",
+    "all_",
+    help="Clear all results.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "-r/-R",
+    "--progress/--no_progress",
     help="Clear progress.",
     is_flag=True,
     default=False,
     show_default=True,
 )
 @click.option(
-    "-T",
-    "--no_transformations",
+    "-t/-T",
+    "--transformations/--no_transformations",
     help="Clear transformations.",
     is_flag=True,
     default=False,
     show_default=True,
 )
-@click.option("-I", "--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
-@click.option("-C", "--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
+@click.option("-i/-I", "--image/--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
+@click.option("-c/-C", "--cache/--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
 @project_path_multi_
 @elastix.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
 def clear_cmd(
-    project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_transformations: bool, no_progress: bool
+    project_dir: ty.Sequence[str], cache: bool, image: bool, transformations: bool, progress: bool, all_: bool
 ) -> None:
     """Clear project data (cache/images/transformations/etc...)."""
-    clear_runner(project_dir, no_cache, no_image, no_transformations, no_progress)
+    clear_runner(project_dir, cache, image, transformations, progress)
 
 
 def clear_runner(
     paths: ty.Sequence[str],
-    no_cache: bool = True,
-    no_image: bool = True,
-    no_transformations: bool = True,
-    no_progress: bool = True,
+    cache: bool = False,
+    image: bool = False,
+    transformations: bool = False,
+    progress: bool = False,
+    all_: bool = False,
 ) -> None:
     """Register images."""
     from image2image_reg.workflows import IWsiReg
 
+    if all_:
+        cache = image = transformations = progress = True
+
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
-        Parameter("Don't clear cache", "--no_cache", no_cache),
-        Parameter("Don't clear images", "--no_image", no_image),
-        Parameter("Don't clear transformations", "--no_transformations", no_transformations),
-        Parameter("Don't clear progress", "--no_progress", no_progress),
+        Parameter("Don't clear cache", "--cache", cache),
+        Parameter("Don't clear images", "--image", image),
+        Parameter("Don't clear transformations", "--transformations", transformations),
+        Parameter("Don't clear progress", "--progress", progress),
     )
 
     with MeasureTimer() as timer:
         for path in paths:
             pro = IWsiReg.from_path(path)
-            pro.clear(
-                cache=not no_cache, image=not no_image, transformations=not no_transformations, progress=not no_progress
-            )
+            pro.clear(cache=cache, image=image, transformations=transformations, progress=progress)
             logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
     logger.info(f"Finished clearing all projects in {timer()}.")
