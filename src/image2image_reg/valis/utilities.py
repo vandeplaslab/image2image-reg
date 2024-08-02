@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import typing as ty
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -16,17 +17,38 @@ from tqdm import tqdm
 from image2image_reg.enums import ValisCrop, ValisInterpolation
 
 if ty.TYPE_CHECKING:
-    from valis.registration import Valis
+    from valis.registration import Slide, Valis
 
 
-def transform_points(registrar: Valis, source_path: PathLike, x: np.ndarray, y: np.ndarray, crop: str = "reference"):
+def transform_points(
+    registrar: Valis,
+    source_path: PathLike,
+    x: np.ndarray,
+    y: np.ndarray,
+    crop: str = "reference",
+    non_rigid: bool = True,
+    silent: bool = False,
+):
     """Transform points."""
     from valis.valtils import get_name
 
+    # retrieve slide
     slide_src = registrar.get_slide(get_name(str(source_path)))
     if not Path(slide_src.src_f).exists():
         raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
-    xy_transformed = slide_src.warp_xy(np.c_[x, y], crop=crop, non_rigid=True)
+    return _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid, silent=silent)
+
+
+def _transform_points(
+    slide_src: Slide,
+    x: np.ndarray,
+    y: np.ndarray,
+    crop: str = "reference",
+    non_rigid: bool = True,
+    silent: bool = False,
+):
+    """Transform points."""
+    xy_transformed = slide_src.warp_xy(np.c_[x, y], crop=crop, non_rigid=non_rigid)
     return xy_transformed[:, 0], xy_transformed[:, 1]
 
 
@@ -39,6 +61,7 @@ def transform_points_df(
     y_key: str = "y",
     suffix: str = "_transformed",
     replace: bool = False,
+    silent: bool = False,
 ) -> pd.DataFrame:
     """Transform points in a dataframe.
 
@@ -52,8 +75,20 @@ def transform_points_df(
         Dataframe with x and y columns
     crop : str, optional
         Crop method, by default "reference"
+    x_key : str, optional
+        X column key, by default "x"
+    y_key : str, optional
+        Y column key, by default "y"
+    suffix : str, optional
+        Suffix to add to the transformed columns, by default "_transformed"
+    replace : bool, optional
+        Whether to replace the original columns with the transformed ones, by default False
+    silent : bool, optional
+        Whether to show progress bar, by default False
     """
-    return _transform_points_df(registrar, source_path, df, x_key, y_key, crop=crop, suffix=suffix, replace=replace)
+    return _transform_points_df(
+        registrar, source_path, df, x_key, y_key, crop=crop, suffix=suffix, replace=replace, silent=silent
+    )
 
 
 def transform_vertices_df(
@@ -65,6 +100,7 @@ def transform_vertices_df(
     y_key: str = "vertex_y",
     suffix: str = "_transformed",
     replace: bool = False,
+    silent: bool = False,
 ) -> pd.DataFrame:
     """Transform points in a dataframe.
 
@@ -78,8 +114,20 @@ def transform_vertices_df(
         Dataframe with x and y columns
     crop : str, optional
         Crop method, by default "reference"
+    x_key : str, optional
+        X column key, by default "vertex_x"
+    y_key : str, optional
+        Y column key, by default "vertex_y"
+    suffix : str, optional
+        Suffix to add to the transformed columns, by default "_transformed"
+    replace : bool, optional
+        Whether to replace the original columns with the transformed ones, by default False
+    silent : bool, optional
+        Whether to show progress bar, by default False
     """
-    return _transform_points_df(registrar, source_path, df, x_key, y_key, crop=crop, suffix=suffix, replace=replace)
+    return _transform_points_df(
+        registrar, source_path, df, x_key, y_key, crop=crop, suffix=suffix, replace=replace, silent=silent
+    )
 
 
 def _transform_points_df(
@@ -91,6 +139,7 @@ def _transform_points_df(
     crop: str = "reference",
     suffix: str = "_transformed",
     replace: bool = False,
+    silent: bool = False,
 ) -> pd.DataFrame:
     if x_key not in df.columns or y_key not in df.columns:
         raise ValueError(f"Dataframe must have '{x_key}' and '{y_key}' columns.")
@@ -99,7 +148,7 @@ def _transform_points_df(
 
     x = df[x_key].values
     y = df[y_key].values
-    x, y = transform_points(registrar, source_path, x, y, crop=crop)
+    x, y = transform_points(registrar, source_path, x, y, crop=crop, silent=silent)
     if f"{x_key}{suffix}" in df.columns:
         df.drop(columns=[f"{x_key}{suffix}"], inplace=True)
     if f"{y_key}{suffix}" in df.columns:
@@ -139,11 +188,11 @@ def transform_registered_image(
 
     output_dir = Path(output_dir)
     # export images to OME-TIFFs
-    slide_ref = None
+    ref_slide = None
     if registrar.reference_img_f:
-        slide_ref = registrar.get_ref_slide()
-        if slide_ref and not Path(slide_ref.src_f).exists():
-            raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+        ref_slide = registrar.get_ref_slide()
+        if ref_slide and not Path(ref_slide.src_f).exists():
+            raise ValueError(f"Reference slide {ref_slide.src_f} does not exist.")
     else:
         crop = False
         logger.warning("No reference image found. Disabling cropping.")
@@ -152,7 +201,7 @@ def transform_registered_image(
     for slide_obj in registrar.slide_dict.values():
         logger.trace(f"Transforming {slide_obj.name}...")
         if not Path(slide_obj.src_f).exists():
-            raise ValueError(f"Slide {slide_ref.src_f} does not exist.")
+            raise ValueError(f"Slide {ref_slide.src_f} does not exist.")
 
         reader = get_simple_reader(slide_obj.src_f, init_pyramid=False)
         output_filename = output_dir / reader.path.name
@@ -174,7 +223,7 @@ def transform_registered_image(
             output_filename,
             None,
             warped,
-            resolution=slide_ref.resolution if slide_ref else slide_obj.resolution,
+            resolution=ref_slide.resolution if ref_slide else slide_obj.resolution,
             channel_names=reader.channel_names,
             as_uint8=as_uint8,
             tile_size=tile_size,
@@ -205,11 +254,11 @@ def transform_attached_image(
 
     logger.trace(f"Transforming attached images for {source_path}...")
     # get reference slide and source slide
-    slide_ref = None
+    ref_slide = None
     if registrar.reference_img_f:
-        slide_ref = registrar.get_ref_slide()
-        if slide_ref and not Path(slide_ref.src_f).exists():
-            raise ValueError(f"Reference slide {slide_ref.src_f} does not exist.")
+        ref_slide = registrar.get_ref_slide()
+        if ref_slide and not Path(ref_slide.src_f).exists():
+            raise ValueError(f"Reference slide {ref_slide.src_f} does not exist.")
     else:
         crop = False
         logger.warning("No reference image found. Disabling cropping.")
@@ -239,7 +288,7 @@ def transform_attached_image(
             output_filename,
             None,
             warped,
-            resolution=slide_ref.resolution if slide_ref else slide_src.resolution,
+            resolution=ref_slide.resolution if ref_slide else slide_src.resolution,
             channel_names=reader.channel_names,
             as_uint8=as_uint8,
             tile_size=tile_size,
@@ -268,7 +317,7 @@ def transform_attached_points(
         raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
 
     inv_pixel_size = 1 / pixel_size
-    is_in_px = pixel_size == 1.0
+    is_in_px = pixel_size != 1.0
     paths_ = []
     for path in tqdm(paths, desc="Transforming attached points"):
         # read data
@@ -320,12 +369,112 @@ def transform_attached_shapes(
     attach_to: PathLike,
     output_dir: PathLike,
     paths: list[PathLike],
-    pixel_size: float,
+    source_pixel_size: float,
     crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
     overwrite: bool = False,
 ) -> list[Path]:
     """Transform attached shapes."""
-    raise NotImplementedError("Must implement method")
+    import json
+
+    from image2image_io.readers.shapes_reader import ShapesReader
+    from valis.valtils import get_name
+
+    slide = registrar.get_slide(get_name(str(attach_to)))
+    if not Path(slide.src_f).exists():
+        raise ValueError(f"Source slide {slide.src_f} does not exist.")
+
+    target_pixel_size = source_pixel_size
+    if registrar.reference_img_f:
+        ref_slide: Slide = registrar.get_ref_slide()
+        target_pixel_size = ref_slide.resolution
+
+    is_in_px = source_pixel_size != 1.0
+    paths_ = []
+    for path in tqdm(paths, desc="Transforming attached points"):
+        # read data
+        path = Path(path)
+        output_path = output_dir / path.name
+        if output_path.exists() and not overwrite:
+            logger.trace(f"File {output_path} already exists. Moving on...")
+            continue
+
+        reader = ShapesReader(path)
+        geojson_data = deepcopy(reader.geojson_data)
+        if isinstance(geojson_data, list):
+            if "type" in geojson_data[0] and geojson_data[0]["type"] == "Feature":
+                geojson_data = _transform_geojson_features(
+                    geojson_data,
+                    slide,
+                    in_px=is_in_px,
+                    as_px=is_in_px,
+                    source_pixel_size=source_pixel_size,
+                    target_pixel_size=target_pixel_size,
+                    crop=crop,
+                    non_rigid=non_rigid,
+                )
+            else:
+                raise ValueError("Invalid GeoJSON data.")
+
+        with open(output_path, "w") as f:
+            json.dump(geojson_data, f, indent=1)
+        paths_.append(output_path)
+    return paths_
+
+
+def _transform_geojson_features(
+    geojson_data: list[dict],
+    slide_src: Slide,
+    in_px: bool,
+    as_px: bool,
+    source_pixel_size: float = 1.0,
+    target_pixel_size: float = 1.0,
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
+) -> list[dict]:
+    inv_source_pixel_size = 1 / source_pixel_size
+
+    def _transform_original_from_um_to_px(x, y):
+        if in_px:  # no need to transform since it's already in pixel coordinates
+            return x, y
+        # convert from um to pixel by multiplying by the inverse of the pixel size
+        return x * inv_source_pixel_size, y * inv_source_pixel_size
+
+    def _transform_transformed_from_px_to_um(x, y):
+        if as_px:  # no need to transform since it's already in pixel coordinates
+            return x, y
+        # convert from px to um by multiplying by the pixel size
+        return x * target_pixel_size, y * target_pixel_size
+
+    # iterate over features and depending on the geometry type, transform the coordinates
+    result = []
+    for feature in geojson_data:
+        geometry = feature["geometry"]
+        if geometry["type"] == "Point":
+            x, y = geometry["coordinates"]
+            x, y = _transform_original_from_um_to_px(x, y)
+            x, y = _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid)
+            x, y = _transform_transformed_from_px_to_um(x, y)
+            geometry["coordinates"] = [x[0], y[0]]
+        elif geometry["type"] == "Polygon":
+            for i, ring in enumerate(
+                tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, mininterval=1, disable=True)
+            ):
+                x, y = np.array(ring).T
+                x, y = _transform_original_from_um_to_px(x, y)
+                x, y = _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid)
+                x, y = _transform_transformed_from_px_to_um(x, y)
+                geometry["coordinates"][i] = np.c_[x, y].tolist()
+        elif geometry["type"] == "MultiPolygon":
+            for j, polygon in enumerate(geometry["coordinates"]):
+                for i, ring in enumerate(tqdm(polygon, desc="Transforming MultiPolygon", leave=False, mininterval=1)):
+                    x, y = np.array(ring).T
+                    x, y = _transform_original_from_um_to_px(x, y)
+                    x, y = _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid)
+                    x, y = _transform_transformed_from_px_to_um(x, y)
+                    geometry["coordinates"][j][i] = np.c_[x, y].tolist()
+        result.append(feature)
+    return result
 
 
 def get_image_files(img_dir: PathLike, ordered: bool = False) -> list[Path]:
@@ -499,12 +648,16 @@ def get_feature_detector_str(feature_detector: str) -> str:
         "akaze": "AkazeFD",
         "brisk": "BriskFD",
         "orb": "OrbFD",
+        "skcensure": "CensureVggFD",
+        "skdaisy": "DaisyFD",
+        "super_point": "SuperPointFD",
         # custom
         "sensitive_vgg": "SensitiveVggFD",
         "svgg": "SensitiveVggFD",
         "very_sensitive_vgg": "VerySensitiveVggFD",
         "vsvgg": "VerySensitiveVggFD",
     }
+    feature_detector = feature_detector.lower()
     all_available = list(available.values()) + list(available.keys())
     if feature_detector not in all_available:
         raise ValueError(f"Feature detector {feature_detector} not found. Please one of use: {all_available}")
@@ -526,6 +679,37 @@ def get_feature_detector(feature_detector: str) -> type:
         else:
             raise ValueError(f"Feature detector {feature_detector} not found.")
     return feature_detector
+
+
+def get_feature_matcher_str(feature_matcher: str) -> str:
+    """Standardize feature matcher."""
+    feature_matcher = feature_matcher.lower()
+    available = {
+        "ransac": ("Matcher", "RANSAC"),
+        "gms": ("Matcher", "GMS"),
+        "super_point": ("SuperPointMatcher", None),
+        "super_glue": ("SuperGlueMatcher", None),
+    }
+    if feature_matcher not in available:
+        raise ValueError(f"Feature matcher {feature_matcher} not found. Please one of use: {list(available.keys())}")
+    return available[feature_matcher] if feature_matcher in available else feature_matcher
+
+
+def get_feature_matcher(feature_matcher: str) -> type:
+    """Get feature detector object."""
+    import valis.feature_matcher as fm_valis
+
+    (feature_matcher, method) = get_feature_matcher_str(feature_matcher)
+    if isinstance(feature_matcher, str):
+        if hasattr(fm_valis, feature_matcher):
+            feature_matcher = getattr(fm_valis, feature_matcher)
+        else:
+            raise ValueError(f"Feature detector {feature_matcher} not found.")
+    if method:
+        feature_matcher = feature_matcher(match_filter_method=method)
+    else:
+        feature_matcher = feature_matcher()
+    return feature_matcher
 
 
 def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool = False) -> ty.Any:

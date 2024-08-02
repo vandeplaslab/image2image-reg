@@ -25,7 +25,7 @@ from image2image_reg._typing import (
     TransformPair,
 )
 from image2image_reg.enums import WriterMode
-from image2image_reg.models import Export, Modality, Preprocessing, Registration, Transform, TransformSequence
+from image2image_reg.models import Modality, Preprocessing, Registration, Transform, TransformSequence
 from image2image_reg.workflows._base import Workflow
 
 if ty.TYPE_CHECKING:
@@ -180,12 +180,23 @@ class IWsiReg(Workflow):
         func(f"Number of attachment shapes: {len(self.attachment_shapes)}")
         n = len(self.attachment_shapes) - 1
         for i, (name, shape_dict) in enumerate(self.attachment_shapes.items()):
-            func(f" {elbow if i == n else tee}{name} ({shape_dict})")
+            func(f" {elbow if i == n else tee}{name}")
+            func(f" {pipe if i != n else blank}{tee}Attached to: {shape_dict['attach_to']}")
+            func(f" {pipe if i != n else blank}{tee}Pixel size: {shape_dict['pixel_size']}")
+            nn = len(shape_dict["files"]) - 1
+            for j, file in enumerate(shape_dict["files"]):
+                func(f" {pipe if i != n else blank}{tee if j != nn else elbow}File: {file}")
+
         # func information about attachment shapes
         func(f"Number of attachment points: {len(self.attachment_points)}")
         n = len(self.attachment_points) - 1
         for i, (name, shape_dict) in enumerate(self.attachment_points.items()):
-            func(f" {elbow if i == n else tee}{name} ({shape_dict})")
+            func(f" {elbow if i == n else tee}{name}")
+            func(f" {pipe if i != n else blank}{tee}Attached to: {shape_dict['attach_to']}")
+            func(f" {pipe if i != n else blank}{tee}Pixel size: {shape_dict['pixel_size']}")
+            nn = len(shape_dict["files"]) - 1
+            for j, file in enumerate(shape_dict["files"]):
+                func(f" {pipe if i != n else blank}{tee if j != nn else elbow}File: {file}")
 
         # func information about merge modalities
         func(f"Number of merge modalities: {len(self.merge_modalities)}")
@@ -685,9 +696,9 @@ class IWsiReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -775,10 +786,18 @@ class IWsiReg(Workflow):
         self.save(registered=True)
 
     def clear(
-        self, cache: bool = True, image: bool = True, transformations: bool = True, progress: bool = True
+        self,
+        cache: bool = False,
+        image: bool = False,
+        transformations: bool = False,
+        progress: bool = False,
+        clear_all: bool = False,
     ) -> None:
         """Clear existing data."""
         from image2image_reg.utils.utilities import _safe_delete
+
+        if clear_all:
+            cache = image = transformations = progress = True
 
         # clear transformations, cache, images
         if cache:
@@ -801,9 +820,9 @@ class IWsiReg(Workflow):
                 _safe_delete(file)
             _safe_delete(self.transformations_dir)
 
-        # remove config files
-        file = self.project_dir / self.REGISTERED_CONFIG_NAME
-        _safe_delete(file)
+            # remove config files
+            file = self.project_dir / self.REGISTERED_CONFIG_NAME
+            _safe_delete(file)
 
     @staticmethod
     def _transforms_to_txt(transformations: dict[str, TransformSequence]) -> dict[str, list[str]]:
@@ -830,9 +849,9 @@ class IWsiReg(Workflow):
         registered_modalities = [edge["modalities"]["source"] for edge in self.registration_nodes]
         non_reg_modalities = list(set(self.modalities.keys()).difference(registered_modalities))
 
-        # remove attachment modalities
-        for attachment_modality in self.attachment_images.keys():
-            non_reg_modalities.pop(non_reg_modalities.index(attachment_modality))
+        # # remove attachment modalities
+        # for attachment_modality in self.attachment_images.keys():
+        #     non_reg_modalities.pop(non_reg_modalities.index(attachment_modality))
         return non_reg_modalities
 
     def _check_if_all_registered(self) -> bool:
@@ -969,7 +988,7 @@ class IWsiReg(Workflow):
         to_write = []
         for modality in tqdm(modalities, desc="Exporting not-registered images..."):
             try:
-                image_modality, transformations, output_path = self._prepare_not_registered_image_transform(
+                image_modality, transformations, output_path = self._prepare_not_registered_transform(
                     modality,
                     to_original_size=to_original_size,
                 )
@@ -1004,7 +1023,7 @@ class IWsiReg(Workflow):
         paths = []
         to_write = []
         for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
-            image_modality, _, output_path = self._prepare_registered_image_transform(
+            image_modality, _, output_path = self._prepare_registered_transform(
                 modality, attachment=False, to_original_size=to_original_size
             )
 
@@ -1037,7 +1056,10 @@ class IWsiReg(Workflow):
     def _export_attachment_shapes(self, n_parallel: int = 1, overwrite: bool = False) -> list[Path]:
         from image2image_reg.elastix.utilities import transform_attached_shape
 
+        # prepare attachment shapes
+
         paths = []
+        attached_to_modality_transform = {}
         # export attachment modalities
         with MeasureTimer() as timer:
             for name, attached_shape_dict in tqdm(
@@ -1047,23 +1069,24 @@ class IWsiReg(Workflow):
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
                 shape_pixel_size = attached_shape_dict["pixel_size"]
                 attach_to_modality = self.modalities[attached_to]
-                if self._is_being_registered(attach_to_modality):
-                    modality, transform_sequence, _ = self._prepare_registered_image_transform(attach_to_modality.name)
-                else:
-                    modality, transform_sequence, _ = self._prepare_not_registered_image_transform(
-                        attach_to_modality.name
-                    )
+                if attached_to not in attached_to_modality_transform:
+                    if self._is_being_registered(attach_to_modality):
+                        _, transform_sequence, _ = self._prepare_registered_transform(attach_to_modality.name)
+                    else:
+                        _, transform_sequence, _ = self._prepare_not_registered_transform(attach_to_modality.name)
+                    attached_to_modality_transform[attached_to] = transform_sequence
+                transform_sequence = attached_to_modality_transform[attached_to]
 
-                for shape_file in attached_shape_dict["files"]:
-                    logger.trace(f"Exporting {shape_file} to {attached_to}...")
-                    shape_file_name = Path(shape_file).stem
-                    suffix = Path(shape_file).suffix
-                    output_path = self.image_dir / f"{self.name}-{shape_file_name}_to_{attached_to}_registered{suffix}"
+                for file in attached_shape_dict["files"]:
+                    logger.trace(f"Exporting {file} to {attached_to} with {transform_sequence}...")
+                    name = Path(file).stem
+                    suffix = Path(file).suffix
+                    output_path = self.image_dir / f"{name}_to_{attached_to}_registered{suffix}"
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
-                    path = transform_attached_shape(transform_sequence, shape_file, shape_pixel_size, output_path)
-                    logger.trace(f"Exported {shape_file} to {attached_to}...")
+                    path = transform_attached_shape(transform_sequence, file, shape_pixel_size, output_path)
+                    logger.trace(f"Exported {file} to {attached_to}...")
                     paths.append(path)
         if paths:
             logger.info(f"Exporting attachment shapes took {timer()}.")
@@ -1073,6 +1096,7 @@ class IWsiReg(Workflow):
         from image2image_reg.elastix.utilities import transform_attached_point
 
         paths = []
+        attached_to_modality_transform = {}
         # export attachment modalities
         with MeasureTimer() as timer:
             for name, attached_shape_dict in tqdm(
@@ -1082,22 +1106,25 @@ class IWsiReg(Workflow):
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
                 shape_pixel_size = attached_shape_dict["pixel_size"]
                 attach_to_modality = self.modalities[attached_to]
-                if self._is_being_registered(attach_to_modality):
-                    modality, transform_sequence, _ = self._prepare_registered_image_transform(attach_to_modality.name)
-                else:
-                    modality, transform_sequence, _ = self._prepare_not_registered_image_transform(
-                        attach_to_modality.name
-                    )
-                for shape_file in attached_shape_dict["files"]:
-                    logger.trace(f"Exporting {shape_file} to {attached_to}...")
-                    shape_file_name = Path(shape_file).stem
-                    suffix = Path(shape_file).suffix
-                    output_path = self.image_dir / f"{self.name}-{shape_file_name}_to_{attached_to}_registered{suffix}"
+                if attached_to not in attached_to_modality_transform:
+                    if self._is_being_registered(attach_to_modality):
+                        _, transform_sequence, _ = self._prepare_registered_transform(attach_to_modality.name)
+                    else:
+                        _, transform_sequence, _ = self._prepare_not_registered_transform(attach_to_modality.name)
+                    attached_to_modality_transform[attached_to] = transform_sequence
+                transform_sequence = attached_to_modality_transform[attached_to]
+                for file in attached_shape_dict["files"]:
+                    logger.trace(f"Exporting {file} to {attached_to}...")
+                    name = Path(file).stem
+                    suffix = Path(file).suffix
+                    output_path = self.image_dir / f"{name}_to_{attached_to}_registered{suffix}"
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
-                    path = transform_attached_point(transform_sequence, shape_file, shape_pixel_size, output_path)
-                    logger.trace(f"Exported {shape_file} to {attached_to}...")
+                    path = transform_attached_point(
+                        transform_sequence, file, shape_pixel_size, output_path, silent=False
+                    )
+                    logger.trace(f"Exported {file} to {attached_to}...")
                     paths.append(path)
         if paths:
             logger.info(f"Exporting attachment points took {timer()}.")
@@ -1116,6 +1143,7 @@ class IWsiReg(Workflow):
         # attachment images
         paths = []
         to_write = []
+
         # keys are: attached image - attached to image (the one that was registered)
         with MeasureTimer() as timer:
             for attached_modality_key, attach_to_modality_key in tqdm(
@@ -1125,14 +1153,14 @@ class IWsiReg(Workflow):
                     continue
                 attached_modality = self.modalities[attached_modality_key]
                 if attach_to_modality_key in self._find_not_registered_modalities():
-                    image_modality, _, output_path = self._prepare_not_registered_image_transform(
+                    image_modality, transform_sequence, output_path = self._prepare_not_registered_transform(
                         attach_to_modality_key,
                         attachment=True,
                         attachment_modality=attached_modality,
                         to_original_size=to_original_size,
                     )
                 else:
-                    image_modality, _, output_path = self._prepare_registered_image_transform(
+                    image_modality, transform_sequence, output_path = self._prepare_registered_transform(
                         attach_to_modality_key,
                         attachment=True,
                         attachment_modality=attached_modality,
@@ -1145,12 +1173,13 @@ class IWsiReg(Workflow):
                 to_write.append(
                     (
                         image_modality.name,
-                        None,
+                        transform_sequence,
                         output_path,
                         fmt,
                         tile_size,
                         as_uint8,
-                        lambda: (True, attach_to_modality_key, to_original_size),  # noqa: B023
+                        None,
+                        # lambda: (True, attach_to_modality_key, to_original_size),
                     )
                 )
             if to_write:
@@ -1166,7 +1195,7 @@ class IWsiReg(Workflow):
             logger.info(f"Exporting attachment images took {timer()}.")
         return paths
 
-    def _prepare_registered_image_transform(
+    def _prepare_registered_transform(
         self,
         edge_key: str,
         attachment: bool = False,
@@ -1180,7 +1209,7 @@ class IWsiReg(Workflow):
         if attachment and attachment_modality:
             # modality_key = copy(edge_key)
             edge_key = attachment_modality.name
-        output_path = self.image_dir / f"{self.name}-{edge_key}_to_{final_modality}_registered"
+        output_path = self.image_dir / f"{edge_key}_to_{final_modality}_registered"
 
         modality = self.modalities[edge_key]
         if self.original_size_transforms.get(final_modality) and to_original_size:
@@ -1204,7 +1233,7 @@ class IWsiReg(Workflow):
             modality = attachment_modality
         return modality, transformations, output_path
 
-    def _prepare_not_registered_image_transform(
+    def _prepare_not_registered_transform(
         self,
         modality_key: str,
         attachment: bool = False,
@@ -1215,12 +1244,12 @@ class IWsiReg(Workflow):
         from image2image_reg.wrapper import ImageWrapper
 
         logger.trace(f"Preparing transforms for non-registered modality : {modality_key} ")
-        output_path = self.image_dir / f"{self.name}-{modality_key}_registered"
+        output_path = self.image_dir / f"{modality_key}_registered"
 
-        im_data_key = None
-        if attachment and attachment_modality:
-            im_data_key = copy(modality_key)
-            modality_key = attachment_modality.name
+        # source_key = None
+        # if attachment and attachment_modality:
+        #     source_key = copy(modality_key)
+        #     modality_key = attachment_modality.name
 
         transformations = None
         modality = self.modalities[modality_key]
@@ -1253,10 +1282,7 @@ class IWsiReg(Workflow):
             if isinstance(o_size_tform, list):
                 o_size_tform = o_size_tform[0]
 
-            orig_size_rt = TransformSequence(
-                Transform(o_size_tform),
-                transform_sequence_index=[0],
-            )
+            orig_size_rt = TransformSequence(Transform(o_size_tform), transform_sequence_index=[0])
             if transformations:
                 transformations.append(orig_size_rt)
             else:
@@ -1288,8 +1314,17 @@ class IWsiReg(Workflow):
             else:
                 transformations.set_output_spacing(modality.output_pixel_size)
 
-        if attachment and im_data_key:
-            modality = self.modalities[im_data_key]
+        # source_key = None
+        # if attachment and attachment_modality:
+        #     source_key = copy(modality_key)
+        # modality_key = attachment_modality.name
+
+        if attachment and attachment_modality:
+            modality = attachment_modality
+            output_path = self.image_dir / f"{attachment_modality.name}_registered"
+            # modality = self.modalities[attachment_modality]
+        # if attachment and source_key:
+        #     modality = self.modalities[source_key]
         return modality, transformations, output_path
 
     def _transform_write_image(
@@ -1316,12 +1351,14 @@ class IWsiReg(Workflow):
                 attach_to_modality = modality
             modality_name = modality
             modality_for_name = self.modalities[modality_name] if isinstance(modality_name, str) else modality_name
-            modality, transformations, filename = self._prepare_registered_image_transform(
+            modality, transformations, filename = self._prepare_registered_transform(
                 attach_to_modality,
                 attachment=attachment,
                 attachment_modality=modality_for_name,
                 to_original_size=to_original_size,
             )
+        elif isinstance(modality, str):
+            modality = self.modalities[modality]
 
         as_uint8_ = as_uint8
         wrapper = ImageWrapper(modality, preview=preview)
@@ -1403,14 +1440,14 @@ class IWsiReg(Workflow):
                 channel_names.append(channel_names_)
                 as_uint8 = all(as_uint_all)
                 if name not in non_reg_modalities and attachment_modality not in non_reg_modalities:
-                    _, sub_im_transforms, _ = self._prepare_registered_image_transform(
+                    _, sub_im_transforms, _ = self._prepare_registered_transform(
                         name,
                         attachment=attachment,
                         attachment_modality=attachment_modality,
                         to_original_size=to_original_size,
                     )
                 else:
-                    _, sub_im_transforms, _ = self._prepare_not_registered_image_transform(
+                    _, sub_im_transforms, _ = self._prepare_not_registered_transform(
                         name,
                         attachment=attachment,
                         attachment_modality=attachment_modality,
@@ -1423,9 +1460,9 @@ class IWsiReg(Workflow):
                 as_uint8 = as_uint8_
 
             if self.name == merge_name:
-                filename = f"{self.name}_merged-registered"
+                filename = "merged-registered"
             else:
-                filename = f"{self.name}-{merge_name}_merged-registered"
+                filename = f"{merge_name}_merged-registered"
             output_path = self.image_dir / filename
             if output_path.with_suffix(".ome.tiff").exists() and not overwrite:
                 logger.trace(f"Skipping {modality} as it already exists ({output_path}).")

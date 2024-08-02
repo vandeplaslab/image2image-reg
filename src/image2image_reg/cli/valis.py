@@ -144,7 +144,7 @@ if is_installed("valis"):
         fraction: float,
     ) -> None:
         """Create a new project."""
-        from image2image_reg.cli.i2reg import new_runner
+        from image2image_reg.cli.elastix import new_runner
 
         new_runner(
             output_dir,
@@ -163,7 +163,7 @@ if is_installed("valis"):
     @valis.command("about", help_group="Project")
     def about_cmd(project_dir: str) -> None:
         """Print information about the registration project."""
-        from image2image_reg.cli.i2reg import about_runner
+        from image2image_reg.cli.elastix import about_runner
 
         about_runner(project_dir, valis=True)
 
@@ -171,7 +171,7 @@ if is_installed("valis"):
     @valis.command("validate", help_group="Project")
     def validate_cmd(project_dir: ty.Sequence[str]) -> None:
         """Validate project configuration."""
-        from image2image_reg.cli.i2reg import validate_runner
+        from image2image_reg.cli.elastix import validate_runner
 
         validate_runner(project_dir, valis=True)
 
@@ -228,7 +228,7 @@ if is_installed("valis"):
         overwrite: bool = False,
     ) -> None:
         """Add images to the project."""
-        from image2image_reg.cli.i2reg import add_modality_runner
+        from image2image_reg.cli.elastix import add_modality_runner
 
         add_modality_runner(
             project_dir,
@@ -248,7 +248,7 @@ if is_installed("valis"):
     @valis.command("attach-image", help_group="Project")
     def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
         """Add attachment image to registered modality."""
-        from image2image_reg.cli.i2reg import add_attachment_runner
+        from image2image_reg.cli.elastix import add_attachment_runner
 
         add_attachment_runner(project_dir, attach_to, name, image, valis=True)
 
@@ -262,7 +262,7 @@ if is_installed("valis"):
         project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
     ) -> None:
         """Add attachment points (csv/tsv/txt) to registered modality."""
-        from image2image_reg.cli.i2reg import add_points_runner
+        from image2image_reg.cli.elastix import add_points_runner
 
         add_points_runner(project_dir, attach_to, name, file, pixel_size, valis=True)
 
@@ -276,7 +276,7 @@ if is_installed("valis"):
         project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
     ) -> None:
         """Add attachment shape (GeoJSON) to registered modality."""
-        from image2image_reg.cli.i2reg import add_shape_runner
+        from image2image_reg.cli.elastix import add_shape_runner
 
         add_shape_runner(project_dir, attach_to, name, file, pixel_size, valis=True)
 
@@ -302,7 +302,7 @@ if is_installed("valis"):
     @valis.command("add-merge", help_group="Project")
     def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
         """Specify how (if) images should be merged."""
-        from image2image_reg.cli.i2reg import add_merge_runner
+        from image2image_reg.cli.elastix import add_merge_runner
 
         add_merge_runner(project_dir, name, modality, auto, valis=True)
 
@@ -622,52 +622,82 @@ if is_installed("valis"):
         return path
 
     @click.option(
-        "-V",
-        "--no_valis",
+        "--all",
+        "all_",
+        help="Clear all results.",
+        is_flag=True,
+        default=False,
+        show_default=True,
+    )
+    @click.option(
+        "-v/-V",
+        "--valis/--no_valis",
+        "valis_",
         help="Clear valis.",
         is_flag=True,
         default=False,
         show_default=True,
     )
     @click.option(
-        "-M",
-        "--no_metadata",
+        "-m/-M",
+        "--metadata/--no_metadata",
         help="Clear metadata.",
         is_flag=True,
         default=False,
         show_default=True,
     )
-    @click.option("-I", "--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
-    @click.option("-C", "--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
+    @click.option("-i/-I", "--image/--no_image", help="Clear images.", is_flag=True, default=False, show_default=True)
+    @click.option("-c/-C", "--cache/--no_cache", help="Clear cache.", is_flag=True, default=False, show_default=True)
     @project_path_multi_
     @valis.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
     def clear_cmd(
-        project_dir: ty.Sequence[str], no_cache: bool, no_image: bool, no_metadata: bool, no_valis: bool
+        project_dir: ty.Sequence[str], cache: bool, image: bool, metadata: bool, valis_: bool, all_: bool
     ) -> None:
         """Clear project data (cache/images/transformations/etc...)."""
-        clear_runner(project_dir, no_cache, no_image, no_metadata, no_valis)
+        clear_runner(project_dir, cache, image, metadata, valis_, all_)
 
     def clear_runner(
         paths: ty.Sequence[str],
-        no_cache: bool = True,
-        no_image: bool = True,
-        no_metadata: bool = True,
-        no_valis: bool = True,
+        cache: bool = True,
+        image: bool = True,
+        metadata: bool = True,
+        valis_: bool = True,
+        all_: bool = False,
     ) -> None:
         """Register images."""
         from image2image_reg.workflows import ValisReg
 
+        if all_:
+            cache = image = metadata = valis_ = True
+
         print_parameters(
             Parameter("Project directory", "-p/--project_dir", paths),
-            Parameter("Don't clear cache", "--no_cache", no_cache),
-            Parameter("Don't clear images", "--no_image", no_image),
-            Parameter("Don't clear metadata", "--no_metadata", no_metadata),
-            Parameter("Don't clear valis", "--no_valis", no_valis),
+            Parameter("Don't clear cache", "--cache", cache),
+            Parameter("Don't clear images", "--image", image),
+            Parameter("Don't clear metadata", "--metadata", metadata),
+            Parameter("Don't clear valis", "--no_valis", valis_),
         )
 
         with MeasureTimer() as timer:
             for path in paths:
                 pro = ValisReg.from_path(path)
-                pro.clear(cache=not no_cache, image=not no_image, metadata=not no_metadata, valis=not no_valis)
+                pro.clear(cache=cache, image=image, metadata=metadata, valis=valis_)
                 logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
         logger.info(f"Finished clearing all projects in {timer()}.")
+
+    @click.option(
+        "-i",
+        "--source_dir",
+        help="Source directory where images/files should be searched for.",
+        type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+        show_default=True,
+        required=True,
+        multiple=True,
+    )
+    @project_path_single_
+    @valis.command("update", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+    def update_cmd(project_dir: ty.Sequence[str], source_dir: list[str]) -> None:
+        """Update project paths (e.g after folder move)."""
+        from image2image_reg.cli.elastix import update_runner
+
+        update_runner(project_dir, source_dir, valis=True)

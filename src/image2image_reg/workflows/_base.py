@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
+from koyo.utilities import clean_path
 from loguru import logger
 
 from image2image_reg._typing import AttachedShapeOrPointDict
@@ -723,3 +724,88 @@ class Workflow:
                 for name, merge_modalities in config["merge_images"].items():
                     self.merge_modalities[name] = merge_modalities
                 logger.trace(f"Loaded merge modalities in {timer(since_last=True)}")
+
+    @classmethod
+    def read_config(cls, path: PathLike) -> dict:
+        """Read config without instantiating class"""
+        from koyo.json import read_json_data
+
+        path = Path(path)
+        if path.is_dir() and path.suffix in [cls.EXTENSION]:
+            path = path / cls.CONFIG_NAME
+        elif path.is_file() and path.name == cls.CONFIG_NAME:
+            path = path.parent / cls.CONFIG_NAME
+        if not path.exists():
+            raise ValueError(f"Could not find config file at '{path}'.")
+        return read_json_data(path)
+
+    @classmethod
+    def write_config(cls, path: PathLike, config: dict) -> None:
+        """Write config without instantiating class"""
+        from koyo.json import write_json_data
+
+        path = Path(path)
+        if path.is_dir() and path.suffix in [cls.EXTENSION]:
+            path = path / cls.CONFIG_NAME
+        elif path.is_file() and path.name == cls.CONFIG_NAME:
+            path = path.parent / cls.CONFIG_NAME
+        write_json_data(path, config)
+
+    @classmethod
+    def update_paths(cls, path: PathLike, source_dirs: list[PathLike]) -> None:
+        """Update source paths."""
+        config = cls.read_config(path)
+        config["modalities"] = cls._update_modality_paths(config["modalities"], source_dirs)
+        config["attachment_shapes"] = cls._update_attachment_paths(config["attachment_shapes"], source_dirs)
+        config["attachment_points"] = cls._update_attachment_paths(config["attachment_points"], source_dirs)
+        cls.write_config(path, config)
+
+    @staticmethod
+    def _update_modality_paths(config: dict[str, dict], source_dirs: list[PathLike]) -> dict:
+        for modality in config.values():
+            name = modality["name"]
+            path = clean_path(modality["path"])
+            if not path.exists():
+                logger.trace(f"Path '{path}' does not exist for modality={name}.")
+                for source_dir in source_dirs:
+                    source_dir = Path(source_dir)
+                    updated, new_path = _get_new_path(path, source_dir)
+                    if updated:
+                        modality["path"] = str(new_path)
+                        logger.trace(f"Updated path for modality={name} to '{new_path}'.")
+
+        return config
+
+    @staticmethod
+    def _update_attachment_paths(
+        config: dict[str, AttachedShapeOrPointDict] | None, source_dirs: list[PathLike]
+    ) -> AttachedShapeOrPointDict | None:
+        if not config:
+            return config
+        for attachment in config.values():
+            for i, path in enumerate(attachment["files"]):
+                path = clean_path(path)
+                if not path.exists():
+                    logger.trace(f"Path '{path}' does not exist for attachment={attachment}.")
+                    for source_dir in source_dirs:
+                        updated, new_path = _get_new_path(path, source_dir)
+                        if new_path.exists():
+                            attachment["files"][i] = str(new_path)
+                            logger.trace(f"Updated path for attachment={attachment} to '{new_path}'.")
+        return config
+
+
+def _get_new_path(path: Path, source_dir: Path) -> tuple[bool, Path]:
+    # check if the file exists in the source directory
+    new_path = source_dir / path.name
+    if new_path.exists():
+        return True, new_path
+    else:
+        # check whether part of the source directory is in the rest of the path
+        if source_dir.name in path.parts:
+            for i, part in enumerate(path.parts):
+                if part == source_dir.name:
+                    new_path = Path(source_dir).joinpath(*path.parts[i + 1 :])
+                    if new_path.exists():
+                        return True, new_path
+    return False, path

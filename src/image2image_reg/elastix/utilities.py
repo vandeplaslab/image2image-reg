@@ -92,6 +92,7 @@ def transform_points_df(
         suffix=suffix,
         replace=replace,
         source_pixel_size=source_pixel_size,
+        silent=silent,
     )
 
 
@@ -155,6 +156,7 @@ def _transform_points_df(
     suffix: str = "_transformed",
     replace: bool = False,
     source_pixel_size: float = 1.0,
+    silent: bool = False,
 ) -> pd.DataFrame:
     if x_key not in df.columns or y_key not in df.columns:
         raise ValueError(f"Dataframe must have '{x_key}' and '{y_key}' columns.")
@@ -163,7 +165,7 @@ def _transform_points_df(
 
     x = df[x_key].values
     y = df[y_key].values
-    x, y = transform_points(seq, x, y, in_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size)
+    x, y = transform_points(seq, x, y, in_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size, silent=silent)
 
     # remove transformed columns if they exist
     if f"{x_key}{suffix}" in df.columns:
@@ -183,13 +185,17 @@ def _transform_points_df(
 
 
 def transform_attached_point(
-    transform_sequence: TransformSequence, path: PathLike, pixel_size: float, output_path: PathLike
+    transform_sequence: TransformSequence,
+    path: PathLike,
+    source_pixel_size: float,
+    output_path: PathLike,
+    silent: bool = False,
 ) -> Path:
     """Transform points data."""
     from image2image_io.readers.points_reader import read_points
     from image2image_io.readers.utilities import get_column_name
 
-    is_in_px = pixel_size == 1.0
+    is_in_px = source_pixel_size != 1.0
 
     # read data
     path = Path(path)
@@ -207,6 +213,8 @@ def transform_attached_point(
         x_key=x_key,
         y_key=y_key,
         replace=True,
+        source_pixel_size=source_pixel_size,
+        silent=silent,
     )
     if path.suffix in [".csv", ".txt", ".tsv"]:
         sep = {"csv": ",", "txt": "\t", "tsv": "\t"}[path.suffix[1:]]
@@ -217,19 +225,32 @@ def transform_attached_point(
 
 
 def transform_attached_shape(
-    transform_sequence: TransformSequence, path: PathLike, pixel_size: float, output_path: PathLike
+    transform_sequence: TransformSequence,
+    path: PathLike,
+    source_pixel_size: float,
+    output_path: PathLike,
+    silent: bool = False,
 ) -> Path:
     """Transform points data."""
     import json
 
     from image2image_io.readers.shapes_reader import ShapesReader
 
-    is_in_px = pixel_size == 1.0
+    # if value is equal to 1.0, then the coordinates are in pixels
+    is_in_px = source_pixel_size != 1.0
+
     reader = ShapesReader(path)
     geojson_data = deepcopy(reader.geojson_data)
     if isinstance(geojson_data, list):
         if "type" in geojson_data[0] and geojson_data[0]["type"] == "Feature":
-            geojson_data = _transform_geojson_features(geojson_data, transform_sequence, in_px=is_in_px, as_px=is_in_px)
+            geojson_data = _transform_geojson_features(
+                geojson_data,
+                transform_sequence,
+                in_px=is_in_px,
+                as_px=is_in_px,
+                source_pixel_size=source_pixel_size,
+                silent=silent,
+            )
         else:
             raise ValueError("Invalid GeoJSON data.")
 
@@ -238,27 +259,51 @@ def transform_attached_shape(
 
 
 def _transform_geojson_features(
-    geojson_data: list[dict], transform_sequence: TransformSequence, in_px: bool, as_px: bool
+    geojson_data: list[dict],
+    transform_sequence: TransformSequence,
+    in_px: bool,
+    as_px: bool,
+    source_pixel_size: float = 1.0,
+    silent: bool = False,
 ) -> list[dict]:
     result = []
     for feature in geojson_data:
+        # for feature in tqdm(geojson_data, desc="Transforming Features", leave=False, mininterval=1):
         geometry = feature["geometry"]
         if geometry["type"] == "Point":
             x, y = geometry["coordinates"]
-            x, y = transform_points(transform_sequence, [x], [y], in_px=in_px, as_px=as_px)
+            x, y = transform_points(
+                transform_sequence, [x], [y], in_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size
+            )
             geometry["coordinates"] = [x[0], y[0]]
         elif geometry["type"] == "Polygon":
             for i, ring in enumerate(
-                tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, miniters=500)
+                tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, mininterval=1, disable=True)
             ):
                 x, y = np.array(ring).T
-                x, y = transform_points(transform_sequence, x, y, in_px=in_px, as_px=as_px, silent=True)
+                x, y = transform_points(
+                    transform_sequence,
+                    x,
+                    y,
+                    in_px=in_px,
+                    as_px=as_px,
+                    silent=False,
+                    source_pixel_size=source_pixel_size,
+                )
                 geometry["coordinates"][i] = np.c_[x, y].tolist()
         elif geometry["type"] == "MultiPolygon":
             for j, polygon in enumerate(geometry["coordinates"]):
-                for i, ring in enumerate(tqdm(polygon, desc="Transforming MultiPolygon", leave=False, miniters=500)):
+                for i, ring in enumerate(tqdm(polygon, desc="Transforming MultiPolygon", leave=False, mininterval=1)):
                     x, y = np.array(ring).T
-                    x, y = transform_points(transform_sequence, x, y, in_px=in_px, as_px=as_px, silent=True)
+                    x, y = transform_points(
+                        transform_sequence,
+                        x,
+                        y,
+                        in_px=in_px,
+                        as_px=as_px,
+                        silent=True,
+                        source_pixel_size=source_pixel_size,
+                    )
                     geometry["coordinates"][j][i] = np.c_[x, y].tolist()
         result.append(feature)
     return result

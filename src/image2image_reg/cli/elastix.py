@@ -376,7 +376,7 @@ def add_path_runner(
     target_preprocessing: str | None = None,
 ) -> None:
     """Add images to the project."""
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.elastix import IWsiReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", project_dir),
@@ -588,7 +588,7 @@ def preprocess_runner(
 
 
 def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> PathLike:
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.elastix import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
@@ -763,7 +763,7 @@ def _register(
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> PathLike:
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.elastix import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
@@ -856,6 +856,7 @@ def export_runner(
         Parameter(
             "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
         ),
+        Parameter("Write not-registered images", "--write_attached/--no_write_attached", write_attached),
         Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
@@ -874,6 +875,7 @@ def export_runner(
                             fmt,
                             write_registered,
                             write_not_registered,
+                            write_attached,
                             write_merged,
                             remove_merged,
                             original_size,
@@ -891,6 +893,7 @@ def export_runner(
                     fmt,
                     write_registered,
                     write_not_registered,
+                    write_attached,
                     write_merged,
                     remove_merged,
                     original_size,
@@ -907,6 +910,7 @@ def _export(
     fmt: WriterMode,
     write_registered: bool,
     write_not_registered: bool,
+    write_attached: bool,
     write_merged: bool,
     remove_merged: bool,
     original_size: bool,
@@ -914,7 +918,7 @@ def _export(
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> PathLike:
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.elastix import IWsiReg
 
     obj = IWsiReg.from_path(path)
     obj.set_logger()
@@ -925,6 +929,7 @@ def _export(
         fmt=fmt,
         write_registered=write_registered,
         write_not_registered=write_not_registered,
+        write_attached=write_attached,
         write_merged=write_merged,
         remove_merged=remove_merged,
         to_original_size=original_size,
@@ -1002,7 +1007,7 @@ def clear_cmd(
     project_dir: ty.Sequence[str], cache: bool, image: bool, transformations: bool, progress: bool, all_: bool
 ) -> None:
     """Clear project data (cache/images/transformations/etc...)."""
-    clear_runner(project_dir, cache, image, transformations, progress)
+    clear_runner(project_dir, cache, image, transformations, progress, all_)
 
 
 def clear_runner(
@@ -1033,3 +1038,31 @@ def clear_runner(
             pro.clear(cache=cache, image=image, transformations=transformations, progress=progress)
             logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
     logger.info(f"Finished clearing all projects in {timer()}.")
+
+
+@click.option(
+    "-s",
+    "--source_dir",
+    help="Source directory where images/files should be searched for.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=True,
+    multiple=True,
+)
+@project_path_single_
+@elastix.command("update", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+def update_cmd(project_dir: str, source_dir: list[str]) -> None:
+    """Update project paths (e.g after folder move)."""
+    update_runner(project_dir, source_dir, valis=False)
+
+
+def update_runner(path: PathLike, source_dirs: list[PathLike], valis: bool = False) -> None:
+    """Register images."""
+    from image2image_reg.workflows import IWsiReg, ValisReg
+
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", path),
+        Parameter("Source directories", "--source_dirs", source_dirs),
+    )
+
+    IWsiReg.update_paths(path, source_dirs) if not valis else ValisReg.update_paths(path, source_dirs)

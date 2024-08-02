@@ -18,7 +18,7 @@ from image2image_reg.enums import WriterMode
 from image2image_reg.workflows._base import Workflow
 
 if ty.TYPE_CHECKING:
-    from image2image_reg.workflows.iwsireg import IWsiReg
+    from image2image_reg.workflows.elastix import IWsiReg
 
 logger = logger.bind(src="Valis")
 
@@ -160,19 +160,18 @@ class ValisReg(Workflow):
         self.name = config["name"]
         self.cache_images = config["cache_images"]
         self.merge_images = config["merge"]
-        self._reference = config["reference"]
         self.check_for_reflections = config["check_for_reflections"]
         self.non_rigid_registration = config["non_rigid_registration"]
         self.micro_registration = config["micro_registration"]
         self.micro_registration_fraction = config["micro_registration_fraction"]
 
         # add modality information
-        with MeasureTimer() as timer:
-            self._load_modalities_from_config(config, raise_on_error)
-            # load attachment images
-            self._load_attachment_from_config(config)
-            # load merge
-            self._load_merge_from_config(config)
+        self._load_modalities_from_config(config, raise_on_error)
+        # load attachment images
+        self._load_attachment_from_config(config)
+        # load merge
+        self._load_merge_from_config(config)
+        self.set_reference(config["reference"])
 
     def print_summary(self, func: ty.Callable = logger.info) -> None:
         """Print summary about the project."""
@@ -245,9 +244,19 @@ class ValisReg(Workflow):
             logger.success("✅ Project configuration is valid.")
         return is_valid, errors
 
-    def clear(self, cache: bool = True, valis: bool = False, image: bool = False, metadata: bool = False) -> None:
+    def clear(
+        self,
+        cache: bool = True,
+        valis: bool = False,
+        image: bool = False,
+        metadata: bool = False,
+        clear_all: bool = False,
+    ) -> None:
         """Clear existing data."""
         from image2image_reg.utils.utilities import _safe_delete
+
+        if clear_all:
+            cache = image = valis = metadata = True
 
         # clear transformations, cache, images
         if cache:
@@ -265,6 +274,8 @@ class ValisReg(Workflow):
                 "micro_registration",
                 "registered",
                 "rigid_registration",
+                "non_rigid_registration",
+                "deformation_fields",
             ]:
                 directory = self.project_dir / sub_directory
                 for file in directory.glob("*"):
@@ -288,10 +299,11 @@ class ValisReg(Workflow):
         from natsort import natsorted
 
         # get all modality paths
-        filelist = [modality.path for modality in self.modalities.values()]
-        # remove any images that are in the attachment dictionary
-        for src_name, _ in self.attachment_images.items():
-            filelist.remove(self.modalities[src_name].path)
+        modalities = self.get_image_modalities(with_attachment=False)
+        filelist = []
+        for modality_name in modalities:
+            filelist.append(self.modalities[modality_name].path)
+
         # sort images
         filelist = natsorted(filelist)
         filelist = [Path(path) for path in filelist]
@@ -357,7 +369,11 @@ class ValisReg(Workflow):
         """Co-register images."""
         from valis import registration
 
-        from image2image_reg.valis.utilities import get_feature_detector, get_micro_registration_dimension
+        from image2image_reg.valis.utilities import (
+            get_feature_detector,
+            get_feature_matcher,
+            get_micro_registration_dimension,
+        )
 
         # get filelist
         filelist = self.filelist
@@ -370,9 +386,8 @@ class ValisReg(Workflow):
         feature_detector_cls = get_feature_detector(self.feature_detector)
         logger.info(f"Feature detector: {feature_detector_cls}")
         # get matcher
-        # feature_matcher_cls = get_feature_matcher(self.feature_matcher)
-        # logger.info(f"Feature matcher: {feature_matcher_cls}")
-        logger.info(f"Feature matcher: {self.feature_matcher}")
+        feature_matcher_cls = get_feature_matcher(self.feature_matcher)
+        logger.info(f"Feature matcher: {feature_matcher_cls}")
         # Print configuration
         logger.info(f"Check for reflections: {self.check_for_reflections}")
         logger.info(f"Non-rigid registration: {self.non_rigid_registration}")
@@ -405,6 +420,7 @@ class ValisReg(Workflow):
                         align_to_reference=reference is not None,
                         check_for_reflections=self.check_for_reflections,
                         feature_detector_cls=feature_detector_cls,
+                        matcher=feature_matcher_cls,
                         **kws,
                     )
                     registrar.dst_dir = str(self.project_dir)
@@ -478,11 +494,12 @@ class ValisReg(Workflow):
         if not self.registrar:
             raise ValueError("Registrar not found. Please register first.")
 
-        # # export images to OME-TIFFs
+        # export registered images
         paths = []
         if write_registered:
             self._export_registered_images(fmt, tile_size, as_uint8, overwrite)
-        #
+
+        # export attachment modalities
         if write_attached:
             self._export_attachment_images(fmt, tile_size, as_uint8, overwrite)
             self._export_attachment_points(n_parallel, overwrite)
@@ -522,7 +539,7 @@ class ValisReg(Workflow):
             for name, attached_dict in tqdm(self.attachment_shapes.items(), desc="Exporting attachment shapes..."):
                 attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
-                shape_pixel_size = attached_dict["pixel_size"]
+                source_pixel_size = attached_dict["pixel_size"]  # source pixel size
                 attach_to_modality = self.modalities[attached_to]
 
                 paths_ = transform_attached_shapes(
@@ -530,7 +547,7 @@ class ValisReg(Workflow):
                     attach_to_modality.path,
                     self.image_dir,
                     attached_dict["files"],
-                    shape_pixel_size,
+                    source_pixel_size,
                     overwrite=overwrite,
                 )
                 paths.extend(paths_)
@@ -547,7 +564,7 @@ class ValisReg(Workflow):
             for name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment shapes..."):
                 attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
-                shape_pixel_size = attached_dict["pixel_size"]
+                source_pixel_size = attached_dict["pixel_size"]
                 attach_to_modality = self.modalities[attached_to]
 
                 paths_ = transform_attached_points(
@@ -555,7 +572,7 @@ class ValisReg(Workflow):
                     attach_to_modality.path,
                     self.image_dir,
                     attached_dict["files"],
-                    shape_pixel_size,
+                    source_pixel_size,
                     overwrite=overwrite,
                 )
                 paths.extend(paths_)
@@ -907,8 +924,9 @@ def get_channel_kws(obj: ValisReg) -> dict:
 
     channel_kws = {}
     # iterate over modalities
-    for modality in obj.modalities.values():
-        name = valtils.get_name(str(modality.path))
+    for modality_name in obj.get_image_modalities(with_attachment=False):
+        modality = obj.modalities[modality_name]
+        modality_name = valtils.get_name(str(modality.path))
         modality_kws = modality.preprocessing.to_valis()
-        channel_kws[name] = [get_preprocessor(modality_kws[0]), modality_kws[1]]
+        channel_kws[modality_name] = [get_preprocessor(modality_kws[0]), modality_kws[1]]
     return channel_kws

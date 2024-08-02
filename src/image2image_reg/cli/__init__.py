@@ -12,7 +12,7 @@ from loguru import logger
 from image2image_reg import __version__
 from image2image_reg.cli._common import set_logger
 from image2image_reg.cli.convert import convert
-from image2image_reg.cli.i2reg import elastix
+from image2image_reg.cli.elastix import elastix
 from image2image_reg.cli.merge import merge
 from image2image_reg.cli.simple_valis import simple_valis
 from image2image_reg.cli.valis import valis

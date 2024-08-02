@@ -77,13 +77,16 @@ ValisDetectorMethod = ty.Literal[
     "akaze",
     "brisk",
     "orb",
+    "skcensure",
+    "skdaisy",
+    # "super_point",
     "sensitive_vgg",
     "very_sensitive_vgg",
     # short-name
     "svgg",
     "vsvgg",
 ]
-ValisMatcherMethod = ty.Literal["ransac", "gms"]
+ValisMatcherMethod = ty.Literal["ransac", "gms"]  # , "super_point", "super_glue"]
 ValisInterpolation = ty.Literal["linear", "bicubic"]
 ValisCrop = ty.Literal[True, False, "overlap", "reference"]
 

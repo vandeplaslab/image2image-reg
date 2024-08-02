@@ -1,10 +1,13 @@
 """Transformation model."""
+
 from __future__ import annotations
 
 from warnings import warn
 
 import numpy as np
 import SimpleITK as sitk
+from koyo.timer import MeasureTimer
+from loguru import logger
 from tqdm import tqdm
 
 from image2image_reg.utils.convert import convert_to_itk
@@ -23,7 +26,7 @@ class TransformMixin:
     output_direction: tuple[float, float] | None = None
     resample_interpolator: str = "FinalNearestNeighborInterpolator"
     final_transform: sitk.Transform | None = None
-    inverse_transform: sitk.Transform
+    inverse_transform: sitk.Transform | None = None
     transforms: list[Transform]
 
     def __call__(self, image: sitk.Image) -> sitk.Image:
@@ -36,7 +39,10 @@ class TransformMixin:
 
     def __repr__(self) -> str:
         """Return repr."""
-        return f"{self.__class__.__name__}(name={self.name}; n={self.n_transforms}; is_linear={self.is_linear})"
+        return (
+            f"{self.__class__.__name__}<name={self.name}; n={self.n_transforms}; is_linear={self.is_linear}; "
+            f"spacing={self.output_spacing}>"
+        )
 
     @property
     def n_transforms(self) -> int:
@@ -46,12 +52,14 @@ class TransformMixin:
     @property
     def inverse_final_transform(self) -> sitk.Transform:
         """Return inverse final transform."""
-        if self.final_transform is None:
-            raise ValueError("Final transform does not exist yet.")
-        if not self.is_linear:
-            self.compute_inverse_nonlinear()
-            return self.inverse_transform
-        return self.final_transform.GetInverse()  # type: ignore[no-untyped-call]
+        if not self.inverse_transform:
+            if self.final_transform is None:
+                raise ValueError("Final transform does not exist yet.")
+            if not self.is_linear:
+                self.compute_inverse_nonlinear()
+            else:
+                self.inverse_transform = self.final_transform.GetInverse()  # type: ignore[no-untyped-call]
+        return self.inverse_transform
 
     def _build_resampler(self, inverse: bool = False) -> None:
         """Build resampler."""
@@ -74,16 +82,18 @@ class TransformMixin:
 
     def compute_inverse_nonlinear(self) -> None:
         """Compute the inverse of a BSpline transform using ITK."""
-        tform_to_disp_field = sitk.TransformToDisplacementFieldFilter()  # type: ignore[no-untyped-call]
-        tform_to_disp_field.SetOutputSpacing(self.output_spacing)  # type: ignore[no-untyped-call]
-        tform_to_disp_field.SetOutputOrigin(self.output_origin)  # type: ignore[no-untyped-call]
-        tform_to_disp_field.SetOutputDirection(self.output_direction)  # type: ignore[no-untyped-call]
-        tform_to_disp_field.SetSize(self.output_size)  # type: ignore[no-untyped-call]
+        with MeasureTimer() as timer:
+            tform_to_disp_field = sitk.TransformToDisplacementFieldFilter()  # type: ignore[no-untyped-call]
+            tform_to_disp_field.SetOutputSpacing(self.output_spacing)  # type: ignore[no-untyped-call]
+            tform_to_disp_field.SetOutputOrigin(self.output_origin)  # type: ignore[no-untyped-call]
+            tform_to_disp_field.SetOutputDirection(self.output_direction)  # type: ignore[no-untyped-call]
+            tform_to_disp_field.SetSize(self.output_size)  # type: ignore[no-untyped-call]
 
-        displacement_field = tform_to_disp_field.Execute(self.itk_transform)  # type: ignore[no-untyped-call]
-        displacement_field = sitk.InvertDisplacementField(displacement_field)  # type: ignore[no-untyped-call]
-        displacement_field = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
-        self.inverse_transform = displacement_field
+            displacement_field = tform_to_disp_field.Execute(self.final_transform)  # type: ignore[no-untyped-call]
+            displacement_field = sitk.InvertDisplacementField(displacement_field)  # type: ignore[no-untyped-call]
+            displacement_field = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
+            self.inverse_transform = displacement_field
+        logger.trace(f"Computed inverse transform in {timer()}")
 
     def transform_points(
         self,
@@ -115,25 +125,34 @@ class TransformMixin:
         transformed_points: np.ndarray
             Transformed points
         """
-        # TODO: this is actually quite slow so let's parallelize!
-        inv_pixel_size = 1 / self.output_spacing[0]
         if not self.output_spacing:
             raise ValueError("Output spacing not set, call `set_output_spacing` first")
+
+        inv_target_pixel_size = 1 / self.output_spacing[0]
+        # convert from px to um by multiplying by the pixel size
         if is_px:
             points = points * source_pixel_size
 
-        points = np.asarray(points).tolist()
-        transformed_points = []
-        for point in tqdm(points, desc="Transforming points", leave=False, disable=silent, miniters=500):
-            point = self.inverse_final_transform.TransformPoint(point)
-            # for _index, transform in enumerate(self.transforms):
-            #     point = transform.inverse_transform.TransformPoint(point)
-            transformed_point = np.array(point)
+        points = np.asarray(points)
+        transformed_points = np.zeros_like(points)
+        points = points.tolist()
+        for i, point in enumerate(
+            tqdm(
+                points,
+                desc=f"Transforming points (is={is_px}; as={px}; {source_pixel_size:.3f}; {inv_target_pixel_size:.3f})",
+                leave=False,
+                disable=silent,
+                mininterval=1,
+            )
+        ):
+            # transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
+            for transform_ in self.transforms:
+                point = transform_.inverse_final_transform.TransformPoint(point)
+            transformed_points[i] = point
 
-            if px:
-                transformed_point *= inv_pixel_size
-            transformed_points.append(transformed_point)
-        return np.stack(transformed_points)
+        if px:
+            transformed_points = transformed_points * inv_target_pixel_size
+        return transformed_points
 
     def set_output_spacing(self, spacing: tuple[float, float] | tuple[int, int]) -> None:
         """Method that allows setting the output spacing of the resampler to resampled to any pixel spacing desired.
