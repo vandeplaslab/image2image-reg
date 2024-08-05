@@ -38,6 +38,7 @@ from ._common import (
     project_path_multi_,
     project_path_single_,
     remove_merged_,
+    rename_,
     write_,
     write_attached_,
     write_merged_,
@@ -310,6 +311,7 @@ if is_installed("valis"):
     @parallel_mode_
     @n_parallel_
     @as_uint8_
+    @rename_
     @remove_merged_
     @write_merged_
     @write_attached_
@@ -328,6 +330,7 @@ if is_installed("valis"):
         write_attached: bool,
         write_merged: bool,
         remove_merged: bool,
+        rename: bool,
         as_uint8: bool | None,
         n_parallel: int,
         parallel_mode: str,
@@ -343,6 +346,7 @@ if is_installed("valis"):
             write_attached=write_attached,
             write_merged=write_merged,
             remove_merged=remove_merged,
+            rename=rename,
             as_uint8=as_uint8,
             n_parallel=n_parallel,
             parallel_mode=parallel_mode,
@@ -358,6 +362,7 @@ if is_installed("valis"):
         write_attached: bool,
         write_merged: bool,
         remove_merged: bool,
+        rename: bool,
         as_uint8: bool | None,
         n_parallel: int = 1,
         overwrite: bool = False,
@@ -380,6 +385,7 @@ if is_installed("valis"):
                 write_attached=write_attached,
                 write_merged=write_merged,
                 remove_merged=remove_merged,
+                rename=rename,
                 as_uint8=as_uint8,
                 n_parallel=n_parallel,
                 overwrite=overwrite,
@@ -395,6 +401,7 @@ if is_installed("valis"):
         write_attached: bool = True,
         write_merged: bool = True,
         remove_merged: bool = True,
+        rename: bool = False,
         as_uint8: bool | None = False,
         n_parallel: int = 1,
         parallel_mode: str = "outer",
@@ -433,6 +440,7 @@ if is_installed("valis"):
                                 write_attached,
                                 write_merged,
                                 remove_merged,
+                                rename,
                                 as_uint8,
                                 overwrite,
                             )
@@ -453,6 +461,7 @@ if is_installed("valis"):
                         write_attached,
                         write_merged,
                         remove_merged,
+                        rename,
                         as_uint8,
                         n_parallel=n_parallel,
                         overwrite=overwrite,
@@ -471,6 +480,7 @@ if is_installed("valis"):
     @parallel_mode_
     @n_parallel_
     @as_uint8_
+    @rename_
     @remove_merged_
     @write_merged_
     @write_attached_
@@ -487,6 +497,7 @@ if is_installed("valis"):
         write_attached: bool,
         write_merged: bool,
         remove_merged: bool,
+        rename: bool,
         as_uint8: bool | None,
         n_parallel: int,
         parallel_mode: str,
@@ -501,6 +512,7 @@ if is_installed("valis"):
             write_attached=write_attached,
             write_merged=write_merged,
             remove_merged=remove_merged,
+            rename=rename,
             as_uint8=as_uint8,
             n_parallel=n_parallel,
             parallel_mode=parallel_mode,
@@ -515,6 +527,7 @@ if is_installed("valis"):
         write_attached: bool = True,
         write_merged: bool = True,
         remove_merged: bool = True,
+        rename: bool = True,
         as_uint8: bool | None = False,
         n_parallel: int = 1,
         parallel_mode: str = "outer",
@@ -560,6 +573,7 @@ if is_installed("valis"):
                                 write_attached,
                                 write_merged,
                                 remove_merged,
+                                rename,
                                 as_uint8,
                                 overwrite,
                             )
@@ -577,6 +591,7 @@ if is_installed("valis"):
                         write_attached,
                         write_merged,
                         remove_merged,
+                        rename,
                         as_uint8,
                         n_parallel=n_parallel,
                         overwrite=overwrite,
@@ -592,6 +607,7 @@ if is_installed("valis"):
         write_attached: bool,
         write_merged: bool,
         remove_merged: bool,
+        rename: bool,
         as_uint8: bool | None,
         n_parallel: int = 1,
         overwrite: bool = False,
@@ -615,6 +631,7 @@ if is_installed("valis"):
             write_attached=write_attached,
             write_merged=write_merged,
             remove_merged=remove_merged,
+            rename=rename,
             as_uint8=as_uint8,
             n_parallel=n_parallel,
             overwrite=overwrite,

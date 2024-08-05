@@ -89,6 +89,13 @@ write_ = click.option(
     default=True,
     show_default=True,
 )
+rename_ = click.option(
+    "--rename/--no_rename",
+    help="Rename images.",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
 fmt_ = click.option(
     "-f",
     "--fmt",

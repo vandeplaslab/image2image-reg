@@ -487,6 +487,7 @@ class ValisReg(Workflow):
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
+        rename: bool = True,
         overwrite: bool = False,
         **kwargs: ty.Any,
     ) -> list | None:

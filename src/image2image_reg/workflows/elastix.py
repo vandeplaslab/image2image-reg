@@ -912,6 +912,7 @@ class IWsiReg(Workflow):
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
+        rename: bool = True,
         n_parallel: int = 1,
         overwrite: bool = False,
     ) -> list | None:

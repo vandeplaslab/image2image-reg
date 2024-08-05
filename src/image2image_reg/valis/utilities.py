@@ -740,7 +740,7 @@ def get_valis_registrar_alt(project_dir: PathLike, name: str, init_jvm: bool = F
         registration.init_jvm()
 
     registrar = None
-    registrar_path = project_dir / "data" / f"{name}_registrar.pickle"
+    registrar_path = Path(project_dir) / "data" / f"{name}_registrar.pickle"
     if registrar_path.exists():
         import pickle
 
