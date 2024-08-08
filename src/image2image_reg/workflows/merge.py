@@ -1,4 +1,5 @@
 """Merge images."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +8,7 @@ from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
 
-from image2image_reg.models import BoundingBox, Modality
+from image2image_reg.models import BoundingBox
 
 
 def merge(
@@ -22,9 +23,9 @@ def merge(
 ) -> Path:
     """Merge multiple images."""
     from image2image_io.models.merge import MergeImages
+    from image2image_io.readers import get_simple_reader
     from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
-
-    from image2image_reg.wrapper import ImageWrapper
+    # from image2image_reg.wrapper import ImageWrapper
 
     paths = [Path(path) for path in paths]
     output_dir = Path(output_dir)
@@ -38,12 +39,11 @@ def merge(
     with MeasureTimer() as timer:
         for path_ in paths:
             path = Path(path_)
-            modality = Modality(name=path.name, path=path)
-            reader_names.append(modality.name)
-            wrapper = ImageWrapper(modality)
-            pixel_sizes.append(wrapper.reader.resolution)
-            channel_names.append(wrapper.reader.channel_names)
-            image_shapes.append(wrapper.reader.image_shape)
+            reader = get_simple_reader(path)
+            reader_names.append(reader.name)
+            pixel_sizes.append(reader.resolution)
+            channel_names.append(reader.channel_names)
+            image_shapes.append(reader.image_shape)
     logger.info(f"Loaded {len(reader_names)} images in {timer()}.")
     image_shape = image_shapes[0]
     crop_mask = crop_bbox.to_mask(image_shape) if crop_bbox else None  # type: ignore[attr-defined]
