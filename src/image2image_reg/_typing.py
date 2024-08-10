@@ -56,6 +56,13 @@ class SerializedRegisteredRegistrationNode(ty.TypedDict):
     target_preprocessing: Preprocessing | None
 
 
+class AttachedImageDict(ty.TypedDict):
+    """Attached image dictionary."""
+
+    files: list[str]
+    attach_to: str
+
+
 class AttachedShapeOrPointDict(ty.TypedDict):
     """Attached shape dictionary."""
 

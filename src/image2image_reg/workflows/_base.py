@@ -254,15 +254,19 @@ class Workflow:
             images.append(modality.name)
         return images
 
+    def get_attachment_list(self, attach_to: str, kind: ty.Literal["image", "geojson", "points"]) -> list[str]:
+        """Return list of attachment(s)."""
+        if kind == "image":
+            return [name for name, attach_to_ in self.attachment_images.items() if attach_to_ == attach_to]
+        if kind == "geojson":
+            return [name for name, attach_to_ in self.attachment_shapes.items() if attach_to_["attach_to"] == attach_to]
+        if kind == "points":
+            return [name for name, attach_to_ in self.attachment_points.items() if attach_to_["attach_to"] == attach_to]
+        raise ValueError(f"Invalid kind '{kind}' - expected 'image', 'geojson', 'points'.")
+
     def get_attachment_count(self, attach_to: str, kind: ty.Literal["image", "geojson", "points"] | str) -> int:
         """Get number of attachments of a certain kind fora specified attachment image."""
-        if kind == "image":
-            return sum(1 for name, attach_to_ in self.attachment_images.items() if attach_to_ == attach_to)
-        if kind == "geojson":
-            return sum(1 for name, attach_to_ in self.attachment_shapes.items() if attach_to_["attach_to"] == attach_to)
-        if kind == "points":
-            return sum(1 for name, attach_to_ in self.attachment_points.items() if attach_to_["attach_to"] == attach_to)
-        raise ValueError(f"Invalid kind '{kind}' - expected 'image', 'geojson', 'points'.")
+        return len(self.get_attachment_list(attach_to, kind))
 
     def auto_add_modality(
         self,
@@ -415,6 +419,14 @@ class Workflow:
         reader: BaseReader = get_simple_reader(path, init_pyramid=False)
         self.add_attachment_images(attach_to_modality, name, path, reader.resolution, reader.channel_names)
 
+    def remove_attachment_image(self, name: str) -> None:
+        """Remove attachment data."""
+        if name not in self.attachment_images:
+            raise ValueError(f"Attachment image with name '{name}' does not exist.")
+        self.attachment_images.pop(name)
+        self.modalities.pop(name)
+        logger.trace(f"Removed attachment image '{name}'.")
+
     def add_attachment_images(
         self,
         attach_to_modality: str,
@@ -481,6 +493,13 @@ class Workflow:
         if attach_to_modality not in self.modalities:
             raise ValueError("Modality does not exist. Please add it before trying to add an attachment.")
         self.add_attachment_geojson(attach_to_modality, name, path)
+
+    def remove_attachment_geojson(self, name: str) -> None:
+        """Remove attachment data."""
+        if name not in self.attachment_shapes:
+            raise ValueError(f"Shape set with name '{name}' does not exist.")
+        self.attachment_shapes.pop(name)
+        logger.trace(f"Removed shape set '{name}'.")
 
     def add_attachment_geojson(
         self, attach_to: str, name: str, paths: PathLike | list[PathLike], pixel_size: float | None = None
@@ -573,6 +592,13 @@ class Workflow:
         if pixel_size is None:
             pixel_size = self.modalities[attach_to].pixel_size
         self.add_attachment_points(attach_to, name, path, pixel_size)
+
+    def remove_attachment_points(self, name: str) -> None:
+        """Remove attachment data."""
+        if name not in self.attachment_points:
+            raise ValueError(f"Points set with name '{name}' does not exist.")
+        self.attachment_points.pop(name)
+        logger.trace(f"Removed points set '{name}'.")
 
     def add_attachment_points(
         self, attach_to: str, name: str, paths: PathLike | list[PathLike], pixel_size: float | None = None
