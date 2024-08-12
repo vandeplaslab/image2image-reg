@@ -498,13 +498,13 @@ class ValisReg(Workflow):
         # export registered images
         paths = []
         if write_registered:
-            self._export_registered_images(fmt, tile_size, as_uint8, overwrite)
+            self._export_registered_images(fmt, tile_size, as_uint8, rename, overwrite)
 
         # export attachment modalities
         if write_attached:
-            self._export_attachment_images(fmt, tile_size, as_uint8, overwrite)
             self._export_attachment_points(n_parallel, overwrite)
             self._export_attachment_shapes(n_parallel, overwrite)
+            self._export_attachment_images(fmt, tile_size, as_uint8, rename, overwrite)
         return paths
 
     def _export_registered_images(
@@ -512,9 +512,12 @@ class ValisReg(Workflow):
         fmt: str | WriterMode = "ome-tiff",
         tile_size: int = 512,
         as_uint8: bool | None = None,
+        rename: bool = True,
         overwrite: bool = False,
     ) -> list[Path]:
         from image2image_reg.valis.utilities import transform_registered_image
+
+        path_to_name_map = {Path(modality.path): modality.name for modality in self.modalities.values()}
 
         paths = []
         with MeasureTimer() as timer:
@@ -525,6 +528,8 @@ class ValisReg(Workflow):
                 as_uint8=as_uint8,
                 tile_size=tile_size,
                 overwrite=overwrite,
+                path_to_name_map=path_to_name_map,
+                rename=rename,
             )
             paths.extend(paths_)
         if paths:
@@ -586,9 +591,12 @@ class ValisReg(Workflow):
         fmt: str | WriterMode = "ome-tiff",
         tile_size: int = 512,
         as_uint8: bool | None = None,
+        rename: bool = True,
         overwrite: bool = False,
     ) -> list[Path]:
         from image2image_reg.valis.utilities import transform_attached_image
+
+        path_to_name_map = {Path(modality.path): modality.name for modality in self.modalities.values()}
 
         # export attached images to OME-TIFFs
         paths = []
@@ -615,6 +623,8 @@ class ValisReg(Workflow):
                     as_uint8=as_uint8,
                     tile_size=tile_size,
                     overwrite=overwrite,
+                    path_to_name_map=path_to_name_map,
+                    rename=rename,
                 )
                 paths.extend(paths_)
         if paths:

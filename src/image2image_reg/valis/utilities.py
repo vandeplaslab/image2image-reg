@@ -177,8 +177,10 @@ def transform_registered_image(
     crop: str | bool | ValisCrop = "reference",
     non_rigid_reg: bool = True,
     pyramid: int = 0,
-    as_uint8: bool = False,
+    as_uint8: bool | None = None,
+    rename: bool = True,
     tile_size: int = 512,
+    path_to_name_map: dict[Path, str] | None = None,
     overwrite: bool = False,
 ) -> list[Path]:
     """Transform valis image."""
@@ -187,6 +189,7 @@ def transform_registered_image(
     from valis.slide_tools import vips2numpy
 
     output_dir = Path(output_dir)
+
     # export images to OME-TIFFs
     ref_slide = None
     if registrar.reference_img_f:
@@ -197,6 +200,12 @@ def transform_registered_image(
         crop = False
         logger.warning("No reference image found. Disabling cropping.")
 
+    if path_to_name_map is None:
+        path_to_name_map = {}
+    ref_name = ""
+    if ref_slide:
+        ref_name = path_to_name_map.get(Path(ref_slide.src_f), ref_slide.name)
+
     files = []
     for slide_obj in registrar.slide_dict.values():
         logger.trace(f"Transforming {slide_obj.name}...")
@@ -204,7 +213,17 @@ def transform_registered_image(
             raise ValueError(f"Slide {ref_slide.src_f} does not exist.")
 
         reader = get_simple_reader(slide_obj.src_f, init_pyramid=False)
-        output_filename = output_dir / reader.path.name
+        # renaming involves naming the file such as:
+        # <source_name>_to_<reference_name>.ome.tiff
+        if rename and path_to_name_map:
+            slide_name = path_to_name_map.get(Path(slide_obj.src_f), slide_obj.name)
+            if ref_name:
+                filename = f"{slide_name}_to_{ref_name}.ome.tiff"
+            else:
+                filename = f"{slide_name}.ome.tiff"
+        else:
+            filename = reader.name
+        output_filename = output_dir / filename
         if output_filename.exists() and not overwrite:
             logger.trace(f"File {output_filename} already exists. Moving on...")
             continue
@@ -240,8 +259,10 @@ def transform_attached_image(
     interp_method: str | ValisInterpolation = "bicubic",
     crop: str | bool | ValisCrop = "reference",
     pyramid: int = 0,
-    as_uint8: bool = False,
+    as_uint8: bool | None = None,
+    rename: bool = True,
     tile_size: int = 512,
+    path_to_name_map: dict[Path, str] | None = None,
     overwrite: bool = False,
 ) -> list[Path]:
     """Transform valis image."""
@@ -262,6 +283,13 @@ def transform_attached_image(
     else:
         crop = False
         logger.warning("No reference image found. Disabling cropping.")
+
+    if path_to_name_map is None:
+        path_to_name_map = {}
+    ref_name = ""
+    if ref_slide:
+        ref_name = path_to_name_map.get(Path(ref_slide.src_f), ref_slide.name)
+
     slide_src = registrar.get_slide(get_name(str(source_path)))
     if not Path(slide_src.src_f).exists():
         raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
@@ -270,7 +298,17 @@ def transform_attached_image(
     for path in tqdm(paths_to_register, desc="Transforming attached images"):
         logger.trace(f"Transforming {path} to {source_path}...")
         reader = get_simple_reader(path)
-        output_filename = output_dir / reader.path.name
+        # renaming involves naming the file such as:
+        # <source_name>_to_<reference_name>.ome.tiff
+        if rename and path_to_name_map:
+            slide_name = path_to_name_map.get(reader.path, reader.name)
+            if ref_name:
+                filename = f"{slide_name}_to_{ref_name}.ome.tiff"
+            else:
+                filename = f"{slide_name}.ome.tiff"
+        else:
+            filename = reader.name
+        output_filename = output_dir / filename
         if output_filename.exists() and not overwrite:
             logger.trace(f"File {output_filename} already exists. Moving on...")
             continue
