@@ -95,6 +95,10 @@ class BoundingBox(MaskMixin):
         self.height = height if isinstance(height, list) else [height]
         assert len(self.x) == len(self.y) == len(self.width) == len(self.height), "Bounding box must have 4 values"
 
+    def __repr__(self) -> str:
+        """Repr."""
+        return f"{self.__class__.__name__}<(x={self.x}, y={self.y}, width={self.width}, height={self.height}>"
+
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Return dict."""
         if as_wsireg:

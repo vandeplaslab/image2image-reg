@@ -605,14 +605,15 @@ def preprocess_reg_image_spatial(
 
     original_size_transform = None
     if preprocessing.crop_bbox:
-        logger.trace("Cropping to mask")
+        logger.trace(f"Cropping to mask - {preprocessing.crop_bbox}")
+        print(preprocessing.crop_bbox)
         translation_transform = generate_rigid_translation_transform(
             image,
             pixel_size,
-            preprocessing.crop_bbox.x,
-            preprocessing.crop_bbox.y,
-            preprocessing.crop_bbox.width,
-            preprocessing.crop_bbox.height,
+            preprocessing.crop_bbox.x[0],
+            preprocessing.crop_bbox.y[0],
+            preprocessing.crop_bbox.width[0],
+            preprocessing.crop_bbox.height[0],
         )
         transforms.append(translation_transform)
         composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})

@@ -44,7 +44,7 @@ from koyo.click import cli_parse_paths_sort
 @click.option(
     "-o",
     "--output_dir",
-    help="Path to images to be merged.",
+    help="Path to the output directory where images should be saved to.",
     type=click.Path(file_okay=False, dir_okay=True, resolve_path=True),
     show_default=True,
     required=True,
@@ -52,7 +52,7 @@ from koyo.click import cli_parse_paths_sort
 @click.option(
     "-p",
     "--path",
-    help="Path to images to be merged.",
+    help="Path(s) of images to be converted.",
     type=click.UNPROCESSED,
     show_default=True,
     required=True,

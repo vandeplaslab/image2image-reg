@@ -483,6 +483,7 @@ def generate_rigid_translation_transform(
     tform = deepcopy(BASE_RIGID_TRANSFORM)
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle=0)
+    # rot_cent_pt = ((bound_w - 1) / 2, (bound_h - 1) / 2)
 
     rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(
         ((bound_w - 1) / 2, (bound_h - 1) / 2),
@@ -493,7 +494,8 @@ def generate_rigid_translation_transform(
     ) = image.TransformContinuousIndexToPhysicalPoint(
         (float(translation_x), float(translation_y)),
     )  # type: ignore[no-untyped-call]
-    # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
+    # # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
+    # print(translation_x, translation_y)
 
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(size_x), str(size_y)]
