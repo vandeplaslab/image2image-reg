@@ -193,6 +193,7 @@ class Workflow:
                 logger=logger,
                 remove=False,
             )
+            [logger.enable(module) for module in ("image2image_io", "image2image_reg", "koyo")]  # type: ignore
             logger.info(f"Setup logging to file - '{self.log_file!s}'")
             logger.trace(f"Executed command: {sys.argv}")
 

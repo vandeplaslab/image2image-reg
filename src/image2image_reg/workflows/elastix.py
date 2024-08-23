@@ -588,14 +588,16 @@ class IWsiReg(Workflow):
         wrapper = ImageWrapper(modality, preprocessing)
         cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not overwrite else False
         if not cached:
+            logger.trace(f"'{modality.name}' is not cached - pre-processing...")
             wrapper.preprocess()
             wrapper.save_cache(self.cache_dir, self.cache_images)
         else:
             if not quick:
+                logger.trace(f"Loading cached '{modality.name}' image.")
                 wrapper.load_cache(self.cache_dir, self.cache_images)
         if not quick:
             if wrapper.image is None:
-                raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
+                raise ValueError(f"'{modality.name}' image has not been pre-processed.")
             # update caches
             spacing = wrapper.image.GetSpacing()  # type:ignore[no-untyped-call]
             self.preprocessed_cache["image_spacing"][modality.name] = spacing
@@ -724,7 +726,7 @@ class IWsiReg(Workflow):
             #         pool.imap_unordered(self._preprocess_image, to_preprocess)
             for modality in tqdm(self.modalities.values(), desc="Pre-processing images"):
                 if not self._is_being_registered(modality):
-                    logger.trace(f"Skipping pre-processing for {modality.name}.")
+                    logger.trace(f"Skipping pre-processing for {modality.name} as it's not being registered.")
                     continue
                 logger.trace(f"Pre-processing {modality.name}.")
                 # TODO: allow extra pre-processing specification
@@ -735,7 +737,12 @@ class IWsiReg(Workflow):
         """Co-register images."""
         # TODO: add multi-core support
         self.set_logger()
+        if self.is_registered:
+            logger.info("Project has already been registered.")
+            return
+
         self.save(registered=False)
+        # check whether registration nodes have been specified
         if not self.registration_nodes:
             raise ValueError("No registration paths have been defined.")
         if preprocess_first:
