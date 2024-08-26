@@ -525,7 +525,7 @@ def preprocess_reg_image_spatial(
     transform_mask : bool
         If True, mask will be transformed using the same transformation parameters as the image.
     """
-    transforms = []
+    transforms: list[dict] = []
     original_size = image.GetSize()
 
     if preprocessing.downsample > 1:
@@ -596,35 +596,36 @@ def preprocess_reg_image_spatial(
             logger.trace("Translated mask")
 
     # crop to bbox
-    if mask and preprocessing.use_crop:
-        logger.trace("Computing mask bounding box")
-        if preprocessing.crop_bbox is None:
-            mask_bbox = compute_mask_to_bbox(mask)
-            preprocessing.crop_bbox = mask_bbox
-            logger.trace(f"Computed mask bounding box: {mask_bbox}")
+    # if mask and preprocessing.use_crop:
+    #     logger.trace("Computing mask bounding box")
+    #     if preprocessing.crop_bbox is None:
+    #         mask_bbox = compute_mask_to_bbox(mask)
+    #         preprocessing.crop_bbox = mask_bbox
+    #         logger.trace(f"Computed mask bounding box: {mask_bbox}")
 
     original_size_transform = None
-    if preprocessing.crop_bbox:
-        logger.trace(f"Cropping to mask - {preprocessing.crop_bbox}")
-        print(preprocessing.crop_bbox)
-        translation_transform = generate_rigid_translation_transform(
-            image,
-            pixel_size,
-            preprocessing.crop_bbox.x[0],
-            preprocessing.crop_bbox.y[0],
-            preprocessing.crop_bbox.width[0],
-            preprocessing.crop_bbox.height[0],
-        )
-        transforms.append(translation_transform)
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
+    if preprocessing.use_crop and (preprocessing.crop_bbox or preprocessing.crop_polygon):
+        if preprocessing.crop_bbox:
+            logger.trace(f"Cropping to mask - {preprocessing.crop_bbox}")
+            translation_transform = generate_rigid_translation_transform(
+                image,
+                pixel_size,
+                preprocessing.crop_bbox.x[0],
+                preprocessing.crop_bbox.y[0],
+                preprocessing.crop_bbox.width[0],
+                preprocessing.crop_bbox.height[0],
+            )
+            transforms.append(translation_transform)
+            composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
+            image = transform_plane(image, final_tform, composite_transform)
+            original_size_transform = generate_rigid_original_transform(original_size, deepcopy(translation_transform))
 
-        image = transform_plane(image, final_tform, composite_transform)
-        original_size_transform = generate_rigid_original_transform(original_size, deepcopy(translation_transform))
-
-        if mask is not None:
-            mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
-    return image, mask, transforms, original_size_transform
+            if mask is not None:
+                mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
+                mask = transform_plane(mask, final_tform, composite_transform)
+        elif preprocessing.crop_polygon:
+            logger.trace(f"Cropping to mask - {preprocessing.crop_polygon}")
+    return image, mask, transforms, original_size_transform  # type: ignore[return-value]
 
 
 def preprocess(

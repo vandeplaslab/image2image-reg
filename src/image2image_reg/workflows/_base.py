@@ -463,7 +463,7 @@ class Workflow:
             )
         path = Path(path)
         if self.has_modality(path=path):
-            logger.warning(f"Attachment image '{name}' already exists. Overwriting.")
+            logger.warning(f"This image '{name}' is already present in the project.")
             return
         if not path.exists():
             raise ValueError(f"Path '{path}' does not exist.")
@@ -476,7 +476,7 @@ class Workflow:
             overwrite=True,
         )
         self.attachment_images[name] = attach_to_modality
-        logger.trace(f"Added attachment image '{name}'.")
+        logger.trace(f"Added attachment image '{name}' to '{attach_to_modality}'.")
 
     def auto_add_attachment_geojson(self, attach_to_modality: str, name: str, path: PathLike) -> None:
         """Add modality."""

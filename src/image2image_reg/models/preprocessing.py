@@ -192,7 +192,7 @@ class Preprocessing(BaseModel):
             text += f"x{self.downsample} downsample"
             tooltip += f"Downsample: x{self.downsample}\n"
         if self.is_masked():
-            text += "masked"
+            text += "masked\n"
             tooltip += "Using mask during registration\n"
         if self.is_cropped():
             text += "cropped"
