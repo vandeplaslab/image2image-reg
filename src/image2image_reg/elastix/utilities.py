@@ -243,14 +243,15 @@ def transform_attached_shape(
     geojson_data = deepcopy(reader.geojson_data)
     if isinstance(geojson_data, list):
         if "type" in geojson_data[0] and geojson_data[0]["type"] == "Feature":
-            geojson_data = _transform_geojson_features(
-                geojson_data,
-                transform_sequence,
-                in_px=is_in_px,
-                as_px=is_in_px,
-                source_pixel_size=source_pixel_size,
-                silent=silent,
-            )
+            if transform_sequence is not None:
+                geojson_data = _transform_geojson_features(
+                    geojson_data,
+                    transform_sequence,
+                    in_px=is_in_px,
+                    as_px=is_in_px,
+                    source_pixel_size=source_pixel_size,
+                    silent=silent,
+                )
         else:
             raise ValueError("Invalid GeoJSON data.")
 

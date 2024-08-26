@@ -709,6 +709,8 @@ class IWsiReg(Workflow):
         """Check whether the modality will be registered or is simply an attachment."""
         if modality.name in self.attachment_images:
             return False
+        elif modality.name not in self.registration_paths:
+            return False
         return True
 
     def preprocess(self, n_parallel: int = 1, overwrite: bool = False, quick: bool = False) -> None:

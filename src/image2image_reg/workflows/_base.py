@@ -462,6 +462,9 @@ class Workflow:
                 f" images."
             )
         path = Path(path)
+        if self.has_modality(path=path):
+            logger.warning(f"Attachment image '{name}' already exists. Overwriting.")
+            return
         if not path.exists():
             raise ValueError(f"Path '{path}' does not exist.")
         self.add_modality(
