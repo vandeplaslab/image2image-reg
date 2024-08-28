@@ -22,8 +22,7 @@ if ty.TYPE_CHECKING:
 
 logger = logger.bind(src="Valis")
 
-if not is_installed("valis") or not is_installed("pyvips"):
-    logger.warning("Valis or pyvips is not installed. Valis registration will not work.")
+HAS_VALIS = is_installed("valis") and is_installed("pyvips")
 
 
 class ValisReg(Workflow):
@@ -68,6 +67,8 @@ class ValisReg(Workflow):
         self.micro_registration_fraction: float = micro_registration_fraction
         self.feature_detector: str = feature_detector
         self.feature_matcher: str = feature_matcher
+        if not HAS_VALIS:
+            logger.warning("Valis is not installed. Please install it to use this functionality.")
 
     @property
     def is_registered(self) -> bool:
@@ -156,8 +157,12 @@ class ValisReg(Workflow):
     def load_from_i2valis(self, raise_on_error: bool = True) -> None:
         """Load data from image2image-reg project file."""
         config: ValisRegConfig = read_json_data(self.project_dir / self.CONFIG_NAME)
+        name = config.get("name")
+        if name != self.project_dir.stem:
+            name = self.project_dir.stem
+            logger.trace(f"Name in config does not match directory name. Using '{name}' instead.")
         # restore parameters
-        self.name = config["name"]
+        self.name = name
         self.cache_images = config["cache_images"]
         self.merge_images = config["merge"]
         self.check_for_reflections = config["check_for_reflections"]
