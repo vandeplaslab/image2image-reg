@@ -15,6 +15,7 @@ from natsort import natsorted
 from tqdm import tqdm
 
 from image2image_reg.enums import ValisCrop, ValisInterpolation
+from image2image_reg.utils.utilities import make_new_name
 
 if ty.TYPE_CHECKING:
     from valis.registration import Slide, Valis
@@ -217,10 +218,7 @@ def transform_registered_image(
         # <source_name>_to_<reference_name>.ome.tiff
         if rename and path_to_name_map:
             slide_name = path_to_name_map.get(Path(slide_obj.src_f), slide_obj.name)
-            if ref_name:
-                filename = f"{slide_name}_to_{ref_name}.ome.tiff"
-            else:
-                filename = f"{slide_name}.ome.tiff"
+            filename = make_new_name(slide_name, ref_name)
         else:
             filename = reader.name
         output_filename = output_dir / filename
@@ -302,10 +300,7 @@ def transform_attached_image(
         # <source_name>_to_<reference_name>.ome.tiff
         if rename and path_to_name_map:
             slide_name = path_to_name_map.get(reader.path, reader.name)
-            if ref_name:
-                filename = f"{slide_name}_to_{ref_name}.ome.tiff"
-            else:
-                filename = f"{slide_name}.ome.tiff"
+            filename = make_new_name(slide_name, ref_name)
         else:
             filename = reader.name
         output_filename = output_dir / filename

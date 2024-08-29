@@ -26,6 +26,7 @@ from image2image_reg._typing import (
 )
 from image2image_reg.enums import WriterMode
 from image2image_reg.models import Modality, Preprocessing, Registration, Transform, TransformSequence
+from image2image_reg.utils.utilities import make_new_name
 from image2image_reg.workflows._base import Workflow
 
 if ty.TYPE_CHECKING:
@@ -698,9 +699,9 @@ class IWsiReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -969,8 +970,8 @@ class IWsiReg(Workflow):
             )
 
         if write_attached:
-            self._export_attachment_shapes(n_parallel, overwrite)
-            self._export_attachment_points(n_parallel, overwrite)
+            self._export_attachment_shapes(n_parallel, rename, overwrite)
+            self._export_attachment_points(n_parallel, rename, overwrite)
             self._export_attachment_images(
                 merge_modalities, remove_merged, fmt, to_original_size, tile_size, as_uint8, rename, overwrite
             )
@@ -1069,7 +1070,9 @@ class IWsiReg(Workflow):
                     paths.append(path)
         return paths
 
-    def _export_attachment_shapes(self, n_parallel: int = 1, overwrite: bool = False) -> list[Path]:
+    def _export_attachment_shapes(
+        self, n_parallel: int = 1, rename: bool = True, overwrite: bool = False
+    ) -> list[Path]:
         from image2image_reg.elastix.utilities import transform_attached_shape
 
         # prepare attachment shapes
@@ -1097,7 +1100,11 @@ class IWsiReg(Workflow):
                     logger.trace(f"Exporting {file} to {attached_to} with {transform_sequence}...")
                     name = Path(file).stem
                     suffix = Path(file).suffix
-                    output_path = self.image_dir / f"{name}_to_{attached_to}_registered{suffix}"
+                    if rename:
+                        filename = make_new_name(name, attached_to, suffix=suffix)
+                    else:
+                        filename = f"{name}{suffix}"
+                    output_path = self.image_dir / filename
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
@@ -1108,7 +1115,9 @@ class IWsiReg(Workflow):
             logger.info(f"Exporting attachment shapes took {timer()}.")
         return paths
 
-    def _export_attachment_points(self, n_parallel: int = 1, overwrite: bool = False):
+    def _export_attachment_points(
+        self, n_parallel: int = 1, rename: bool = True, overwrite: bool = False
+    ) -> list[Path]:
         from image2image_reg.elastix.utilities import transform_attached_point
 
         paths = []
@@ -1133,7 +1142,11 @@ class IWsiReg(Workflow):
                     logger.trace(f"Exporting {file} to {attached_to}...")
                     name = Path(file).stem
                     suffix = Path(file).suffix
-                    output_path = self.image_dir / f"{name}_to_{attached_to}_registered{suffix}"
+                    if rename:
+                        filename = make_new_name(name, attached_to, suffix=suffix)
+                    else:
+                        filename = f"{name}{suffix}"
+                    output_path = self.image_dir / filename
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
@@ -1232,7 +1245,7 @@ class IWsiReg(Workflow):
 
         modality = self.modalities[edge_key]
         if rename:
-            filename = f"{edge_key}_to_{final_modality}_registered"
+            filename = make_new_name(edge_key, final_modality, suffix="")
         else:
             filename = Path(modality.path).name
         output_path = self.image_dir / filename
