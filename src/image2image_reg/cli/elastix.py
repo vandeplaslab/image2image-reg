@@ -45,6 +45,7 @@ from ._common import (
     project_path_multi_,
     project_path_single_,
     remove_merged_,
+    rename_,
     write_attached_,
     write_merged_,
     write_not_registered_,
@@ -599,6 +600,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
 @overwrite_
 @parallel_mode_
 @n_parallel_
+@rename_
 @as_uint8_
 @original_size_
 @remove_merged_
@@ -636,6 +638,7 @@ def register_cmd(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
+    rename: bool,
     n_parallel: int,
     parallel_mode: str,
     overwrite: bool,
@@ -653,6 +656,7 @@ def register_cmd(
         remove_merged=remove_merged,
         original_size=original_size,
         as_uint8=as_uint8,
+        rename=rename,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
         overwrite=overwrite,
@@ -671,6 +675,7 @@ def register_runner(
     remove_merged: bool = True,
     original_size: bool = False,
     as_uint8: bool | None = False,
+    rename: bool = True,
     n_parallel: int = 1,
     parallel_mode: str = "outer",
     overwrite: bool = False,
@@ -690,6 +695,7 @@ def register_runner(
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
+        Parameter("Rename", "-rename/--no_rename", rename),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
@@ -712,6 +718,7 @@ def register_runner(
                             remove_merged,
                             original_size,
                             as_uint8,
+                            rename,
                             overwrite,
                         )
                         for path in paths
@@ -733,7 +740,8 @@ def register_runner(
                         write_merged,
                         remove_merged,
                         original_size,
-                        as_uint8,
+                        as_uint8=as_uint8,
+                        rename=rename,
                         n_parallel=n_parallel,
                         overwrite=overwrite,
                     )
@@ -760,6 +768,7 @@ def _register(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
+    rename: bool = True,
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> PathLike:
@@ -780,6 +789,7 @@ def _register(
             as_uint8=as_uint8,
             n_parallel=n_parallel,
             overwrite=overwrite,
+            rename=rename,
         )
     return path
 
@@ -787,6 +797,7 @@ def _register(
 @overwrite_
 @parallel_mode_
 @n_parallel_
+@rename_
 @as_uint8_
 @original_size_
 @remove_merged_
@@ -796,7 +807,7 @@ def _register(
 @write_registered_
 @fmt_
 @project_path_multi_
-@elastix.command("export", help_group="Execute")
+@elastix.command("export", help_group="Execute", aliases=["write"])
 def export_cmd(
     project_dir: ty.Sequence[str],
     fmt: WriterMode,
@@ -807,6 +818,7 @@ def export_cmd(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
+    rename: bool,
     n_parallel: int,
     parallel_mode: str,
     overwrite: bool,
@@ -822,6 +834,7 @@ def export_cmd(
         remove_merged=remove_merged,
         original_size=original_size,
         as_uint8=as_uint8,
+        rename=rename,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
         overwrite=overwrite,
@@ -837,7 +850,8 @@ def export_runner(
     write_merged: bool = True,
     remove_merged: bool = True,
     original_size: bool = False,
-    as_uint8: bool | None = False,
+    as_uint8: bool | None = None,
+    rename: bool = True,
     n_parallel: int = 1,
     parallel_mode: str = "outer",
     overwrite: bool = False,
@@ -861,6 +875,7 @@ def export_runner(
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
+        Parameter("Rename", "-rename/--no_rename", rename),
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
 
@@ -880,6 +895,7 @@ def export_runner(
                             remove_merged,
                             original_size,
                             as_uint8,
+                            rename,
                             overwrite,
                         )
                         for path in paths
@@ -898,6 +914,7 @@ def export_runner(
                     remove_merged,
                     original_size,
                     as_uint8,
+                    rename=rename,
                     n_parallel=n_parallel,
                     overwrite=overwrite,
                 )
@@ -915,6 +932,7 @@ def _export(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
+    rename: bool = True,
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> PathLike:
@@ -934,6 +952,7 @@ def _export(
         remove_merged=remove_merged,
         to_original_size=original_size,
         as_uint8=as_uint8,
+        rename=rename,
         n_parallel=n_parallel,
         overwrite=overwrite,
     )

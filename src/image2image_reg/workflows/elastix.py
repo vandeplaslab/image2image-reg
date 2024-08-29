@@ -274,8 +274,12 @@ class IWsiReg(Workflow):
     def load_from_i2reg(self, raise_on_error: bool = True) -> None:
         """Load data from image2image-reg project file."""
         config: IWsiRegConfig = read_json_data(self.project_dir / self.CONFIG_NAME)
+        name = config.get("name")
+        if name != self.project_dir.stem:
+            name = self.project_dir.stem
+            logger.trace(f"Name in config does not match directory name. Using '{name}' instead.")
         # restore parameters
-        self.name = config["name"]
+        self.name = name
         self.cache_images = config["cache_images"]
         self.pairwise = config["pairwise"]
         self.merge_images = config["merge"]
@@ -335,10 +339,12 @@ class IWsiReg(Workflow):
             logger.warning("Could not find appropriate registration node.")
             return None
         source = edge["modalities"]["source"]
-        transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
+        transform_tag = f"{source}_to_{target}_transformations.json"
         if transform_tag and not (self.transformations_dir / transform_tag).exists():
-            logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
-            return None
+            transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
+            if transform_tag and not (self.transformations_dir / transform_tag).exists():
+                logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
+                return None
 
         target_modality = self.modalities[target]
         target_wrapper = ImageWrapper(
@@ -368,7 +374,7 @@ class IWsiReg(Workflow):
         # setup parameters
         edge_["transforms"] = {"registration": transforms_partial_seq, "initial": initial_transforms_seq}
         edge_["registered"] = True
-        edge_["transform_tag"] = f"{self.name}-{source}_to_{target}_transformations.json"
+        edge_["transform_tag"] = f"{source}_to_{target}_transformations.json"
         logger.trace(f"Restored previous transformation data for {source} - {target}")
         return {
             f"initial-{source}": initial_transforms_seq,
@@ -784,7 +790,7 @@ class IWsiReg(Workflow):
             )
             edge["transforms"] = {"registration": registration, "initial": initial}
             edge["registered"] = True
-            edge["transform_tag"] = f"{self.name}-{source}_to_{target}_transformations.json"
+            edge["transform_tag"] = f"{source}_to_{target}_transformations.json"
 
             # load plot data
             self._generate_figures(source, target, registration_dir)
@@ -858,10 +864,9 @@ class IWsiReg(Workflow):
     def _find_not_registered_modalities(self) -> list[str]:
         registered_modalities = [edge["modalities"]["source"] for edge in self.registration_nodes]
         non_reg_modalities = list(set(self.modalities.keys()).difference(registered_modalities))
-
-        # # remove attachment modalities
-        # for attachment_modality in self.attachment_images.keys():
-        #     non_reg_modalities.pop(non_reg_modalities.index(attachment_modality))
+        # remove attachment modalities
+        for attachment_modality in self.attachment_images.keys():
+            non_reg_modalities.pop(non_reg_modalities.index(attachment_modality))
         return non_reg_modalities
 
     def _check_if_all_registered(self) -> bool:
@@ -885,9 +890,7 @@ class IWsiReg(Workflow):
             logger.trace(f"Saving transformations for {source_modality}...")
             target_modalities = self.registration_paths[source_modality]
             target_modality = target_modalities[-1]
-            output_path = (
-                self.transformations_dir / f"{self.name}-{source_modality}_to_{target_modality}_transformations.json"
-            )
+            output_path = self.transformations_dir / f"{source_modality}_to_{target_modality}_transformations.json"
             tform_txt = self._transforms_to_txt(self.transformations[source_modality])
             write_json_data(output_path, tform_txt)
             out.append(output_path)
@@ -900,8 +903,7 @@ class IWsiReg(Workflow):
                 target_modalities = self.registration_paths[attached_to_modality]
                 target_modality = target_modalities[-1]
                 output_path = (
-                    self.transformations_dir
-                    / f"{self.name}-{attached_modality}_to_{target_modality}_transformations.json"
+                    self.transformations_dir / f"{attached_modality}_to_{target_modality}_transformations.json"
                 )
                 tform_txt = self._transforms_to_txt(self.transformations[attached_to_modality])
                 write_json_data(output_path, tform_txt)
@@ -958,13 +960,13 @@ class IWsiReg(Workflow):
                     logger.trace(f"Removed {merge_modality} from not registered modalities as it will be merged.")
 
         # export non-registered nodes
-        if write_not_registered:
+        if write_not_registered and not_reg_modality_list:
             self._export_not_registered_images(
                 not_reg_modality_list, fmt, to_original_size, tile_size, as_uint8, rename, n_parallel, overwrite
             )
 
         # export modalities
-        if write_registered:
+        if write_registered and reg_modality_list:
             self._export_registered_images(
                 reg_modality_list, fmt, to_original_size, tile_size, as_uint8, rename, n_parallel, overwrite
             )
@@ -1011,7 +1013,7 @@ class IWsiReg(Workflow):
                 logger.trace(f"Exporting {modality} to {output_path}... (registered)")
                 to_write.append((image_modality, transformations, output_path, fmt, tile_size, as_uint8))
             except KeyError:
-                logger.warning(f"Could not find transformation data for {modality}.")
+                logger.exception(f"Could not find transformation data for {modality}.")
         if to_write:
             if n_parallel > 1:
                 with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
@@ -1313,22 +1315,25 @@ class IWsiReg(Workflow):
                     transform_sequence_index=list(range(len(initial_transform))),
                 )
             if original_size_transform:
-                # TODO: this might be broken
-                transformations = TransformSequence(
-                    [Transform(t[0]) for t in original_size_transform],
+                original_size_transform_seq = TransformSequence(
+                    [Transform(t) for t in original_size_transform],
                     transform_sequence_index=list(range(len(original_size_transform))),
                 )
+                if transformations:
+                    transformations.append(original_size_transform_seq)
+                else:
+                    transformations = original_size_transform_seq
 
         if to_original_size and self.original_size_transforms[modality_key]:
             o_size_tform = self.original_size_transforms[modality_key]
             if isinstance(o_size_tform, list):
                 o_size_tform = o_size_tform[0]
 
-            orig_size_rt = TransformSequence(Transform(o_size_tform), transform_sequence_index=[0])
+            original_size_transform_seq = TransformSequence(Transform(o_size_tform), transform_sequence_index=[0])
             if transformations:
-                transformations.append(orig_size_rt)
+                transformations.append(original_size_transform_seq)
             else:
-                transformations = orig_size_rt
+                transformations = original_size_transform_seq
 
         if modality.preprocessing and modality.preprocessing.downsample > 1 and transformations:
             if not modality.output_pixel_size:
@@ -1336,7 +1341,6 @@ class IWsiReg(Workflow):
                 transformations.set_output_spacing((output_spacing_target, output_spacing_target))
             else:
                 transformations.set_output_spacing(modality.output_pixel_size)
-
         elif modality.preprocessing and modality.preprocessing.downsample > 1 and not transformations:
             transformations = TransformSequence(
                 [
@@ -1355,12 +1359,10 @@ class IWsiReg(Workflow):
                 transformations.set_output_spacing((output_spacing_target, output_spacing_target))
             else:
                 transformations.set_output_spacing(modality.output_pixel_size)
-
         # source_key = None
         # if attachment and attachment_modality:
         #     source_key = copy(modality_key)
         # modality_key = attachment_modality.name
-
         if attachment and attachment_modality:
             modality = attachment_modality
             if rename:

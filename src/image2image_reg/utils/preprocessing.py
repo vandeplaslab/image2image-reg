@@ -625,6 +625,7 @@ def preprocess_reg_image_spatial(
                 mask = transform_plane(mask, final_tform, composite_transform)
         elif preprocessing.crop_polygon:
             logger.trace(f"Cropping to mask - {preprocessing.crop_polygon}")
+            logger.warning("Polygon cropping not implemented yet")
     return image, mask, transforms, original_size_transform  # type: ignore[return-value]
 
 

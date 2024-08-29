@@ -173,9 +173,11 @@ class ImageWrapper:
     def load_initial_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:
         """Load original size transform metadata."""
         filename = cls.get_cache_path(modality, cache_dir)
+        output_filename = filename_with_suffix(filename, "initial", ".json")
         transforms = []
-        if filename_with_suffix(filename, "initial", ".json").exists():
-            data = read_json_data(filename_with_suffix(filename, "initial", ".json"))
+        if output_filename.exists():
+            data = read_json_data(output_filename)
+            data = [data] if isinstance(data, dict) else data
             if data:
                 transforms.extend(data)
         return transforms or None
@@ -184,9 +186,11 @@ class ImageWrapper:
     def load_original_size_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:
         """Load original size transform metadata."""
         filename = cls.get_cache_path(modality, cache_dir)
+        output_filename = filename_with_suffix(filename, "original_size_transform", ".json")
         transforms = []
-        if filename_with_suffix(filename, "original_size_transform", ".json").exists():
-            data = read_json_data(filename_with_suffix(filename, "original_size_transform", ".json"))
+        if output_filename.exists():
+            data = read_json_data(output_filename)
+            data = [data] if isinstance(data, dict) else data
             if data:
                 transforms.extend(data)
         return transforms or None
