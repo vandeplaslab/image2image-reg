@@ -169,7 +169,7 @@ if is_installed("valis"):
         about_runner(project_dir, valis=True)
 
     @project_path_multi_
-    @valis.command("validate", help_group="Project")
+    @valis.command("validate", help_group="Project", aliases=["check"])
     def validate_cmd(project_dir: ty.Sequence[str]) -> None:
         """Validate project configuration."""
         from image2image_reg.cli.elastix import validate_runner
@@ -218,7 +218,7 @@ if is_installed("valis"):
     )
     @modality_multi_
     @project_path_single_
-    @valis.command("add-image", help_group="Project")
+    @valis.command("add-image", help_group="Project", aliases=["ai"])
     def add_modality_cmd(
         project_dir: str,
         name: ty.Sequence[str],
@@ -246,7 +246,7 @@ if is_installed("valis"):
     @modality_multi_
     @attach_to_
     @project_path_single_
-    @valis.command("attach-image", help_group="Project")
+    @valis.command("attach-image", help_group="Project", aliases=["ati"])
     def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
         """Add attachment image to registered modality."""
         from image2image_reg.cli.elastix import add_attachment_runner
@@ -258,7 +258,7 @@ if is_installed("valis"):
     @modality_single_
     @attach_to_
     @project_path_single_
-    @valis.command("attach-points", help_group="Project")
+    @valis.command("attach-points", help_group="Project", aliases=["atp"])
     def add_points_cmd(
         project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
     ) -> None:
@@ -272,7 +272,7 @@ if is_installed("valis"):
     @modality_single_
     @attach_to_
     @project_path_single_
-    @valis.command("attach-shape", help_group="Project")
+    @valis.command("attach-shape", help_group="Project", aliases=["ats"])
     def add_shape_cmd(
         project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
     ) -> None:
@@ -300,7 +300,7 @@ if is_installed("valis"):
     )
     @modality_single_
     @project_path_multi_
-    @valis.command("add-merge", help_group="Project")
+    @valis.command("add-merge", help_group="Project", aliases=["am"])
     def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
         """Specify how (if) images should be merged."""
         from image2image_reg.cli.elastix import add_merge_runner
@@ -320,7 +320,7 @@ if is_installed("valis"):
     @fmt_
     @write_
     @project_path_multi_
-    @valis.command("register", help_group="Execute")
+    @valis.command("register", help_group="Execute", aliases=["run"])
     def register_cmd(
         project_dir: ty.Sequence[str],
         write: bool,
@@ -488,7 +488,7 @@ if is_installed("valis"):
     @write_registered_
     @fmt_
     @project_path_multi_
-    @valis.command("export", help_group="Execute")
+    @valis.command("export", help_group="Execute", aliases=["write"])
     def export_cmd(
         project_dir: ty.Sequence[str],
         fmt: WriterMode,

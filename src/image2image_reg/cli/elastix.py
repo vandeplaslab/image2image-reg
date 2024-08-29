@@ -147,7 +147,7 @@ def about_runner(project_dir: str, valis: bool = False) -> None:
 
 
 @project_path_multi_
-@elastix.command("validate", help_group="Project")
+@elastix.command("validate", help_group="Project", aliases=["check"])
 def validate_cmd(project_dir: ty.Sequence[str]) -> None:
     """Validate project configuration."""
     validate_runner(project_dir)
@@ -206,7 +206,7 @@ def validate_runner(paths: ty.Sequence[str], valis: bool = False) -> None:
 @image_
 @modality_multi_
 @project_path_single_
-@elastix.command("add-image", help_group="Project")
+@elastix.command("add-image", help_group="Project", aliases=["ai"])
 def add_modality_cmd(
     project_dir: str,
     name: ty.Sequence[str],
@@ -353,7 +353,7 @@ def add_modality_runner(
     required=True,
 )
 @project_path_single_
-@elastix.command("add-path", help_group="Project")
+@elastix.command("add-path", help_group="Project", aliases=["ap"])
 def add_path_cmd(
     project_dir: str,
     source: str,
@@ -403,7 +403,7 @@ def add_path_runner(
 @modality_multi_
 @attach_to_
 @project_path_single_
-@elastix.command("attach-image", help_group="Project")
+@elastix.command("attach-image", help_group="Project", aliases=["ati"])
 def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
     """Add attachment image to registered modality."""
     add_attachment_runner(project_dir, attach_to, name, image)
@@ -443,7 +443,7 @@ def add_attachment_runner(
 @modality_single_
 @attach_to_
 @project_path_single_
-@elastix.command("attach-points", help_group="Project")
+@elastix.command("attach-points", help_group="Project", aliases=["atp"])
 def add_points_cmd(
     project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
 ) -> None:
@@ -477,7 +477,7 @@ def add_points_runner(
 @modality_single_
 @attach_to_
 @project_path_single_
-@elastix.command("attach-shape", help_group="Project")
+@elastix.command("attach-shape", help_group="Project", aliases=["ats"])
 def add_shape_cmd(
     project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
 ) -> None:
@@ -525,7 +525,7 @@ def add_shape_runner(
 )
 @modality_single_
 @project_path_multi_
-@elastix.command("add-merge", help_group="Project")
+@elastix.command("add-merge", help_group="Project", aliases=["am"])
 def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
     """Specify how (if) images should be merged."""
     add_merge_runner(project_dir, name, modality, auto)
@@ -555,7 +555,7 @@ def add_merge_runner(
 @parallel_mode_
 @n_parallel_
 @project_path_multi_
-@elastix.command("preprocess", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+@elastix.command("preprocess", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS, aliases=["pre"])
 def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str, overwrite: bool) -> None:
     """Preprocess images."""
     preprocess_runner(project_dir, n_parallel, parallel_mode, overwrite)
@@ -625,7 +625,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
     show_default=True,
 )
 @project_path_multi_
-@elastix.command("register", help_group="Execute")
+@elastix.command("register", help_group="Execute", aliases=["run"])
 def register_cmd(
     project_dir: ty.Sequence[str],
     histogram_match: bool,
@@ -957,41 +957,6 @@ def _export(
         overwrite=overwrite,
     )
     return path
-
-
-@overwrite_
-@as_uint8_
-@original_size_
-@fmt_
-@files_
-@modality_single_
-@project_path_single_
-@elastix.command("transform", help_group="Execute")
-def transform_cmd(
-    project_dir: str,
-    name: list[str],
-    files: list[str],
-    fmt: WriterMode,
-    original_size: bool,
-    as_uint8: bool | None,
-    overwrite: bool,
-) -> None:
-    """Transform images."""
-    transform_runner(
-        project_dir,
-        name=name,
-        files=files,
-        fmt=fmt,
-        original_size=original_size,
-        as_uint8=as_uint8,
-        overwrite=overwrite,
-    )
-
-
-def transform_runner(
-    path: PathLike, name: str, files: list[PathLike], fmt: str, original_size: bool, as_uint8: bool, overwrite: bool
-) -> None:
-    """Transform."""
 
 
 @click.option(
