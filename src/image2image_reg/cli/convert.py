@@ -28,7 +28,7 @@ from koyo.click import cli_parse_paths_sort
     "--tile_size",
     help="Tile size.",
     type=click.Choice(["256", "512", "1024", "2048"], case_sensitive=False),
-    default="1024",
+    default="512",
     show_default=True,
     required=False,
 )
