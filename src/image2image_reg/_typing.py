@@ -71,7 +71,7 @@ class AttachedShapeOrPointDict(ty.TypedDict):
     attach_to: str
 
 
-class IWsiRegConfig(ty.TypedDict):
+class ElastixRegConfig(ty.TypedDict):
     """Configuration."""
 
     schema_version: str

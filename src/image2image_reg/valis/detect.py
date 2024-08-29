@@ -248,7 +248,7 @@ class VggFD(FeatureDetectorBase):
 
 
 class SensitiveVggFD(FeatureDetectorBase):
-    """Uses BRISK for feature detection and VGG for feature description"""
+    """Uses BRISK for feature detection and VGG for feature description."""
 
     def __init__(
         self,
@@ -259,7 +259,7 @@ class SensitiveVggFD(FeatureDetectorBase):
 
 
 class VerySensitiveVggFD(FeatureDetectorBase):
-    """Uses BRISK for feature detection and VGG for feature description"""
+    """Uses BRISK for feature detection and VGG for feature description."""
 
     def __init__(
         self,

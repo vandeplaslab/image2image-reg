@@ -18,7 +18,7 @@ from image2image_reg.enums import WriterMode
 from image2image_reg.workflows._base import Workflow
 
 if ty.TYPE_CHECKING:
-    from image2image_reg.workflows.elastix import IWsiReg
+    from image2image_reg.workflows.elastix import ElastixReg
 
 logger = logger.bind(src="Valis")
 
@@ -102,16 +102,16 @@ class ValisReg(Workflow):
         logger.trace(f"Restored from config in {timer()}")
         return obj
 
-    def to_i2reg(self, output_dir: PathLike) -> IWsiReg:
-        """Export to IWsiReg object."""
-        from image2image_reg.workflows import IWsiReg
+    def to_i2reg(self, output_dir: PathLike) -> ElastixReg:
+        """Export to ElastixReg object."""
+        from image2image_reg.workflows import ElastixReg
 
-        return IWsiReg.from_valis(self, output_dir)
+        return ElastixReg.from_valis(self, output_dir)
 
     @classmethod
     def from_wsireg(
         cls,
-        obj: IWsiReg,
+        obj: ElastixReg,
         output_dir: PathLike,
         check_for_reflections: bool = False,
         non_rigid_registration: bool = False,
@@ -120,7 +120,7 @@ class ValisReg(Workflow):
         feature_detector: str = "sensitive_vgg",
         feature_matcher: str = "RANSAC",
     ) -> ValisReg:
-        """Create Valis configuration from IWsiReg object."""
+        """Create Valis configuration from ElastixReg object."""
         valis = cls(
             obj.name,
             output_dir=output_dir,
@@ -139,7 +139,7 @@ class ValisReg(Workflow):
 
         # try to get reference
         references = []
-        for source, targets in obj.registration_paths.items():
+        for _source, targets in obj.registration_paths.items():
             references.append(targets[-1])  # last node is the final target
         references = list(set(references))
         if references and len(references) == 1:
@@ -547,7 +547,7 @@ class ValisReg(Workflow):
         paths = []
         # export attachment modalities
         with MeasureTimer() as timer:
-            for name, attached_dict in tqdm(self.attachment_shapes.items(), desc="Exporting attachment shapes..."):
+            for _name, attached_dict in tqdm(self.attachment_shapes.items(), desc="Exporting attachment shapes..."):
                 attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
                 source_pixel_size = attached_dict["pixel_size"]  # source pixel size
@@ -572,7 +572,7 @@ class ValisReg(Workflow):
         paths = []
         # export attachment modalities
         with MeasureTimer() as timer:
-            for name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment shapes..."):
+            for _name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment shapes..."):
                 attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
                 source_pixel_size = attached_dict["pixel_size"]

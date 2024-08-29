@@ -6,7 +6,7 @@ import numpy as np
 
 from image2image_reg.models import Preprocessing
 from image2image_reg.utils._test import get_test_file
-from image2image_reg.workflows import IWsiReg
+from image2image_reg.workflows import ElastixReg
 
 
 def _make_ellipse_project(
@@ -15,12 +15,12 @@ def _make_ellipse_project(
     with_initial: bool = False,
     with_bbox: bool = False,
     with_through: bool = False,
-) -> IWsiReg:
+) -> ElastixReg:
     source = get_test_file("ellipse_moving.tiff")
     target = get_test_file("ellipse_target.tiff")
     mask = get_test_file("ellipse_mask.tiff") if with_mask else None
 
-    obj = IWsiReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+    obj = ElastixReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
     obj.set_logger()
     pre = Preprocessing.basic()
     if with_initial:

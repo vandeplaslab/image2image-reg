@@ -696,7 +696,7 @@ class Workflow:
             for name, modality in config["modalities"].items():
                 if not Path(modality["path"]).exists() and raise_on_error:
                     raise ValueError(f"Modality path '{modality['path']}' does not exist.")
-                preprocessing = modality.get("preprocessing", dict())
+                preprocessing = modality.get("preprocessing", {})
                 self.add_modality(
                     name=name,
                     path=modality["path"],
@@ -757,7 +757,7 @@ class Workflow:
 
     @classmethod
     def read_config(cls, path: PathLike) -> dict:
-        """Read config without instantiating class"""
+        """Read config without instantiating class."""
         from koyo.json import read_json_data
 
         path = Path(path)
@@ -771,7 +771,7 @@ class Workflow:
 
     @classmethod
     def write_config(cls, path: PathLike, config: dict) -> None:
-        """Write config without instantiating class"""
+        """Write config without instantiating class."""
         from koyo.json import write_json_data
 
         path = Path(path)

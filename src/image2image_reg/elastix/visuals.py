@@ -11,7 +11,7 @@ from matplotlib.patches import ArrowStyle
 from image2image_reg.enums import NetworkTypes
 
 if ty.TYPE_CHECKING:
-    from image2image_reg.workflows import IWsiReg
+    from image2image_reg.workflows import ElastixReg
 
 COLOR_MAP = [
     "#a6cee3",
@@ -30,7 +30,7 @@ COLOR_MAP = [
 
 
 def draw_registration_nodes(
-    workflow: IWsiReg,
+    workflow: ElastixReg,
     ax: plt.Axes | None,
     node_size: float = 100,
     node_alpha: float = 0.75,
@@ -78,17 +78,17 @@ def draw_registration_nodes(
             xycoords="data",
             xytext=pos[tgts[0]],
             textcoords="data",
-            arrowprops=dict(
-                arrowstyle="<-",
-                color=src_color,
-                shrinkA=5,
-                shrinkB=5,
-                patchA=None,
-                patchB=None,
-                mutation_scale=10,
-                connectionstyle=cstyle,
-                linewidth=1.5,
-            ),
+            arrowprops={
+                "arrowstyle": "<-",
+                "color": src_color,
+                "shrinkA": 5,
+                "shrinkB": 5,
+                "patchA": None,
+                "patchB": None,
+                "mutation_scale": 10,
+                "connectionstyle": cstyle,
+                "linewidth": 1.5,
+            },
         )
         path_targets = nx.algorithms.shortest_path(g, src, tgts[-1])[1:]
 
@@ -101,24 +101,24 @@ def draw_registration_nodes(
                     xycoords="data",
                     xytext=pos[target],
                     textcoords="data",
-                    arrowprops=dict(
-                        arrowstyle="<-",
-                        color=src_color,
-                        shrinkA=5,
-                        shrinkB=5,
-                        patchA=None,
-                        patchB=None,
-                        mutation_aspect=2,
-                        connectionstyle=cstyle,
-                        linewidth=1,
-                    ),
+                    arrowprops={
+                        "arrowstyle": "<-",
+                        "color": src_color,
+                        "shrinkA": 5,
+                        "shrinkB": 5,
+                        "patchA": None,
+                        "patchB": None,
+                        "mutation_aspect": 2,
+                        "connectionstyle": cstyle,
+                        "linewidth": 1,
+                    },
                 )
     nx.draw_networkx_labels(g, pos)
     return fig, ax
 
 
 def draw_workflow(
-    workflow: IWsiReg,
+    workflow: ElastixReg,
     ax: plt.Axes | None = None,
     layout: str | NetworkTypes = "kk",
     node_size: float = 100,
@@ -132,7 +132,7 @@ def draw_workflow(
     if ax is None:
         fig, ax = plt.subplots()
     else:
-        fig = None
+        pass
 
     ax.clear()
     ax.axis("off")
@@ -209,16 +209,16 @@ def draw_workflow(
             xycoords="data",
             xytext=pos[attachment_mod],
             textcoords="data",
-            arrowprops=dict(
-                arrowstyle=ArrowStyle.BracketA(widthA=0.5),
-                color="white",
-                shrinkA=5,
-                shrinkB=5,
-                patchA=None,
-                patchB=None,
-                mutation_scale=10,
-                linewidth=1.5,
-            ),
+            arrowprops={
+                "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
+                "color": "white",
+                "shrinkA": 5,
+                "shrinkB": 5,
+                "patchA": None,
+                "patchB": None,
+                "mutation_scale": 10,
+                "linewidth": 1.5,
+            },
         )
 
     for shape_set_name, shape_info in workflow.attachment_shapes.items():
@@ -228,16 +228,16 @@ def draw_workflow(
             xycoords="data",
             xytext=pos[shape_info["attach_to"]],
             textcoords="data",
-            arrowprops=dict(
-                arrowstyle=ArrowStyle.BracketA(widthA=0.5),
-                color="white",
-                shrinkA=5,
-                shrinkB=5,
-                patchA=None,
-                patchB=None,
-                mutation_scale=10,
-                linewidth=1.5,
-            ),
+            arrowprops={
+                "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
+                "color": "white",
+                "shrinkA": 5,
+                "shrinkB": 5,
+                "patchA": None,
+                "patchB": None,
+                "mutation_scale": 10,
+                "linewidth": 1.5,
+            },
         )
 
     for shape_set_name, shape_info in workflow.attachment_points.items():
@@ -247,16 +247,16 @@ def draw_workflow(
             xycoords="data",
             xytext=pos[shape_info["attach_to"]],
             textcoords="data",
-            arrowprops=dict(
-                arrowstyle=ArrowStyle.BracketA(widthA=0.5),
-                color="white",
-                shrinkA=5,
-                shrinkB=5,
-                patchA=None,
-                patchB=None,
-                mutation_scale=10,
-                linewidth=1.5,
-            ),
+            arrowprops={
+                "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
+                "color": "white",
+                "shrinkA": 5,
+                "shrinkB": 5,
+                "patchA": None,
+                "patchB": None,
+                "mutation_scale": 10,
+                "linewidth": 1.5,
+            },
         )
 
     for source, targets in workflow.registration_paths.items():
@@ -269,17 +269,17 @@ def draw_workflow(
             xycoords="data",
             xytext=pos[targets[0]],
             textcoords="data",
-            arrowprops=dict(
-                arrowstyle="<-",
-                color=src_color,
-                shrinkA=5,
-                shrinkB=5,
-                patchA=None,
-                patchB=None,
-                mutation_scale=10,
-                connectionstyle=cstyle,
-                linewidth=1.5,
-            ),
+            arrowprops={
+                "arrowstyle": "<-",
+                "color": src_color,
+                "shrinkA": 5,
+                "shrinkB": 5,
+                "patchA": None,
+                "patchB": None,
+                "mutation_scale": 10,
+                "connectionstyle": cstyle,
+                "linewidth": 1.5,
+            },
         )
         path_targets = nx.algorithms.shortest_path(g, source, targets[-1])[1:]
 
@@ -292,18 +292,18 @@ def draw_workflow(
                     xycoords="data",
                     xytext=pos[target],
                     textcoords="data",
-                    arrowprops=dict(
-                        arrowstyle="<-",
-                        color=src_color,
-                        shrinkA=5,
-                        shrinkB=5,
-                        patchA=None,
-                        patchB=None,
-                        mutation_aspect=2,
-                        connectionstyle=cstyle,
-                        linewidth=1,
-                        linestyle="dotted",
-                    ),
+                    arrowprops={
+                        "arrowstyle": "<-",
+                        "color": src_color,
+                        "shrinkA": 5,
+                        "shrinkB": 5,
+                        "patchA": None,
+                        "patchB": None,
+                        "mutation_aspect": 2,
+                        "connectionstyle": cstyle,
+                        "linewidth": 1,
+                        "linestyle": "dotted",
+                    },
                 )
 
     if len(pos.keys()) > 2:

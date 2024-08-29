@@ -169,7 +169,7 @@ class TransformSequence(TransformMixin):
         first : bool, optional
             Load only the first transform from the file. This is necessary when e.g. reloading transform data from disk
             after a registration has been performed but the transform sequence will be altered before being applied.
-            This is ESSENTIAL when doing anything within the IWsiReg object as it will apply other transforms to the
+            This is ESSENTIAL when doing anything within the ElastixReg object as it will apply other transforms to the
             image. The transformation json file usually stores ALL necessary transformations.
         skip_initial: bool, optional
             Skip the initial transform. This is necessary when e.g. reloading transform data from disk

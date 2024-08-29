@@ -12,7 +12,6 @@ import cv2
 import numpy as np
 import shapely
 import weightedstats
-from image2image_reg.valis.utilities import get_image_name
 from koyo.typing import PathLike
 from loguru import logger
 from PIL import Image
@@ -23,6 +22,8 @@ from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 from skimage import filters, morphology, transform
+
+from image2image_reg.valis.utilities import get_image_name
 
 logger = logger.bind(src="Utilities")
 

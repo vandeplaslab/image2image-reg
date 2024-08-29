@@ -1,4 +1,4 @@
-"""Valis registration"""
+"""Valis registration."""
 
 from __future__ import annotations
 

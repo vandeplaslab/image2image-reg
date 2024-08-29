@@ -22,9 +22,7 @@ from image2image_reg.enums import ImageType
 
 
 def clean_mask(mask, img, rel_min_size=0.001):
-    """
-    Remove small objects, regions that are not very colorful (relativey), and retangularly shaped objects
-    """
+    """Remove small objects, regions that are not very colorful (relativey), and retangularly shaped objects."""
     fg_labeled = measure.label(mask)
     fg_regions = measure.regionprops(fg_labeled)
 
@@ -35,7 +33,7 @@ def clean_mask(mask, img, rel_min_size=0.001):
     c = exposure.rescale_intensity(jch[..., 1], out_range=(0, 1))
     colorfulness_img = np.zeros(mask.shape)
 
-    for i, r in enumerate(fg_regions):
+    for _i, r in enumerate(fg_regions):
         # Fill in contours that are touching border
         r0, c0, r1, c1 = r.bbox
         r_filled_img = r.image_filled.copy()
@@ -88,7 +86,7 @@ def clean_mask(mask, img, rel_min_size=0.001):
 
     # Get final regions
     fg_mask = np.zeros(mask.shape[0:2], np.uint8)
-    for i, rid in enumerate(keep_region_idx):
+    for _i, rid in enumerate(keep_region_idx):
         r = feature_regions[rid]
         fg_mask[r.slice][r.image_filled] = 255
 
@@ -98,7 +96,7 @@ def clean_mask(mask, img, rel_min_size=0.001):
 def jc_dist(img, cspace="IHLS", p=99, metric="euclidean"):
     """
     Cacluate distance between backround and each pixel
-    using a luminosity and colofulness/saturation in a polar colorspace
+    using a luminosity and colofulness/saturation in a polar colorspace.
 
     Parameters
     ----------
@@ -146,7 +144,7 @@ def jc_dist(img, cspace="IHLS", p=99, metric="euclidean"):
 
 def create_tissue_mask_with_jc_dist(img):
     """
-    Create tissue mask using JC distance from background
+    Create tissue mask using JC distance from background.
 
     Parameters
     ----------
@@ -186,7 +184,7 @@ def create_tissue_mask_with_jc_dist(img):
 
 
 class NoProcessing(ImageProcesser):
-    """No processing"""
+    """No processing."""
 
     def __init__(self, image, src_f, level, series, *args, **kwargs):
         super().__init__(image=image, src_f=src_f, level=level, series=series, *args, **kwargs)
@@ -200,7 +198,7 @@ class NoProcessing(ImageProcesser):
 
 
 class HEPreprocessing(ImageProcesser):
-    """HE Pre-processing"""
+    """HE Pre-processing."""
 
     def __init__(self, image, src_f, level, series, *args, **kwargs):
         super().__init__(image=image, src_f=src_f, level=level, series=series, *args, **kwargs)
@@ -222,7 +220,7 @@ class HEPreprocessing(ImageProcesser):
 
 
 class MaxIntensityProjection(ImageProcesser):
-    """Select channel from image"""
+    """Select channel from image."""
 
     def __init__(self, image, src_f, level, series, *args, **kwargs):
         super().__init__(image=image, src_f=src_f, level=level, series=series, *args, **kwargs)
@@ -274,7 +272,7 @@ class MaxIntensityProjection(ImageProcesser):
 
 
 class I2RegPreprocessor(ImageProcesser):
-    """Select channel from image"""
+    """Select channel from image."""
 
     def create_mask(self) -> np.ndarray:
         """Create tissue mask."""
@@ -325,9 +323,7 @@ class OD(ImageProcesser):
         return mask
 
     def process_image(self, adaptive_eq=False, p=95, *args, **kwargs):
-        """
-        Calculate norm of the OD image
-        """
+        """Calculate norm of the OD image."""
         eps = np.finfo("float").eps
         img01 = self.image / 255
         od = -np.log10(img01 + eps)

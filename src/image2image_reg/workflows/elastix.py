@@ -18,7 +18,7 @@ from mpire import WorkerPool
 from tqdm import tqdm
 
 from image2image_reg._typing import (
-    IWsiRegConfig,
+    ElastixRegConfig,
     RegistrationNode,
     SerializedRegisteredRegistrationNode,
     SourceTargetPair,
@@ -38,7 +38,7 @@ CONFIG.init_pyramid = False
 CONFIG.only_last_pyramid = False
 
 
-class IWsiReg(Workflow):
+class ElastixReg(Workflow):
     """Whole slide registration utilizing WsiReg approach of graph based registration."""
 
     CONFIG_NAME = "project.config.json"
@@ -101,7 +101,7 @@ class IWsiReg(Workflow):
         return all(reg_edge["registered"] for reg_edge in self.registration_nodes)
 
     @classmethod
-    def from_path(cls, path: PathLike, raise_on_error: bool = True) -> IWsiReg:
+    def from_path(cls, path: PathLike, raise_on_error: bool = True) -> ElastixReg:
         """Initialize based on the project path."""
         path = Path(path)
         if not path.exists():
@@ -115,7 +115,7 @@ class IWsiReg(Workflow):
 
         with MeasureTimer() as timer:
             config_path = path / cls.CONFIG_NAME
-            config: dict | IWsiRegConfig | None = None
+            config: dict | ElastixRegConfig | None = None
             if config_path.exists():
                 config = read_json_data(path / cls.CONFIG_NAME)
             if config and "name" not in config:
@@ -273,7 +273,7 @@ class IWsiReg(Workflow):
 
     def load_from_i2reg(self, raise_on_error: bool = True) -> None:
         """Load data from image2image-reg project file."""
-        config: IWsiRegConfig = read_json_data(self.project_dir / self.CONFIG_NAME)
+        config: ElastixRegConfig = read_json_data(self.project_dir / self.CONFIG_NAME)
         name = config.get("name")
         if name != self.project_dir.stem:
             name = self.project_dir.stem
@@ -308,7 +308,7 @@ class IWsiReg(Workflow):
 
             # check whether the registered version of the config exists
             if (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
-                registered_config: IWsiRegConfig = read_json_data(self.project_dir / self.REGISTERED_CONFIG_NAME)
+                registered_config: ElastixRegConfig = read_json_data(self.project_dir / self.REGISTERED_CONFIG_NAME)
                 # load transformation data from file
                 transformations = {}
                 for registered_edge in registered_config["registration_graph_edges"]:
@@ -1571,7 +1571,7 @@ class IWsiReg(Workflow):
             modalities_out[modality.name] = modality.to_dict()
 
         # write config
-        config: IWsiRegConfig = {
+        config: ElastixRegConfig = {
             "schema_version": "1.1",
             "name": self.name,
             # "output_dir": str(self.project_dir),
@@ -1658,14 +1658,14 @@ class IWsiReg(Workflow):
         return filename
 
     def to_valis(self, output_dir: PathLike) -> ValisReg:
-        """Convert the configuration to ValisReg"""
+        """Convert the configuration to ValisReg."""
         from image2image_reg.workflows import ValisReg
 
         return ValisReg.from_wsireg(self, output_dir)
 
     @classmethod
-    def from_valis(cls, obj: ValisReg, outout_dir: PathLike) -> IWsiReg:
-        """Create IWsiReg from ValisReg"""
+    def from_valis(cls, obj: ValisReg, outout_dir: PathLike) -> ElastixReg:
+        """Create ElastixReg from ValisReg."""
         iwsreg = cls(obj.name, output_dir=outout_dir, cache=obj.cache_images, merge=obj.merge_images)
 
         # add modalities

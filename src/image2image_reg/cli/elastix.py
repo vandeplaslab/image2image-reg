@@ -105,7 +105,7 @@ def new_runner(
     feature_matcher: str = "RANSAC",
 ) -> None:
     """Create a new project."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
     print_parameters(
         Parameter("Output directory", "-o/--output_dir", output_dir),
@@ -114,7 +114,7 @@ def new_runner(
         Parameter("Merge", "--merge/--no_merge", merge),
     )
     if not valis:
-        obj = IWsiReg(name=name, output_dir=output_dir, cache=cache, merge=merge)
+        obj = ElastixReg(name=name, output_dir=output_dir, cache=cache, merge=merge)
     else:
         obj = ValisReg(
             name=name,
@@ -140,9 +140,9 @@ def about_cmd(project_dir: ty.Sequence[str]) -> None:
 
 def about_runner(project_dir: str, valis: bool = False) -> None:
     """Add images to the project."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
-    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.print_summary()
 
 
@@ -155,10 +155,10 @@ def validate_cmd(project_dir: ty.Sequence[str]) -> None:
 
 def validate_runner(paths: ty.Sequence[str], valis: bool = False) -> None:
     """Add images to the project."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
     for project_dir in paths:
-        obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+        obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
         obj.validate()
 
 
@@ -235,7 +235,7 @@ def add_modality_runner(
     reference: bool = False,
 ) -> None:
     """Add images to the project."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
     if not isinstance(names, (list, tuple)):
         names = [names]  # type: ignore[list-item]
@@ -279,7 +279,7 @@ def add_modality_runner(
         Parameter("Affine", "-A/--affine", affines),
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
-    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     for name, path, mask, preprocessing, affine, method in zip(names, paths, masks, preprocessings, affines, methods):
         obj.auto_add_modality(
             name,
@@ -377,7 +377,7 @@ def add_path_runner(
     target_preprocessing: str | None = None,
 ) -> None:
     """Add images to the project."""
-    from image2image_reg.workflows.elastix import IWsiReg
+    from image2image_reg.workflows.elastix import ElastixReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", project_dir),
@@ -388,7 +388,7 @@ def add_path_runner(
         Parameter("Source pre-processing", "-P/--source_preprocessing", source_preprocessing),
         Parameter("Target pre-processing", "-S/--target_preprocessing", target_preprocessing),
     )
-    obj = IWsiReg.from_path(project_dir)
+    obj = ElastixReg.from_path(project_dir)
     obj.add_registration_path(
         source,
         target,
@@ -413,7 +413,7 @@ def add_attachment_runner(
     project_dir: str, attach_to: str, names: list[str], paths: list[str], valis: bool = False
 ) -> None:
     """Add attachment modality."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
     if not isinstance(paths, (list, tuple)):
         names = [names]
@@ -432,7 +432,7 @@ def add_attachment_runner(
         Parameter("Name", "-n/--name", names),
         Parameter("Image", "-i/--image", paths),
     )
-    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     for name, path in zip(names, paths):
         obj.auto_add_attachment_images(attach_to, name, path)
     obj.save()
@@ -455,7 +455,7 @@ def add_points_runner(
     project_dir: str, attach_to: str, name: str, paths: list[str | Path], pixel_size: float | None, valis: bool = False
 ) -> None:
     """Add attachment modality."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
@@ -467,7 +467,7 @@ def add_points_runner(
         Parameter("Point Files", "-f/--file", paths),
         Parameter("Pixel size", "-s/--pixel_size", pixel_size),
     )
-    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.add_attachment_points(attach_to, name, paths, pixel_size)
     obj.save()
 
@@ -489,7 +489,7 @@ def add_shape_runner(
     project_dir: str, attach_to: str, name: str, paths: list[str | Path], pixel_size: float | None, valis: bool = False
 ) -> None:
     """Add attachment modality."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
     if not isinstance(paths, (list, tuple)):
         paths = [paths]
@@ -501,7 +501,7 @@ def add_shape_runner(
         Parameter("Shape files", "-f/--file", paths),
         Parameter("Pixel size", "-s/--pixel_size", pixel_size),
     )
-    obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.add_attachment_geojson(attach_to, name, paths)
     obj.save()
 
@@ -535,7 +535,7 @@ def add_merge_runner(
     paths: ty.Sequence[str], name: str, modalities: ty.Iterable[str] | None, auto: bool = False, valis: bool = False
 ) -> None:
     """Add attachment modality."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
@@ -543,7 +543,7 @@ def add_merge_runner(
         Parameter("Modalities", "-m/--modality", modalities),
     )
     for project_dir in paths:
-        obj = IWsiReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+        obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
         if auto:
             obj.auto_add_merge_modalities(name)
         else:
@@ -589,9 +589,9 @@ def preprocess_runner(
 
 
 def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> PathLike:
-    from image2image_reg.workflows.elastix import IWsiReg
+    from image2image_reg.workflows.elastix import ElastixReg
 
-    obj = IWsiReg.from_path(path)
+    obj = ElastixReg.from_path(path)
     obj.set_logger()
     obj.preprocess(n_parallel, overwrite=overwrite, quick=True)
     return path
@@ -772,9 +772,9 @@ def _register(
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> PathLike:
-    from image2image_reg.workflows.elastix import IWsiReg
+    from image2image_reg.workflows.elastix import ElastixReg
 
-    obj = IWsiReg.from_path(path)
+    obj = ElastixReg.from_path(path)
     obj.set_logger()
     obj.register(histogram_match=histogram_match)
     if write_images:
@@ -936,9 +936,9 @@ def _export(
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> PathLike:
-    from image2image_reg.workflows.elastix import IWsiReg
+    from image2image_reg.workflows.elastix import ElastixReg
 
-    obj = IWsiReg.from_path(path)
+    obj = ElastixReg.from_path(path)
     obj.set_logger()
     if not obj.is_registered:
         warning_msg(f"Project {obj.name} is not registered.")
@@ -1038,7 +1038,7 @@ def clear_runner(
     all_: bool = False,
 ) -> None:
     """Register images."""
-    from image2image_reg.workflows import IWsiReg
+    from image2image_reg.workflows import ElastixReg
 
     if all_:
         cache = image = transformations = progress = True
@@ -1053,7 +1053,7 @@ def clear_runner(
 
     with MeasureTimer() as timer:
         for path in paths:
-            pro = IWsiReg.from_path(path)
+            pro = ElastixReg.from_path(path)
             pro.clear(cache=cache, image=image, transformations=transformations, progress=progress)
             logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
     logger.info(f"Finished clearing all projects in {timer()}.")
@@ -1077,11 +1077,11 @@ def update_cmd(project_dir: str, source_dir: list[str]) -> None:
 
 def update_runner(path: PathLike, source_dirs: list[PathLike], valis: bool = False) -> None:
     """Register images."""
-    from image2image_reg.workflows import IWsiReg, ValisReg
+    from image2image_reg.workflows import ElastixReg, ValisReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", path),
         Parameter("Source directories", "--source_dirs", source_dirs),
     )
 
-    IWsiReg.update_paths(path, source_dirs) if not valis else ValisReg.update_paths(path, source_dirs)
+    ElastixReg.update_paths(path, source_dirs) if not valis else ValisReg.update_paths(path, source_dirs)
