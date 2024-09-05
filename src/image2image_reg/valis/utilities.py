@@ -21,12 +21,25 @@ if ty.TYPE_CHECKING:
     from valis.registration import Slide, Valis
 
 
+def _transform_points(
+    slide_src: Slide,
+    x: np.ndarray,
+    y: np.ndarray,
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
+    silent: bool = False,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Transform points."""
+    xy_transformed = slide_src.warp_xy(np.c_[x, y], crop=crop, non_rigid=non_rigid)
+    return xy_transformed[:, 0], xy_transformed[:, 1]
+
+
 def transform_points(
     registrar: Valis,
     source_path: PathLike,
     x: np.ndarray,
     y: np.ndarray,
-    crop: str = "reference",
+    crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
     silent: bool = False,
 ):
@@ -40,24 +53,12 @@ def transform_points(
     return _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid, silent=silent)
 
 
-def _transform_points(
-    slide_src: Slide,
-    x: np.ndarray,
-    y: np.ndarray,
-    crop: str = "reference",
-    non_rigid: bool = True,
-    silent: bool = False,
-):
-    """Transform points."""
-    xy_transformed = slide_src.warp_xy(np.c_[x, y], crop=crop, non_rigid=non_rigid)
-    return xy_transformed[:, 0], xy_transformed[:, 1]
-
-
 def transform_points_df(
     registrar: Valis,
     source_path: PathLike,
     df: pd.DataFrame,
-    crop: str = "reference",
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
     x_key: str = "x",
     y_key: str = "y",
     suffix: str = "_transformed",
@@ -76,6 +77,8 @@ def transform_points_df(
         Dataframe with x and y columns
     crop : str, optional
         Crop method, by default "reference"
+    non_rigid : bool, optional
+        Whether to use non-rigid registration, by default True
     x_key : str, optional
         X column key, by default "x"
     y_key : str, optional
@@ -88,15 +91,60 @@ def transform_points_df(
         Whether to show progress bar, by default False
     """
     return _transform_points_df(
-        registrar, source_path, df, x_key, y_key, crop=crop, suffix=suffix, replace=replace, silent=silent
+        registrar,
+        source_path,
+        df,
+        x_key,
+        y_key,
+        crop=crop,
+        non_rigid=non_rigid,
+        suffix=suffix,
+        replace=replace,
+        silent=silent,
     )
+
+
+def _transform_points_df(
+    registrar: Valis,
+    source_path: PathLike,
+    df: pd.DataFrame,
+    x_key: str = "x",
+    y_key: str = "y",
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
+    suffix: str = "_transformed",
+    replace: bool = False,
+    silent: bool = False,
+) -> pd.DataFrame:
+    if x_key not in df.columns or y_key not in df.columns:
+        raise ValueError(f"Dataframe must have '{x_key}' and '{y_key}' columns.")
+    if replace and suffix == "_transformed":
+        suffix = "_original"
+
+    x = df[x_key].values
+    y = df[y_key].values
+    x, y = transform_points(registrar, source_path, x, y, crop=crop, non_rigid=non_rigid, silent=silent)
+    if f"{x_key}{suffix}" in df.columns:
+        df.drop(columns=[f"{x_key}{suffix}"], inplace=True)
+    if f"{y_key}{suffix}" in df.columns:
+        df.drop(columns=[f"{y_key}{suffix}"], inplace=True)
+    if replace:
+        df.insert(max(0, df.columns.get_loc(x_key)), f"{x_key}{suffix}", df[x_key])
+        df.insert(max(0, df.columns.get_loc(y_key)), f"{y_key}{suffix}", df[y_key])
+        df[x_key] = x
+        df[y_key] = y
+    else:
+        df.insert(df.columns.get_loc(x_key), f"{x_key}{suffix}", x)
+        df.insert(df.columns.get_loc(y_key), f"{y_key}{suffix}", y)
+    return df
 
 
 def transform_vertices_df(
     registrar: Valis,
     source_path: PathLike,
     df: pd.DataFrame,
-    crop: str = "reference",
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
     x_key: str = "vertex_x",
     y_key: str = "vertex_y",
     suffix: str = "_transformed",
@@ -115,6 +163,8 @@ def transform_vertices_df(
         Dataframe with x and y columns
     crop : str, optional
         Crop method, by default "reference"
+    non_rigid : bool, optional
+        Whether to use non-rigid registration, by default True
     x_key : str, optional
         X column key, by default "vertex_x"
     y_key : str, optional
@@ -127,42 +177,17 @@ def transform_vertices_df(
         Whether to show progress bar, by default False
     """
     return _transform_points_df(
-        registrar, source_path, df, x_key, y_key, crop=crop, suffix=suffix, replace=replace, silent=silent
+        registrar,
+        source_path,
+        df,
+        x_key,
+        y_key,
+        crop=crop,
+        non_rigid=non_rigid,
+        suffix=suffix,
+        replace=replace,
+        silent=silent,
     )
-
-
-def _transform_points_df(
-    registrar: Valis,
-    source_path: PathLike,
-    df: pd.DataFrame,
-    x_key: str = "x",
-    y_key: str = "y",
-    crop: str = "reference",
-    suffix: str = "_transformed",
-    replace: bool = False,
-    silent: bool = False,
-) -> pd.DataFrame:
-    if x_key not in df.columns or y_key not in df.columns:
-        raise ValueError(f"Dataframe must have '{x_key}' and '{y_key}' columns.")
-    if replace and suffix == "_transformed":
-        suffix = "_original"
-
-    x = df[x_key].values
-    y = df[y_key].values
-    x, y = transform_points(registrar, source_path, x, y, crop=crop, silent=silent)
-    if f"{x_key}{suffix}" in df.columns:
-        df.drop(columns=[f"{x_key}{suffix}"], inplace=True)
-    if f"{y_key}{suffix}" in df.columns:
-        df.drop(columns=[f"{y_key}{suffix}"], inplace=True)
-    if replace:
-        df.insert(max(0, df.columns.get_loc(x_key) - 1), f"{x_key}{suffix}", df[x_key])
-        df.insert(max(0, df.columns.get_loc(y_key) - 1), f"{y_key}{suffix}", df[y_key])
-        df[x_key] = x
-        df[y_key] = y
-    else:
-        df.insert(df.columns.get_loc(x_key), f"{x_key}{suffix}", x)
-        df.insert(df.columns.get_loc(y_key), f"{y_key}{suffix}", y)
-    return df
 
 
 def get_slide_path(registrar: Valis, name: str) -> Path:
@@ -176,7 +201,7 @@ def transform_registered_image(
     output_dir: PathLike,
     interp_method: str | ValisInterpolation = "bicubic",
     crop: str | bool | ValisCrop = "reference",
-    non_rigid_reg: bool = True,
+    non_rigid: bool = True,
     pyramid: int = 0,
     as_uint8: bool | None = None,
     rename: bool = True,
@@ -227,7 +252,7 @@ def transform_registered_image(
             continue
 
         # warp image and if necessary, convert to numpy
-        warped = slide_obj.warp_slide(level=pyramid, interp_method=interp_method, crop=crop, non_rigid=non_rigid_reg)
+        warped = slide_obj.warp_slide(level=pyramid, interp_method=interp_method, crop=crop, non_rigid=non_rigid)
         if not isinstance(warped, np.ndarray):
             warped = vips2numpy(warped)
 
@@ -256,6 +281,7 @@ def transform_attached_image(
     output_dir: PathLike,
     interp_method: str | ValisInterpolation = "bicubic",
     crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
     pyramid: int = 0,
     as_uint8: bool | None = None,
     rename: bool = True,
@@ -309,7 +335,9 @@ def transform_attached_image(
             continue
 
         # warp image
-        warped = slide_src.warp_slide(level=pyramid, interp_method=interp_method, crop=crop, src_f=str(path))
+        warped = slide_src.warp_slide(
+            level=pyramid, interp_method=interp_method, crop=crop, src_f=str(path), non_rigid=non_rigid
+        )
         if not isinstance(warped, np.ndarray):
             warped = vips2numpy(warped)
 
@@ -335,8 +363,9 @@ def transform_attached_points(
     attach_to: PathLike,
     output_dir: PathLike,
     paths: list[PathLike],
-    pixel_size: float,
+    source_pixel_size: float,
     crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
     suffix: str = "_previous",
     overwrite: bool = False,
 ) -> list[Path]:
@@ -349,51 +378,62 @@ def transform_attached_points(
     if not Path(slide_src.src_f).exists():
         raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
 
-    inv_pixel_size = 1 / pixel_size
-    is_in_px = pixel_size != 1.0
+    is_px = source_pixel_size != 1.0  # if it's not 1.0, then we need to transform the points
+    if not is_px:
+        source_pixel_size = slide_src.resolution
+    inv_source_pixel_size = 1 / source_pixel_size
+    target_pixel_size = source_pixel_size
+    if registrar.reference_img_f:
+        ref_slide: Slide = registrar.get_ref_slide()
+        target_pixel_size = ref_slide.resolution
+
     paths_ = []
-    for path in tqdm(paths, desc="Transforming attached points"):
-        # read data
-        path = Path(path)
-        output_path = output_dir / path.name
-        if output_path.exists() and not overwrite:
-            logger.trace(f"File {output_path} already exists. Moving on...")
-            continue
+    with tqdm(paths) as progress_bar:
+        for path in paths:
+            path = Path(path)
+            progress_bar.set_description(
+                f"Transforming {path.name} points to {slide_src.name} (is={is_px} as={is_px};"
+                f" s={source_pixel_size:.3f}; s-inv={inv_source_pixel_size:.3f}; t={target_pixel_size:.3f})"
+            )
+            # read data
+            output_path = output_dir / path.name
+            if output_path.exists() and not overwrite:
+                logger.trace(f"File {output_path} already exists. Moving on...")
+                continue
 
-        df = read_points(path, return_df=True)
-        x_key = get_column_name(df, ["x", "x_location", "x_centroid", "x:x", "vertex_x"])
-        y_key = get_column_name(df, ["y", "y_location", "y_centroid", "y:y", "vertex_y"])
-        if x_key not in df.columns or y_key not in df.columns:
-            raise ValueError(f"Invalid columns: {df.columns}")
+            df = read_points(path, return_df=True)
+            x_key = get_column_name(df, ["x", "x_location", "x_centroid", "x:x", "vertex_x"])
+            y_key = get_column_name(df, ["y", "y_location", "y_centroid", "y:y", "vertex_y"])
+            if x_key not in df.columns or y_key not in df.columns:
+                raise ValueError(f"Invalid columns: {df.columns}")
 
-        # Valis operates in index units so we need to convert from physical units to index units explicitly
-        if not is_in_px:
-            df[x_key] = df[x_key] * inv_pixel_size
-            df[y_key] = df[y_key] * inv_pixel_size
+            # Valis operates in index units, so we need to convert from physical units to index units explicitly
+            df[x_key], df[y_key] = _transform_original_from_um_to_px(df[x_key], df[y_key], is_px, source_pixel_size)
 
-        # transform the points
-        df_transformed = transform_points_df(
-            registrar,
-            slide_src.src_f,
-            df,
-            x_key=x_key,
-            y_key=y_key,
-            crop=crop,
-            replace=True,
-            suffix=suffix,
-        )
-        if not is_in_px:
-            df_transformed[x_key] = df_transformed[x_key] * pixel_size
-            df_transformed[y_key] = df_transformed[y_key] * pixel_size
+            # transform the points
+            df_transformed = transform_points_df(
+                registrar,
+                slide_src.src_f,
+                df,
+                x_key=x_key,
+                y_key=y_key,
+                crop=crop,
+                replace=True,
+                suffix=suffix,
+                non_rigid=non_rigid,
+            )
+            df_transformed[x_key], df_transformed[y_key] = _transform_transformed_from_px_to_um(
+                df_transformed[x_key], df_transformed[y_key], is_px, target_pixel_size
+            )
 
-        if path.suffix in [".csv", ".txt", ".tsv"]:
-            sep = {"csv": ",", "txt": "\t", "tsv": "\t"}[path.suffix[1:]]
-            df_transformed.to_csv(output_path, index=False, sep=sep)
-        elif path.suffix == ".parquet":
-            df_transformed.to_parquet(output_path, index=False)
-        else:
-            raise ValueError(f"Invalid file extension: {path.suffix}")
-        paths_.append(output_path)
+            if path.suffix in [".csv", ".txt", ".tsv"]:
+                sep = {"csv": ",", "txt": "\t", "tsv": "\t"}[path.suffix[1:]]
+                df_transformed.to_csv(output_path, index=False, sep=sep)
+            elif path.suffix == ".parquet":
+                df_transformed.to_parquet(output_path, index=False)
+            else:
+                raise ValueError(f"Invalid file extension: {path.suffix}")
+            paths_.append(output_path)
     return paths_
 
 
@@ -413,16 +453,18 @@ def transform_attached_shapes(
     from image2image_io.readers.shapes_reader import ShapesReader
     from valis.valtils import get_name
 
-    slide = registrar.get_slide(get_name(str(attach_to)))
-    if not Path(slide.src_f).exists():
-        raise ValueError(f"Source slide {slide.src_f} does not exist.")
+    slide_src = registrar.get_slide(get_name(str(attach_to)))
+    if not Path(slide_src.src_f).exists():
+        raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
 
+    is_px = source_pixel_size != 1.0  # if it's not 1.0, then we need to transform the points
+    if not is_px:
+        source_pixel_size = slide_src.resolution
     target_pixel_size = source_pixel_size
     if registrar.reference_img_f:
         ref_slide: Slide = registrar.get_ref_slide()
         target_pixel_size = ref_slide.resolution
 
-    is_in_px = source_pixel_size != 1.0
     paths_ = []
     for path in tqdm(paths, desc="Transforming attached points"):
         # read data
@@ -438,9 +480,9 @@ def transform_attached_shapes(
             if "type" in geojson_data[0] and geojson_data[0]["type"] == "Feature":
                 geojson_data = _transform_geojson_features(
                     geojson_data,
-                    slide,
-                    in_px=is_in_px,
-                    as_px=is_in_px,
+                    slide_src,
+                    is_px=is_px,
+                    as_px=is_px,
                     source_pixel_size=source_pixel_size,
                     target_pixel_size=target_pixel_size,
                     crop=crop,
@@ -458,7 +500,7 @@ def transform_attached_shapes(
 def _transform_geojson_features(
     geojson_data: list[dict],
     slide_src: Slide,
-    in_px: bool,
+    is_px: bool,
     as_px: bool,
     source_pixel_size: float = 1.0,
     target_pixel_size: float = 1.0,
@@ -467,47 +509,54 @@ def _transform_geojson_features(
 ) -> list[dict]:
     inv_source_pixel_size = 1 / source_pixel_size
 
-    def _transform_original_from_um_to_px(x, y):
-        if in_px:  # no need to transform since it's already in pixel coordinates
-            return x, y
-        # convert from um to pixel by multiplying by the inverse of the pixel size
-        return x * inv_source_pixel_size, y * inv_source_pixel_size
-
-    def _transform_transformed_from_px_to_um(x, y):
-        if as_px:  # no need to transform since it's already in pixel coordinates
-            return x, y
-        # convert from px to um by multiplying by the pixel size
-        return x * target_pixel_size, y * target_pixel_size
-
     # iterate over features and depending on the geometry type, transform the coordinates
     result = []
     for feature in geojson_data:
         geometry = feature["geometry"]
         if geometry["type"] == "Point":
             x, y = geometry["coordinates"]
-            x, y = _transform_original_from_um_to_px(x, y)
+            x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
             x, y = _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid)
-            x, y = _transform_transformed_from_px_to_um(x, y)
+            x, y = _transform_transformed_from_px_to_um(x, y, as_px, target_pixel_size)
             geometry["coordinates"] = [x[0], y[0]]
         elif geometry["type"] == "Polygon":
             for i, ring in enumerate(
                 tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, mininterval=1, disable=True)
             ):
                 x, y = np.array(ring).T
-                x, y = _transform_original_from_um_to_px(x, y)
+                x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
                 x, y = _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid)
-                x, y = _transform_transformed_from_px_to_um(x, y)
+                x, y = _transform_transformed_from_px_to_um(x, y, as_px, target_pixel_size)
                 geometry["coordinates"][i] = np.c_[x, y].tolist()
         elif geometry["type"] == "MultiPolygon":
             for j, polygon in enumerate(geometry["coordinates"]):
                 for i, ring in enumerate(tqdm(polygon, desc="Transforming MultiPolygon", leave=False, mininterval=1)):
                     x, y = np.array(ring).T
-                    x, y = _transform_original_from_um_to_px(x, y)
+                    x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
                     x, y = _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid)
-                    x, y = _transform_transformed_from_px_to_um(x, y)
+                    x, y = _transform_transformed_from_px_to_um(x, y, as_px, target_pixel_size)
                     geometry["coordinates"][j][i] = np.c_[x, y].tolist()
         result.append(feature)
     return result
+
+
+def _transform_original_from_um_to_px(
+    x: np.ndarray, y: np.ndarray, is_px: bool, source_pixel_size: float
+) -> tuple[np.ndarray, np.ndarray]:
+    inv_source_pixel_size = 1 / source_pixel_size
+    if is_px:  # no need to transform since it's already in pixel coordinates
+        return x, y
+    # convert from um to pixel by multiplying by the inverse of the pixel size
+    return x * inv_source_pixel_size, y * inv_source_pixel_size
+
+
+def _transform_transformed_from_px_to_um(
+    x: np.ndarray, y: np.ndarray, as_px: bool, target_pixel_size: float
+) -> tuple[np.ndarray, np.ndarray]:
+    if as_px:  # no need to transform since it's already in pixel coordinates
+        return x, y
+    # convert from px to um by multiplying by the pixel size
+    return x * target_pixel_size, y * target_pixel_size
 
 
 def get_image_files(img_dir: PathLike, ordered: bool = False) -> list[Path]:

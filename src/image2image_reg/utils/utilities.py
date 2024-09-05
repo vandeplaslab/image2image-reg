@@ -37,6 +37,8 @@ def make_new_name(
     if ref_name:
         ref_name = ref_name.replace("_registered", "")
         src_name = src_name.replace(ref_name, "")  # ensure that name doesn't contain reference name
+    if src_name.startswith("_to_"):
+        src_name = src_name[4:]
     if ref_name and ref_name != src_name:
         new_name = f"{src_name}_to_{ref_name}"
     else:
@@ -44,4 +46,6 @@ def make_new_name(
     if project_name:
         new_name = f"{project_name}_{new_name}"
     new_name += f"_registered{suffix}"
+    if new_name.startswith("_to_"):
+        new_name = new_name[4:]
     return new_name

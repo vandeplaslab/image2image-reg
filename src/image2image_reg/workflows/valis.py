@@ -529,7 +529,7 @@ class ValisReg(Workflow):
             paths_ = transform_registered_image(
                 self.registrar,
                 self.image_dir,
-                non_rigid_reg=self.non_rigid_registration,
+                non_rigid=self.non_rigid_registration,
                 as_uint8=as_uint8,
                 tile_size=tile_size,
                 overwrite=overwrite,
@@ -798,7 +798,7 @@ def valis_registration(
     channel_kws: dict[str, str] | PathLike = None,
     check_for_reflections: bool = True,
     micro_reg_fraction: float = 0.25,
-    non_rigid_reg: bool = False,
+    non_rigid: bool = False,
     micro_reg: bool = False,
     feature_detector: str = "sensitive_vgg",
     **kwargs,
@@ -839,7 +839,7 @@ def valis_registration(
     filelist = [str(s) for s in filelist]
 
     kws = {}
-    if not non_rigid_reg:
+    if not non_rigid:
         kws["non_rigid_registrar_cls"] = None
 
     if kwargs:
@@ -913,7 +913,7 @@ def valis_registration(
             with MeasureTimer() as timer:
                 registered_dir = output_dir / project_name / "registered"
                 registered_dir.mkdir(exist_ok=True, parents=True)
-                transform_registered_image(registrar, registered_dir, non_rigid_reg=non_rigid_reg)
+                transform_registered_image(registrar, registered_dir, non_rigid=non_rigid)
             logger.info(f"Exported registered images in {timer()}")
 
             # export attached images to OME-TIFFs

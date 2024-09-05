@@ -40,7 +40,7 @@ def transform_points(
         Whether to show progress bar, by default False
     """
     transformed_xy = seq.transform_points(
-        np.c_[x, y], is_px=in_px, px=as_px, source_pixel_size=source_pixel_size, silent=silent
+        np.c_[x, y], is_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size, silent=silent
     )
     return transformed_xy[:, 0], transformed_xy[:, 1]
 
@@ -174,8 +174,8 @@ def _transform_points_df(
         df.drop(columns=[f"{y_key}{suffix}"], inplace=True)
     # put data in place
     if replace:
-        df.insert(max(0, df.columns.get_loc(x_key) - 1), f"{x_key}{suffix}", df[x_key])
-        df.insert(max(0, df.columns.get_loc(y_key) - 1), f"{y_key}{suffix}", df[y_key])
+        df.insert(max(0, df.columns.get_loc(x_key)), f"{x_key}{suffix}", df[x_key])
+        df.insert(max(0, df.columns.get_loc(y_key)), f"{y_key}{suffix}", df[y_key])
         df[x_key] = x
         df[y_key] = y
     else:

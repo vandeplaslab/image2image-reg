@@ -99,8 +99,8 @@ class TransformMixin:
         self,
         points: np.ndarray,
         is_px: bool = True,
+        as_px: bool = True,
         source_pixel_size: float = 1,
-        px: bool = True,
         silent: bool = False,
     ) -> np.ndarray:
         """
@@ -114,7 +114,7 @@ class TransformMixin:
             Whether point data is in pixel or physical coordinate space
         source_pixel_size: float
             spacing of the pixels associated with pt_data if they are not in physical coordinate space
-        px: bool
+        as_px: bool
             return transformed points to pixel indices in the output_spacing's reference space.
         silent: bool
             Whether to show progress bar
@@ -128,7 +128,8 @@ class TransformMixin:
         if not self.output_spacing:
             raise ValueError("Output spacing not set, call `set_output_spacing` first")
 
-        inv_target_pixel_size = 1 / self.output_spacing[0]
+        target_pixel_size = self.output_spacing[0]
+        inv_target_pixel_size = 1 / target_pixel_size
         # convert from px to um by multiplying by the pixel size
         if is_px:
             points = points * source_pixel_size
@@ -139,7 +140,8 @@ class TransformMixin:
         for i, point in enumerate(
             tqdm(
                 points,
-                desc=f"Transforming points (is={is_px}; as={px}; {source_pixel_size:.3f}; {inv_target_pixel_size:.3f})",
+                desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
+                f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
                 leave=False,
                 disable=silent,
                 mininterval=1,
@@ -150,7 +152,7 @@ class TransformMixin:
                 point = transform_.inverse_final_transform.TransformPoint(point)
             transformed_points[i] = point
 
-        if px:
+        if as_px:
             transformed_points = transformed_points * inv_target_pixel_size
         return transformed_points
 
