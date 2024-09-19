@@ -486,7 +486,10 @@ class ValisReg(Workflow):
         fmt: WriterMode = "ome-tiff",
         write_registered: bool = True,
         write_not_registered: bool = True,
-        write_attached: bool = True,
+        write_attached: bool = False,
+        write_attached_images: bool | None = None,
+        write_attached_points: bool | None = None,
+        write_attached_shapes: bool | None = None,
         write_merged: bool = True,
         remove_merged: bool = True,
         to_original_size: bool = True,
@@ -499,17 +502,21 @@ class ValisReg(Workflow):
         """Export images after applying transformation."""
         if not self.registrar:
             raise ValueError("Registrar not found. Please register first.")
+        if write_attached:
+            write_attached_images = write_attached_points = write_attached_shapes = True
 
-        # export registered images
         paths = []
+        # export registered images
         if write_registered:
-            self._export_registered_images(fmt, tile_size, as_uint8, rename, overwrite)
+            paths.extend(self._export_registered_images(fmt, tile_size, as_uint8, rename, overwrite))
 
         # export attachment modalities
-        if write_attached:
-            self._export_attachment_points(n_parallel, overwrite)
-            self._export_attachment_shapes(n_parallel, overwrite)
-            self._export_attachment_images(fmt, tile_size, as_uint8, rename, overwrite)
+        if write_attached_shapes:
+            paths.extend(self._export_attachment_shapes(n_parallel, overwrite))
+        if write_attached_points:
+            paths.extend(self._export_attachment_points(n_parallel, overwrite))
+        if write_attached_images:
+            paths.extend(self._export_attachment_images(fmt, tile_size, as_uint8, rename, overwrite))
         return paths
 
     def _export_registered_images(
@@ -555,11 +562,12 @@ class ValisReg(Workflow):
 
                 paths_ = transform_attached_shapes(
                     self.registrar,
-                    attach_to_modality.path,
+                    attach_to_modality.path,  # type: ignore[arg-type]
                     self.image_dir,
                     attached_dict["files"],
                     source_pixel_size,
                     overwrite=overwrite,
+                    non_rigid=self.non_rigid_registration,
                 )
                 paths.extend(paths_)
         if paths:
@@ -580,11 +588,12 @@ class ValisReg(Workflow):
 
                 paths_ = transform_attached_points(
                     self.registrar,
-                    attach_to_modality.path,
+                    attach_to_modality.path,  # type: ignore[arg-type]
                     self.image_dir,
                     attached_dict["files"],
                     source_pixel_size,
                     overwrite=overwrite,
+                    non_rigid=self.non_rigid_registration,
                 )
                 paths.extend(paths_)
         if paths:
@@ -613,6 +622,7 @@ class ValisReg(Workflow):
                 if attached_to not in attached_images:
                     attached_images[attached_to] = []
                 attached_images[attached_to].append(self.modalities[src_name].path)
+
             names = list(attached_images.keys())
             for name in names:
                 attached_images[name] = list(set(attached_images[name]))
@@ -622,7 +632,7 @@ class ValisReg(Workflow):
                 attached_to_modality = self.modalities[attached_to]
                 paths_ = transform_attached_image(
                     self.registrar,
-                    attached_to_modality.path,
+                    attached_to_modality.path,  # type: ignore[arg-type]
                     sources,
                     self.image_dir,
                     as_uint8=as_uint8,
@@ -630,6 +640,7 @@ class ValisReg(Workflow):
                     overwrite=overwrite,
                     path_to_name_map=path_to_name_map,
                     rename=rename,
+                    non_rigid=self.non_rigid_registration,
                 )
                 paths.extend(paths_)
         if paths:

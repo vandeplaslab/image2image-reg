@@ -18,9 +18,7 @@ from koyo.typing import PathLike
 from koyo.utilities import is_installed
 from loguru import logger
 
-from image2image_reg.enums import ValisDetectorMethod, ValisMatcherMethod, ValisPreprocessingMethod, WriterMode
-
-from ._common import (
+from image2image_reg.cli._common import (
     ALLOW_EXTRA_ARGS,
     as_uint8_,
     attach_image_,
@@ -41,10 +39,14 @@ from ._common import (
     rename_,
     write_,
     write_attached_,
+    write_attached_images_,
+    write_attached_points_,
+    write_attached_shapes_,
     write_merged_,
     write_not_registered_,
     write_registered_,
 )
+from image2image_reg.enums import ValisDetectorMethod, ValisMatcherMethod, ValisPreprocessingMethod, WriterMode
 
 
 def cli_parse_method(ctx, param, value: list[str]) -> list[str]:
@@ -61,17 +63,16 @@ def cli_parse_method(ctx, param, value: list[str]) -> list[str]:
     ]
 
 
-def cli_parse_detector(ctx, param, value: str) -> str:
+def cli_parse_detector(ctx: click.Context, param: str, value: str) -> str:
     """Parse detector."""
     return {"svgg": "sensitive_vgg", "vsvgg": "very_sensitive_vgg"}.get(value, value)
 
 
-def cli_parse_matcher(ctx, param, value: str) -> str:
+def cli_parse_matcher(ctx: click.Context, param: str, value: str) -> str:
     """Parse matcher."""
     return {"ransac": "RANSAC", "gms": "GMS"}.get(value, value)
 
 
-valis = None
 if is_installed("valis"):
 
     @click.group("valis", cls=GroupedGroup)
@@ -449,7 +450,7 @@ if is_installed("valis"):
                     ):
                         logger.info(f"Finished processing {path} in {timer(since_last=True)}")
             else:
-                errors = []
+                errors: list[str] = []
                 for path in paths:
                     # try:
                     _valis_register(
@@ -472,8 +473,8 @@ if is_installed("valis"):
                     #     errors.append(path)
                     # reraise_exception_if_debug(exc)
                 if errors:
-                    errors = "\n- ".join(errors)
-                    logger.error(f"Failed to register the following projects: {errors}")
+                    errors_str = "\n- ".join(errors)
+                    logger.error(f"Failed to register the following projects: {errors_str}")
         logger.info(f"Finished processing all projects in {timer()}.")
 
     @overwrite_
@@ -483,6 +484,9 @@ if is_installed("valis"):
     @rename_
     @remove_merged_
     @write_merged_
+    @write_attached_points_
+    @write_attached_shapes_
+    @write_attached_images_
     @write_attached_
     @write_not_registered_
     @write_registered_
@@ -495,6 +499,9 @@ if is_installed("valis"):
         write_registered: bool,
         write_not_registered: bool,
         write_attached: bool,
+        write_attached_images: bool | None,
+        write_attached_shapes: bool | None,
+        write_attached_points: bool | None,
         write_merged: bool,
         remove_merged: bool,
         rename: bool,
@@ -510,6 +517,9 @@ if is_installed("valis"):
             write_registered=write_registered,
             write_not_registered=write_not_registered,
             write_attached=write_attached,
+            write_attached_points=write_attached_points,
+            write_attached_shapes=write_attached_shapes,
+            write_attached_images=write_attached_images,
             write_merged=write_merged,
             remove_merged=remove_merged,
             rename=rename,
@@ -525,6 +535,9 @@ if is_installed("valis"):
         write_registered: bool = True,
         write_not_registered: bool = True,
         write_attached: bool = True,
+        write_attached_images: bool | None = None,
+        write_attached_shapes: bool | None = None,
+        write_attached_points: bool | None = None,
         write_merged: bool = True,
         remove_merged: bool = True,
         rename: bool = True,
@@ -543,6 +556,10 @@ if is_installed("valis"):
 
         if not write_merged:
             remove_merged = False
+        if any(v is not None for v in [write_attached_images, write_attached_shapes, write_attached_points]):
+            write_attached = False
+        if write_attached:
+            write_attached_shapes = write_attached_points = write_attached_images = True
 
         print_parameters(
             Parameter("Project directory", "-p/--project_dir", paths),
@@ -570,7 +587,9 @@ if is_installed("valis"):
                                 fmt,
                                 write_registered,
                                 write_not_registered,
-                                write_attached,
+                                write_attached_images,
+                                write_attached_shapes,
+                                write_attached_points,
                                 write_merged,
                                 remove_merged,
                                 rename,
@@ -588,7 +607,9 @@ if is_installed("valis"):
                         fmt,
                         write_registered,
                         write_not_registered,
-                        write_attached,
+                        write_attached_images,
+                        write_attached_shapes,
+                        write_attached_points,
                         write_merged,
                         remove_merged,
                         rename,
@@ -604,7 +625,9 @@ if is_installed("valis"):
         fmt: WriterMode,
         write_registered: bool,
         write_not_registered: bool,
-        write_attached: bool,
+        write_attached_images: bool | None,
+        write_attached_shapes: bool | None,
+        write_attached_points: bool | None,
         write_merged: bool,
         remove_merged: bool,
         rename: bool,
@@ -628,7 +651,9 @@ if is_installed("valis"):
             fmt=fmt,
             write_registered=write_registered,
             write_not_registered=write_not_registered,
-            write_attached=write_attached,
+            write_attached_images=write_attached_images,
+            write_attached_shapes=write_attached_shapes,
+            write_attached_points=write_attached_points,
             write_merged=write_merged,
             remove_merged=remove_merged,
             rename=rename,
@@ -718,3 +743,5 @@ if is_installed("valis"):
         from image2image_reg.cli.elastix import update_runner
 
         update_runner(project_dir, source_dir, valis=True)
+else:
+    valis = None

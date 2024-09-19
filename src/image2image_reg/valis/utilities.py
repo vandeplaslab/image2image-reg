@@ -21,6 +21,265 @@ if ty.TYPE_CHECKING:
     from valis.registration import Slide, Valis
 
 
+def warp_xy_non_rigid(xy, dxdy, displacement_shape_rc=None):
+    from scipy.interpolate import RectBivariateSpline
+
+    single_pt = xy.ndim == 1
+    if single_pt:
+        xy = np.array([xy])
+
+    if displacement_shape_rc is None:
+        displacement_shape_rc = dxdy[0].shape
+
+    bbox = [0, displacement_shape_rc[0], 0, displacement_shape_rc[1]]
+    grid_r = np.arange(displacement_shape_rc[0])
+    grid_c = np.arange(displacement_shape_rc[1])
+
+    interp_dx = RectBivariateSpline(grid_r, grid_c, dxdy[0], bbox=bbox)
+    interp_dy = RectBivariateSpline(grid_r, grid_c, dxdy[1], bbox=bbox)
+
+    nr_x = xy[:, 0] + interp_dx(xy[:, 1], xy[:, 0], grid=False)
+    nr_y = xy[:, 1] + interp_dy(xy[:, 1], xy[:, 0], grid=False)
+
+    nr_xy = np.dstack([nr_x, nr_y])[0]
+    if single_pt:
+        nr_xy = nr_xy[0]
+
+    return nr_xy
+
+
+def _warp_xy_numpy(
+    xy,
+    M=None,
+    transformation_src_shape_rc=None,
+    transformation_dst_shape_rc=None,
+    src_shape_rc=None,
+    dst_shape_rc=None,
+    bk_dxdy=None,
+    fwd_dxdy=None,
+):
+    """
+    Warp xy points using M and/or bk_dxdy/fwd_dxdy. If bk_dxdy is provided, it will be inverted to  create fwd_dxdy
+
+    Parameters
+    ----------
+    xy : ndarray
+        [P, 2] array of xy coordinates for P points
+
+    M : ndarray, optional
+         3x3 affine transformation matrix to perform rigid warp
+
+    transformation_src_shape_rc : (int, int)
+        Shape of image that was used to find the transformation.
+        For example, this could be the original image in which features were detected
+
+    transformation_dst_shape_rc : (int, int), optional
+        Shape of the image with shape `transformation_src_shape_rc` after warping.
+        This could be the shape of the original image after applying `M`.
+
+    src_shape_rc : optional, (int, int)
+        Shape of the image from which the points originated. For example,
+        this could be a larger/smaller version of the image that was
+        used for feature detection.
+
+    dst_shape_rc : optional, (int, int)
+        Shape of image (with shape `src_shape_rc`) after warping
+
+    bk_dxdy : ndarray
+        (2, N, M) numpy array of pixel displacements in the x and y
+        directions from the reference image. dx = bk_dxdy[0],
+        and dy=bk_dxdy[1]. If `bk_dxdy` is not None, but
+        `fwd_dxdy` is None, then `bk_dxdy` will be inverted to warp `xy`.
+
+    fwd_dxdy : ndarray
+        Inverse of bk_dxdy. dx = fwd_dxdy[0], and dy=fwd_dxdy[1].
+        This is what is actually used to warp the points.
+
+    Returns
+    -------
+    warped_xy : [P, 2] array
+        Array of warped xy coordinates for P points
+
+    """
+    from valis.warp_tools import get_inverse_field, get_warp_scaling_factors, warp_xy_rigid
+
+    do_non_rigid = bk_dxdy is not None or fwd_dxdy is not None
+
+    if M is None and not do_non_rigid:
+        return xy
+
+    src_sxy, dst_sxy, displacement_sxy, displacement_shape_rc = get_warp_scaling_factors(
+        transformation_src_shape_rc=transformation_src_shape_rc,
+        transformation_dst_shape_rc=transformation_dst_shape_rc,
+        src_shape_rc=src_shape_rc,
+        dst_shape_rc=dst_shape_rc,
+        bk_dxdy=bk_dxdy,
+        fwd_dxdy=fwd_dxdy,
+    )
+    if src_sxy is not None:
+        in_src_xy = xy / src_sxy
+    else:
+        in_src_xy = xy
+
+    if M is not None:
+        rigid_xy = warp_xy_rigid(in_src_xy, M).astype(float)
+        if not do_non_rigid:
+            if dst_sxy is not None:
+                return rigid_xy * dst_sxy
+            else:
+                return rigid_xy
+    else:
+        rigid_xy = in_src_xy
+
+    if displacement_sxy is not None:
+        # displacement was found on scaled version of the rigidly registered image.
+        # So move points into new displacement field
+        rigid_xy *= displacement_sxy
+
+    if bk_dxdy is not None and fwd_dxdy is None:
+        fwd_dxdy = get_inverse_field(bk_dxdy)
+
+    nonrigid_xy = warp_xy_non_rigid(rigid_xy, dxdy=fwd_dxdy, displacement_shape_rc=displacement_shape_rc)
+
+    if dst_sxy is not None:
+        nonrigid_xy *= dst_sxy
+
+    return nonrigid_xy
+
+
+def warp_xy(
+    xy,
+    M=None,
+    transformation_src_shape_rc=None,
+    transformation_dst_shape_rc=None,
+    src_shape_rc=None,
+    dst_shape_rc=None,
+    bk_dxdy=None,
+    fwd_dxdy=None,
+    pt_buffer=100,
+):
+    """
+    Warp xy points using M and/or bk_dxdy/fwd_dxdy. If bk_dxdy is provided, it will be inverted to  create fwd_dxdy
+
+    Parameters
+    ----------
+    xy : ndarray
+        [P, 2] array of xy coordinates for P points
+
+    M : ndarray, optional
+         3x3 affine transformation matrix to perform rigid warp
+
+    transformation_src_shape_rc : (int, int)
+        Shape of image that was used to find the transformation.
+        For example, this could be the original image in which features were detected
+
+    transformation_dst_shape_rc : (int, int), optional
+        Shape of the image with shape `transformation_src_shape_rc` after warping.
+        This could be the shape of the original image after applying `M`.
+
+    src_shape_rc : optional, (int, int)
+        Shape of the image from which the points originated. For example,
+        this could be a larger/smaller version of the image that was
+        used for feature detection.
+
+    dst_shape_rc : optional, (int, int)
+        Shape of image (with shape `src_shape_rc`) after warping
+
+    bk_dxdy : ndarray, pyvips.Image
+        (2, N, M) numpy array of pixel displacements in the x and y
+        directions from the reference image. dx = bk_dxdy[0],
+        and dy=bk_dxdy[1]. If `bk_dxdy` is not None, but
+        `fwd_dxdy` is None, then `bk_dxdy` will be inverted to warp `xy`.
+
+    fwd_dxdy : ndarray, pyvips.Image
+        Inverse of bk_dxdy. dx = fwd_dxdy[0], and dy=fwd_dxdy[1].
+        This is what is actually used to warp the points.
+
+    pt_buffer : int
+        If `bk_dxdy` or `fwd_dxdy` are pyvips.Image object, then
+        pt_buffer` determines the size of the window around the point used to
+        get the local displacements.
+
+
+    Returns
+    -------
+    warped_xy : [P, 2] array
+        Array of warped xy coordinates for P points
+
+    """
+    do_non_rigid = bk_dxdy is not None or fwd_dxdy is not None
+
+    if M is None and not do_non_rigid:
+        return xy
+
+    warped_xy = _warp_xy_numpy(
+        xy,
+        M,
+        transformation_src_shape_rc=transformation_src_shape_rc,
+        transformation_dst_shape_rc=transformation_dst_shape_rc,
+        src_shape_rc=src_shape_rc,
+        dst_shape_rc=dst_shape_rc,
+        bk_dxdy=bk_dxdy,
+        fwd_dxdy=fwd_dxdy,
+    )
+    return warped_xy
+
+
+def slide_warp_xy(slide: Slide, xy, M=None, slide_level=0, pt_level=0, non_rigid=True, crop=True):
+    """Overloaded warping method."""
+    from valis.registration import CROP_OVERLAP, CROP_REF
+
+    if M is None:
+        M = slide.M
+
+    if np.issubdtype(type(pt_level), np.integer):
+        pt_dim_rc = slide.slide_dimensions_wh[pt_level][::-1]
+    else:
+        pt_dim_rc = np.array(pt_level)
+
+    if np.issubdtype(type(slide_level), np.integer):
+        if slide_level != 0:
+            if np.issubdtype(type(slide_level), np.integer):
+                aligned_slide_shape = slide.val_obj.get_aligned_slide_shape(slide_level)
+            else:
+                aligned_slide_shape = np.array(slide_level)
+        else:
+            aligned_slide_shape = slide.aligned_slide_shape_rc
+    else:
+        aligned_slide_shape = np.array(slide_level)
+
+    if non_rigid:
+        fwd_dxdy = slide.fwd_dxdy
+    else:
+        fwd_dxdy = None
+
+    warped_xy = warp_xy(
+        xy,
+        M=M,
+        transformation_src_shape_rc=slide.processed_img_shape_rc,
+        transformation_dst_shape_rc=slide.reg_img_shape_rc,
+        src_shape_rc=pt_dim_rc,
+        dst_shape_rc=aligned_slide_shape,
+        fwd_dxdy=fwd_dxdy,
+    )
+
+    crop_method = slide.get_crop_method(crop)
+    if crop_method is not False:
+        if crop_method == CROP_REF:
+            ref_slide = slide.val_obj.get_ref_slide()
+            if isinstance(slide_level, int):
+                scaled_aligned_shape_rc = ref_slide.slide_dimensions_wh[slide_level][::-1]
+            else:
+                if len(slide_level) == 2:
+                    scaled_aligned_shape_rc = slide_level
+        elif crop_method == CROP_OVERLAP:
+            scaled_aligned_shape_rc = aligned_slide_shape
+
+        crop_bbox_xywh, _ = slide.get_crop_xywh(crop_method, scaled_aligned_shape_rc)
+        warped_xy -= crop_bbox_xywh[0:2]
+    return warped_xy
+
+
 def _transform_points(
     slide_src: Slide,
     x: np.ndarray,
@@ -42,7 +301,7 @@ def transform_points(
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
     silent: bool = False,
-):
+) -> tuple[np.ndarray, np.ndarray]:
     """Transform points."""
     from valis.valtils import get_name
 
@@ -406,6 +665,9 @@ def transform_attached_points(
             y_key = get_column_name(df, ["y", "y_location", "y_centroid", "y:y", "vertex_y"])
             if x_key not in df.columns or y_key not in df.columns:
                 raise ValueError(f"Invalid columns: {df.columns}")
+            # change dtype to float64
+            df[x_key] = df[x_key].astype(np.float64)
+            df[y_key] = df[y_key].astype(np.float64)
 
             # Valis operates in index units, so we need to convert from physical units to index units explicitly
             df[x_key], df[y_key] = _transform_original_from_um_to_px(df[x_key], df[y_key], is_px, source_pixel_size)

@@ -73,12 +73,36 @@ write_attached_ = click.option(
     default=False,
     show_default=True,
 )
+write_attached_shapes_ = click.option(
+    "write_attached_shapes",
+    "--was/--no_was",
+    help="Write attached shapes. If the argument is used, it will overwrite the `write_attached` option.",
+    is_flag=True,
+    default=None,
+    show_default=True,
+)
+write_attached_points_ = click.option(
+    "write_attached_points",
+    "--wap/--no_wap",
+    help="Write attached points. If the argument is used, it will overwrite the `write_attached` option.",
+    is_flag=True,
+    default=None,
+    show_default=True,
+)
+write_attached_images_ = click.option(
+    "write_attached_images",
+    "--wai/--no_wai",
+    help="Write attached images. If the argument is used, it will overwrite the `write_attached` option.",
+    is_flag=True,
+    default=None,
+    show_default=True,
+)
 write_registered_ = click.option(
     "-r/-R",
     "--write_registered/--no_write_registered",
     help="Write registered images.",
     is_flag=True,
-    default=True,
+    default=False,
     show_default=True,
 )
 write_ = click.option(

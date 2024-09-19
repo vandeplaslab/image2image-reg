@@ -19,10 +19,7 @@ from koyo.typing import PathLike
 from koyo.utilities import reraise_exception_if_debug
 from loguru import logger
 
-from image2image_reg.enums import WriterMode
-
-from ..parameters.registration import AVAILABLE_REGISTRATIONS
-from ._common import (
+from image2image_reg.cli._common import (
     ALLOW_EXTRA_ARGS,
     arg_split_bbox,
     as_uint8_,
@@ -30,7 +27,6 @@ from ._common import (
     attach_points_,
     attach_shapes_,
     attach_to_,
-    files_,
     fmt_,
     get_preprocessing,
     image_,
@@ -47,10 +43,15 @@ from ._common import (
     remove_merged_,
     rename_,
     write_attached_,
+    write_attached_images_,
+    write_attached_points_,
+    write_attached_shapes_,
     write_merged_,
     write_not_registered_,
     write_registered_,
 )
+from image2image_reg.enums import WriterMode
+from image2image_reg.parameters.registration import AVAILABLE_REGISTRATIONS
 
 
 def is_valis(project_dir: Path) -> bool:
@@ -802,6 +803,9 @@ def _register(
 @original_size_
 @remove_merged_
 @write_merged_
+@write_attached_points_
+@write_attached_shapes_
+@write_attached_images_
 @write_attached_
 @write_not_registered_
 @write_registered_
@@ -815,6 +819,9 @@ def export_cmd(
     write_not_registered: bool,
     write_merged: bool,
     write_attached: bool,
+    write_attached_images: bool | None,
+    write_attached_shapes: bool | None,
+    write_attached_points: bool | None,
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
@@ -831,6 +838,9 @@ def export_cmd(
         write_not_registered=write_not_registered,
         write_merged=write_merged,
         write_attached=write_attached,
+        write_attached_points=write_attached_points,
+        write_attached_shapes=write_attached_shapes,
+        write_attached_images=write_attached_images,
         remove_merged=remove_merged,
         original_size=original_size,
         as_uint8=as_uint8,
@@ -847,6 +857,9 @@ def export_runner(
     write_registered: bool = True,
     write_not_registered: bool = True,
     write_attached: bool = True,
+    write_attached_images: bool | None = None,
+    write_attached_shapes: bool | None = None,
+    write_attached_points: bool | None = None,
     write_merged: bool = True,
     remove_merged: bool = True,
     original_size: bool = False,
@@ -861,6 +874,11 @@ def export_runner(
 
     if not write_merged:
         remove_merged = False
+
+    if any(v is not None for v in [write_attached_images, write_attached_shapes, write_attached_points]):
+        write_attached = False
+    if write_attached:
+        write_attached_shapes = write_attached_points = write_attached_images = True
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
@@ -890,7 +908,9 @@ def export_runner(
                             fmt,
                             write_registered,
                             write_not_registered,
-                            write_attached,
+                            write_attached_images,
+                            write_attached_shapes,
+                            write_attached_points,
                             write_merged,
                             remove_merged,
                             original_size,
@@ -909,7 +929,9 @@ def export_runner(
                     fmt,
                     write_registered,
                     write_not_registered,
-                    write_attached,
+                    write_attached_images,
+                    write_attached_shapes,
+                    write_attached_points,
                     write_merged,
                     remove_merged,
                     original_size,
@@ -927,7 +949,9 @@ def _export(
     fmt: WriterMode,
     write_registered: bool,
     write_not_registered: bool,
-    write_attached: bool,
+    write_attached_images: bool | None,
+    write_attached_shapes: bool | None,
+    write_attached_points: bool | None,
     write_merged: bool,
     remove_merged: bool,
     original_size: bool,
@@ -947,7 +971,9 @@ def _export(
         fmt=fmt,
         write_registered=write_registered,
         write_not_registered=write_not_registered,
-        write_attached=write_attached,
+        write_attached_images=write_attached_images,
+        write_attached_shapes=write_attached_shapes,
+        write_attached_points=write_attached_points,
         write_merged=write_merged,
         remove_merged=remove_merged,
         to_original_size=original_size,

@@ -705,9 +705,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -918,7 +918,10 @@ class ElastixReg(Workflow):
         fmt: WriterMode = "ome-tiff",
         write_registered: bool = True,
         write_not_registered: bool = True,
-        write_attached: bool = True,
+        write_attached: bool = False,
+        write_attached_images: bool | None = None,
+        write_attached_points: bool | None = None,
+        write_attached_shapes: bool | None = None,
         write_merged: bool = True,
         remove_merged: bool = True,
         to_original_size: bool = True,
@@ -929,11 +932,12 @@ class ElastixReg(Workflow):
         overwrite: bool = False,
     ) -> list | None:
         """Export images after applying transformation."""
-        # TODO add multi-core support
         self.set_logger()
         if not self._check_if_all_registered():
             logger.warning("Cannot write images as not all modalities have been registered.")
             return None
+        if write_attached:
+            write_attached_images = write_attached_points = write_attached_shapes = True
 
         paths = []
         # prepare merge modalities metadata
@@ -961,21 +965,29 @@ class ElastixReg(Workflow):
 
         # export non-registered nodes
         if write_not_registered and not_reg_modality_list:
-            self._export_not_registered_images(
-                not_reg_modality_list, fmt, to_original_size, tile_size, as_uint8, rename, n_parallel, overwrite
+            paths.extend(
+                self._export_not_registered_images(
+                    not_reg_modality_list, fmt, to_original_size, tile_size, as_uint8, rename, n_parallel, overwrite
+                )
             )
 
         # export modalities
         if write_registered and reg_modality_list:
-            self._export_registered_images(
-                reg_modality_list, fmt, to_original_size, tile_size, as_uint8, rename, n_parallel, overwrite
+            paths.extend(
+                self._export_registered_images(
+                    reg_modality_list, fmt, to_original_size, tile_size, as_uint8, rename, n_parallel, overwrite
+                )
             )
 
-        if write_attached:
-            self._export_attachment_shapes(n_parallel, rename, overwrite)
-            self._export_attachment_points(n_parallel, rename, overwrite)
-            self._export_attachment_images(
-                merge_modalities, remove_merged, fmt, to_original_size, tile_size, as_uint8, rename, overwrite
+        if write_attached_shapes:
+            paths.extend(self._export_attachment_shapes(n_parallel, rename, overwrite))
+        if write_attached_points:
+            paths.extend(self._export_attachment_points(n_parallel, rename, overwrite))
+        if write_attached_images:
+            paths.extend(
+                self._export_attachment_images(
+                    merge_modalities, remove_merged, fmt, to_original_size, tile_size, as_uint8, rename, overwrite
+                )
             )
 
         # export merge modalities
