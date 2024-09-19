@@ -135,6 +135,17 @@ class ElastixReg(Workflow):
         logger.trace(f"Restored from config in {timer()}")
         return obj
 
+    def load_preprocessed_cache(self):
+        """Load cache of sizes and shapes."""
+        from image2image_reg.wrapper import ImageWrapper
+
+        for modality_name in self.get_image_modalities(with_attachment=False):
+            modality = self.modalities[modality_name]
+            if modality.name not in self.preprocessed_cache["image_spacing"]:
+                wrapper = ImageWrapper(modality)
+                self.preprocessed_cache["image_spacing"][modality.name] = wrapper.reader.scale
+                self.preprocessed_cache["image_sizes"][modality.name] = wrapper.reader.image_shape
+
     def print_summary(self, func: ty.Callable = logger.info) -> None:
         """Print summary about the project."""
         elbow, pipe, tee, blank = "└──", "│  ", "├──", "   "
@@ -939,6 +950,9 @@ class ElastixReg(Workflow):
         if write_attached:
             write_attached_images = write_attached_points = write_attached_shapes = True
 
+        # update cache
+        self.load_preprocessed_cache()
+
         paths = []
         # prepare merge modalities metadata
         merge_modalities = self._find_merge_modalities()
@@ -1336,7 +1350,7 @@ class ElastixReg(Workflow):
                 else:
                     transformations = original_size_transform_seq
 
-        if to_original_size and self.original_size_transforms[modality_key]:
+        if to_original_size and self.original_size_transforms.get(modality_key, None):
             o_size_tform = self.original_size_transforms[modality_key]
             if isinstance(o_size_tform, list):
                 o_size_tform = o_size_tform[0]
