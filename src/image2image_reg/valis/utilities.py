@@ -551,6 +551,7 @@ def transform_attached_image(
     """Transform valis image."""
     from image2image_io.readers import get_simple_reader
     from image2image_io.writers import write_ome_tiff_from_array
+    from valis.slide_io import get_slide_reader
     from valis.slide_tools import vips2numpy
     from valis.valtils import get_name
 
@@ -593,9 +594,19 @@ def transform_attached_image(
             logger.trace(f"File {output_filename} already exists. Moving on...")
             continue
 
+        reader_cls = get_slide_reader(str(path), series=0)
+        if reader_cls is None:
+            logger.error(f"Could not find reader for {path}. Skipping...")
+            continue
+
         # warp image
         warped = slide_src.warp_slide(
-            level=pyramid, interp_method=interp_method, crop=crop, src_f=str(path), non_rigid=non_rigid
+            level=pyramid,
+            interp_method=interp_method,
+            crop=crop,
+            src_f=str(path),
+            non_rigid=non_rigid,
+            reader=reader_cls(str(path), series=0),
         )
         if not isinstance(warped, np.ndarray):
             warped = vips2numpy(warped)
