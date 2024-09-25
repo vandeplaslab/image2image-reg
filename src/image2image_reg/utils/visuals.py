@@ -236,11 +236,34 @@ def get_shape(img: np.ndarray) -> np.ndarray:
     return shape
 
 
-def create_overlap_img(img_list: list[np.ndarray], cmap: np.ndarray | None = None) -> np.ndarray:
+def prepare_images_for_overlap(images: list[np.ndarray]) -> list[np.ndarray]:
+    """Prepare images for overlap."""
+    grey_images = []
+    for img in images:
+        _, channel_axis, shape = get_shape_of_image(img)
+        is_rgb = guess_rgb(img.shape)
+        if is_rgb:
+            grey_images.append(rgb2gray(img))
+        elif channel_axis is None:
+            grey_images.append(img)
+        elif channel_axis == 2:
+            grey_images.append(img[:, :, 0])
+        elif channel_axis == 0:
+            grey_images.append(img[0, :, :])
+        else:
+            grey_images.append(np.max(img, axis=channel_axis))
+
+    # normalize the images
+    for i in range(len(grey_images)):
+        grey_images[i] = exposure.rescale_intensity(grey_images[i], out_range=(0, 1)) * 255
+    return grey_images
+
+
+def create_overlap_img(images: list[np.ndarray], cmap: np.ndarray | None = None) -> tuple[np.ndarray, list[np.ndarray]]:
     """
     Parameters
     ----------
-    img_list : list
+    images : list
         list of single channel images to create overlap from
     cmap : ndarray, optional
         colormap to use for coloring the images
@@ -253,42 +276,28 @@ def create_overlap_img(img_list: list[np.ndarray], cmap: np.ndarray | None = Non
     if cmap is None:
         cmap = jzazbz_cmap()
 
-    n_imgs = len(img_list)
+    n_imgs = len(images)
     color_list = get_n_colors(cmap, n_imgs)
+    color_list = [rgb2lab(np.array([[clr]])) * 255 for clr in color_list]
 
-    grey_img_list = []
-    for img in img_list:
-        _, channel_axis, shape = get_shape_of_image(img)
-        is_rgb = guess_rgb(img.shape)
-        if is_rgb:
-            grey_img_list.append(rgb2gray(img))
-        elif channel_axis is None:
-            grey_img_list.append(img)
-        # elif channel_axis == 2:
-        #     grey_img_list.append(img[:, :, 0])
-        # elif channel_axis == 0:
-        #     grey_img_list.append(img[0, :, :])
-        else:
-            grey_img_list.append(np.mean(img, axis=channel_axis))
-
-    # normalize the images
-    for i in range(len(grey_img_list)):
-        grey_img_list[i] = exposure.rescale_intensity(grey_img_list[i], out_range=(0, 1))
+    grey_images = prepare_images_for_overlap(images)
 
     eps = np.finfo("float").eps
-    sum_img = np.full(get_shape(grey_img_list[0])[0:2], eps)
+    sum_img = np.full(get_shape(grey_images[0])[0:2], eps)
     blended_img = np.zeros((*sum_img.shape, 3))
 
     max_v = 0
-    for i in range(len(grey_img_list)):
-        sum_img += grey_img_list[i]
-        max_v = max(max_v, grey_img_list[i].max())
+    for i in range(len(grey_images)):
+        sum_img += grey_images[i]
+        max_v = max(max_v, grey_images[i].max())
 
-    vips_lab_color_list = [rgb2lab(np.array([[clr]])) * 255 for clr in color_list]
-    for i in range(len(grey_img_list)):
-        weight = grey_img_list[i] / sum_img
-        lab_clr = vips_lab_color_list[i]
-        blended_img += lab_clr * np.dstack([grey_img_list[i] / max_v * weight] * 3)
+    for i in range(len(grey_images)):
+        weight = grey_images[i] / sum_img
+        lab_clr = color_list[i]
+        blended_img += lab_clr * np.dstack([(grey_images[i] / 255) / max_v * weight] * 3)
 
-    blended = lab2rgb(blended_img)
-    return np.asarray(blended)
+    blended_img = lab2rgb(blended_img)
+    overlap_img = np.asarray(blended_img)
+    # overlap_img = exposure.equalize_adapthist(overlap_img)
+    overlap_img = exposure.rescale_intensity(overlap_img, out_range=(0, 255)).astype(np.uint8)
+    return overlap_img, grey_images

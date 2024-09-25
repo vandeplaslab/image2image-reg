@@ -94,6 +94,9 @@ class Workflow:
         """Perform several checks on the project."""
         raise NotImplementedError("Must implement method")
 
+    def preview(self, **kwargs: ty.Any) -> None:
+        """Preview registration."""
+
     def register(self, **kwargs: ty.Any) -> None:
         """Co-register images."""
         raise NotImplementedError("Must implement method")
@@ -701,6 +704,7 @@ class Workflow:
         """Execute workflow."""
         self.set_logger()
         self.register()
+        self.preview()
         self.write()
 
     def _load_modalities_from_config(self, config: dict, raise_on_error: bool = True) -> None:

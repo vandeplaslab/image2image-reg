@@ -723,9 +723,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
-                        registered_edge_transform["registration"]
-                    )
+                    transforms[modality][
+                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
+                    ] = registered_edge_transform["registration"]
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -935,35 +935,44 @@ class ElastixReg(Workflow):
                 )
         return out
 
-    def _generate_overlap_image(self) -> None:
+    def preview(self, **kwargs: ty.Any) -> None:
+        """Preview registration."""
+        self._generate_overlap_image()
+
+    def _generate_overlap_image(self, pyramid: int = -1) -> None:
         """Generate overlap of images."""
         from image2image_io.utils.utilities import get_shape_of_image
+        from koyo.visuals import save_gray, save_rgb
 
         from image2image_reg.elastix.utilities import transform_images_for_pyramid
         from image2image_reg.utils.visuals import create_overlap_img
 
-        reg_modality_list, not_reg_modality_list, _ = self._get_modalities_to_transform()
-        images_from_all = []
+        if not self.is_registered:
+            logger.warning("Project has not been registered. Cannot generate overlap images.")
+            return
 
+        images_from_all = []
         # let's iterate through all registration paths
         for source, target_pair in self.registration_paths.items():
-            images = []
+            images, names = [], []
             target, through = (target_pair[-1], target_pair[0]) if len(target_pair) == 2 else (target_pair[0], None)
             target_modality = self.modalities[target]
             target_wrapper = self.get_wrapper(name=target_modality.name)
             assert target_wrapper, f"Could not find wrapper for {target_modality.name}"
             _, transformation, _ = self._prepare_transform(target_modality.name)
-            target_image = transform_images_for_pyramid(target_wrapper, transformation)
+            target_image = transform_images_for_pyramid(target_wrapper, transformation, pyramid)
             _, _, shape = get_shape_of_image(target_image)
             images.append(target_image)
+            names.append(target_modality.name)
 
             source_modality = self.modalities[source]
             source_wrapper = self.get_wrapper(name=source_modality.name)
             assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
             _, transformation, _ = self._prepare_transform(source_modality.name)
             assert transformation is not None, f"Transformation is None for {source_modality.name}"
-            transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(-1), shape[::-1])
-            images.append(transform_images_for_pyramid(source_wrapper, transformation))
+            transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+            images.append(transform_images_for_pyramid(source_wrapper, transformation, pyramid))
+            names.append(source_modality.name)
 
             if through:
                 through_modality = self.modalities[through]
@@ -971,35 +980,28 @@ class ElastixReg(Workflow):
                 assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
                 _, transformation, _ = self._prepare_transform(through_modality.name)
                 assert transformation is not None, f"Transformation is None for {through_modality.name}"
-                transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(-1), shape[::-1])
-                images.append(transform_images_for_pyramid(through_wrapper, transformation))
+                transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+                images.insert(1, transform_images_for_pyramid(through_wrapper, transformation, pyramid))
+                names.append(through_modality.name)
+
             images_from_all.extend(images)
-            yield create_overlap_img(images)
-        # # let's transform the registered modalities first
-        # for modality in reg_modality_list:
-        #     # retrieve image
-        #     image_modality, transformations, _ = self._prepare_registered_transform(modality, attachment=False)
-        #
-        #     # retrieve target image
-        #     target_modality = self.registration_paths[modality][-1]
-        #     target_wrapper = self.get_wrapper(name=target_modality)
-        #     transformations.set_output_spacing(
-        #         target_wrapper.reader.scale_for_pyramid(-1), target_wrapper.reader.pyramid[-1]
-        #     )
-        #     # transform image
-        #     images.append(transform_images_for_pyramid(wrapper, transformations))
+            overlap, greys = create_overlap_img(images)
+            path = self.overlap_dir / f"overlap_{source}_to_{target}.png"
+            save_rgb(path, overlap)
+            logger.trace(f"Saved overlap image to '{path}'.")
+            for name, grey in zip(names, greys):
+                path = self.overlap_dir / f"grey_{name}.png"
+                save_gray(path, grey, multiplier=1)
+                logger.trace(f"Saved greyscale image to '{path}'.")
 
-        # for modality, edges in self.transform_path_map.items():
-        #     for index, edge in enumerate(edges):
-        #         source = edge["source"]
-        #         target = edge["target"]
-        #         target, through = (target[1], target[0]) if isinstance(target, list) else (target, None)
-
-        #     source_modality = self.modalities[source]
-        #     target_modality = self.modalities[target[-1]]
-        #     source_wrapper = self._preprocess_image(source_modality)
-        #     target_wrapper = self._preprocess_image(target_modality)
-        #     create_overlap_img(source_wrapper, target_wrapper, self.overlap_dir)
+        # also export all images
+        try:
+            overlap, _ = create_overlap_img(images_from_all)
+            path = self.overlap_dir / "all_overlap.png"
+            save_rgb(path, overlap)
+            logger.trace(f"Saved overlap image to '{path}'.")
+        except Exception as e:
+            logger.error(f"Could not save overlap image of all images. {e}")
 
     def write(
         self,

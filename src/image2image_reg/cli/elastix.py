@@ -778,6 +778,7 @@ def _register(
     obj = ElastixReg.from_path(path)
     obj.set_logger()
     obj.register(histogram_match=histogram_match)
+    obj.preview()
     if write_images:
         obj.write(
             fmt=fmt,
@@ -793,6 +794,37 @@ def _register(
             rename=rename,
         )
     return path
+
+
+@click.option(
+    "-l",
+    "--pyramid",
+    help="Pyramid level. We will use the lowest level by default, but you can decrease it to preview higher resolution"
+    " image.",
+    type=click.IntRange(-3, -1, clamp=True),
+    default=-1,
+    show_default=True,
+)
+@project_path_multi_
+@elastix.command("preview", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+def preview_cmd(project_dir: ty.Sequence[str], pyramid: int) -> None:
+    """Update project paths (e.g after folder move)."""
+    preview_runner(project_dir, pyramid)
+
+
+def preview_runner(paths: ty.Sequence[str], pyramid: int, valis: bool = False) -> None:
+    """Register images."""
+    from image2image_reg.workflows import ElastixReg, ValisReg
+
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Source directories", "-l/--pyramid", pyramid),
+    )
+
+    for path in paths:
+        obj = (ElastixReg if not valis else ValisReg).from_path(path)
+        obj.set_logger()
+        obj.preview()
 
 
 @overwrite_
