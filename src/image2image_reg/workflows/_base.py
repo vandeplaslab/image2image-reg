@@ -19,6 +19,8 @@ from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox
 if ty.TYPE_CHECKING:
     from image2image_io.readers import BaseReader
 
+    from image2image_reg.wrapper import ImageWrapper
+
 
 class Workflow:
     """Base class for all workflows."""
@@ -209,6 +211,16 @@ class Workflow:
             if name_or_path and (modality.name == str(name_or_path) or modality.path == Path(name_or_path)):
                 return modality
         return None
+
+    def get_wrapper(
+        self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None
+    ) -> ImageWrapper | None:
+        """Get modality."""
+        from image2image_reg.wrapper import ImageWrapper
+
+        modality = self.get_modality(name, path, name_or_path)
+        if modality:
+            return ImageWrapper(modality)
 
     def has_modality(
         self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None

@@ -45,7 +45,7 @@ class PreprocessorMixin:
     @property
     def is_rgb(self) -> bool:
         """Check if image is RGB."""
-        from image2image_io.readers.utilities import guess_rgb
+        from image2image_io.utils.utilities import guess_rgb
 
         return guess_rgb(self.shape)
 

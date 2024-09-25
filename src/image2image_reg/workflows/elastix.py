@@ -96,6 +96,13 @@ class ElastixReg(Workflow):
         return directory
 
     @property
+    def overlap_dir(self) -> Path:
+        """Results directory."""
+        directory = self.project_dir / "Overlap"
+        directory.mkdir(exist_ok=True, parents=True)
+        return directory
+
+    @property
     def is_registered(self) -> bool:
         """Check if the project has been registered."""
         return all(reg_edge["registered"] for reg_edge in self.registration_nodes)
@@ -716,9 +723,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -837,6 +844,10 @@ class ElastixReg(Workflow):
                 _safe_delete(file)
             _safe_delete(self.progress_dir)
 
+            for file in self.overlap_dir.glob("*"):
+                _safe_delete(file)
+            _safe_delete(self.overlap_dir)
+
         if image:
             for file in self.image_dir.glob("*"):
                 _safe_delete(file)
@@ -924,6 +935,72 @@ class ElastixReg(Workflow):
                 )
         return out
 
+    def _generate_overlap_image(self) -> None:
+        """Generate overlap of images."""
+        from image2image_io.utils.utilities import get_shape_of_image
+
+        from image2image_reg.elastix.utilities import transform_images_for_pyramid
+        from image2image_reg.utils.visuals import create_overlap_img
+
+        reg_modality_list, not_reg_modality_list, _ = self._get_modalities_to_transform()
+        images_from_all = []
+
+        # let's iterate through all registration paths
+        for source, target_pair in self.registration_paths.items():
+            images = []
+            target, through = (target_pair[-1], target_pair[0]) if len(target_pair) == 2 else (target_pair[0], None)
+            target_modality = self.modalities[target]
+            target_wrapper = self.get_wrapper(name=target_modality.name)
+            assert target_wrapper, f"Could not find wrapper for {target_modality.name}"
+            _, transformation, _ = self._prepare_transform(target_modality.name)
+            target_image = transform_images_for_pyramid(target_wrapper, transformation)
+            _, _, shape = get_shape_of_image(target_image)
+            images.append(target_image)
+
+            source_modality = self.modalities[source]
+            source_wrapper = self.get_wrapper(name=source_modality.name)
+            assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
+            _, transformation, _ = self._prepare_transform(source_modality.name)
+            assert transformation is not None, f"Transformation is None for {source_modality.name}"
+            transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(-1), shape[::-1])
+            images.append(transform_images_for_pyramid(source_wrapper, transformation))
+
+            if through:
+                through_modality = self.modalities[through]
+                through_wrapper = self.get_wrapper(name=through_modality.name)
+                assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
+                _, transformation, _ = self._prepare_transform(through_modality.name)
+                assert transformation is not None, f"Transformation is None for {through_modality.name}"
+                transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(-1), shape[::-1])
+                images.append(transform_images_for_pyramid(through_wrapper, transformation))
+            images_from_all.extend(images)
+            yield create_overlap_img(images)
+        # # let's transform the registered modalities first
+        # for modality in reg_modality_list:
+        #     # retrieve image
+        #     image_modality, transformations, _ = self._prepare_registered_transform(modality, attachment=False)
+        #
+        #     # retrieve target image
+        #     target_modality = self.registration_paths[modality][-1]
+        #     target_wrapper = self.get_wrapper(name=target_modality)
+        #     transformations.set_output_spacing(
+        #         target_wrapper.reader.scale_for_pyramid(-1), target_wrapper.reader.pyramid[-1]
+        #     )
+        #     # transform image
+        #     images.append(transform_images_for_pyramid(wrapper, transformations))
+
+        # for modality, edges in self.transform_path_map.items():
+        #     for index, edge in enumerate(edges):
+        #         source = edge["source"]
+        #         target = edge["target"]
+        #         target, through = (target[1], target[0]) if isinstance(target, list) else (target, None)
+
+        #     source_modality = self.modalities[source]
+        #     target_modality = self.modalities[target[-1]]
+        #     source_wrapper = self._preprocess_image(source_modality)
+        #     target_wrapper = self._preprocess_image(target_modality)
+        #     create_overlap_img(source_wrapper, target_wrapper, self.overlap_dir)
+
     def write(
         self,
         fmt: WriterMode = "ome-tiff",
@@ -954,17 +1031,7 @@ class ElastixReg(Workflow):
         self.load_preprocessed_cache()
 
         paths = []
-        # prepare merge modalities metadata
-        merge_modalities = self._find_merge_modalities()
-        if merge_modalities:
-            logger.trace(f"Merge modalities: {merge_modalities}")
-        reg_modality_list = list(self.registration_paths.keys())
-        if reg_modality_list:
-            logger.trace(f"Registered modalities: {reg_modality_list}")
-
-        not_reg_modality_list = self._find_not_registered_modalities()
-        if not_reg_modality_list:
-            logger.trace(f"Not registered modalities: {not_reg_modality_list}")
+        reg_modality_list, not_reg_modality_list, merge_modalities = self._get_modalities_to_transform()
 
         if remove_merged:
             for merge_modality in merge_modalities:
@@ -1012,44 +1079,19 @@ class ElastixReg(Workflow):
             paths.append(path)
         return paths
 
-    def _export_not_registered_images(
-        self,
-        modalities: list[str],
-        fmt: str | WriterMode = "ome-tiff",
-        to_original_size: bool = True,
-        tile_size: int = 512,
-        as_uint8: bool | None = None,
-        rename: bool = True,
-        n_parallel: int = 1,
-        overwrite: bool = False,
-    ) -> list[Path]:
-        # preprocess and save unregistered nodes
-        paths = []
-        to_write = []
-        for modality in tqdm(modalities, desc="Exporting not-registered images..."):
-            try:
-                image_modality, transformations, output_path = self._prepare_not_registered_transform(
-                    modality,
-                    to_original_size=to_original_size,
-                    rename=rename,
-                )
-                if _get_with_suffix(output_path, fmt).exists() and not overwrite:
-                    logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
-                    continue
-                logger.trace(f"Exporting {modality} to {output_path}... (registered)")
-                to_write.append((image_modality, transformations, output_path, fmt, tile_size, as_uint8))
-            except KeyError:
-                logger.exception(f"Could not find transformation data for {modality}.")
-        if to_write:
-            if n_parallel > 1:
-                with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
-                    res = pool.imap(self._transform_write_image, to_write)
-                paths.extend(list(res))
-            else:
-                for args in tqdm(to_write, desc="Exporting not-registered modalities..."):
-                    path = self._transform_write_image(*args)
-                    paths.append(path)
-        return paths
+    def _get_modalities_to_transform(self) -> tuple[list[str], list[str], list[str]]:
+        # prepare merge modalities metadata
+        merge_modalities = self._find_merge_modalities()
+        if merge_modalities:
+            logger.trace(f"Merge modalities: {merge_modalities}")
+        reg_modality_list = list(self.registration_paths.keys())
+        if reg_modality_list:
+            logger.trace(f"Registered modalities: {reg_modality_list}")
+
+        not_reg_modality_list = self._find_not_registered_modalities()
+        if not_reg_modality_list:
+            logger.trace(f"Not registered modalities: {not_reg_modality_list}")
+        return reg_modality_list, not_reg_modality_list, merge_modalities
 
     def _export_registered_images(
         self,
@@ -1094,6 +1136,45 @@ class ElastixReg(Workflow):
                 paths.extend(list(res))
             else:
                 for args in tqdm(to_write, desc="Exporting registered modalities (registered)..."):
+                    path = self._transform_write_image(*args)
+                    paths.append(path)
+        return paths
+
+    def _export_not_registered_images(
+        self,
+        modalities: list[str],
+        fmt: str | WriterMode = "ome-tiff",
+        to_original_size: bool = True,
+        tile_size: int = 512,
+        as_uint8: bool | None = None,
+        rename: bool = True,
+        n_parallel: int = 1,
+        overwrite: bool = False,
+    ) -> list[Path]:
+        # preprocess and save unregistered nodes
+        paths = []
+        to_write = []
+        for modality in tqdm(modalities, desc="Exporting not-registered images..."):
+            try:
+                image_modality, transformations, output_path = self._prepare_not_registered_transform(
+                    modality,
+                    to_original_size=to_original_size,
+                    rename=rename,
+                )
+                if _get_with_suffix(output_path, fmt).exists() and not overwrite:
+                    logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
+                    continue
+                logger.trace(f"Exporting {modality} to {output_path}... (registered)")
+                to_write.append((image_modality, transformations, output_path, fmt, tile_size, as_uint8))
+            except KeyError:
+                logger.exception(f"Could not find transformation data for {modality}.")
+        if to_write:
+            if n_parallel > 1:
+                with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
+                    res = pool.imap(self._transform_write_image, to_write)
+                paths.extend(list(res))
+            else:
+                for args in tqdm(to_write, desc="Exporting not-registered modalities..."):
                     path = self._transform_write_image(*args)
                     paths.append(path)
         return paths
@@ -1255,6 +1336,12 @@ class ElastixReg(Workflow):
             logger.info(f"Exporting attachment images took {timer()}.")
         return paths
 
+    def _prepare_transform(self, edge_key: str) -> tuple[Modality, TransformSequence | None, Path]:
+        try:
+            return self._prepare_registered_transform(edge_key)
+        except KeyError:
+            return self._prepare_not_registered_transform(edge_key)
+
     def _prepare_registered_transform(
         self,
         edge_key: str,
@@ -1291,7 +1378,6 @@ class ElastixReg(Workflow):
             else:
                 output_spacing_target = self.modalities[final_modality].pixel_size
                 transformations.set_output_spacing((output_spacing_target, output_spacing_target))
-
         elif modality.output_pixel_size:
             transformations.set_output_spacing(modality.output_pixel_size)
         if attachment:  # and modality_key:
@@ -1305,7 +1391,7 @@ class ElastixReg(Workflow):
         attachment_modality: Modality | None = None,
         to_original_size: bool = True,
         rename: bool = True,
-    ) -> tuple[Modality, TransformSequence, Path]:
+    ) -> tuple[Modality, TransformSequence | None, Path]:
         from image2image_reg.utils.transformation import identity_elx_transform
         from image2image_reg.wrapper import ImageWrapper
 
@@ -1616,7 +1702,7 @@ class ElastixReg(Workflow):
         }
         return config
 
-    def save(self, registered: bool = False, auto: bool = False) -> Path:
+    def save(self, registered: bool = False, auto: bool = False, **kwargs: ty.Any) -> Path:
         """Save configuration to file."""
         status = "registered" if registered is True else "setup"
         config = self._get_config(registered)
@@ -1634,7 +1720,7 @@ class ElastixReg(Workflow):
 
     def save_to_wsireg(self, filename: PathLike | None = None, registered: bool = False) -> Path:
         """Save workflow configuration."""
-        import yaml  # type: ignore[import]
+        import yaml
 
         ts = time.strftime("%Y%m%d-%H%M%S")
         status = "registered" if registered is True else "setup"

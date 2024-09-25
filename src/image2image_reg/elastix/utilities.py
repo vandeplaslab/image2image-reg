@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing as ty
 from copy import deepcopy
 from pathlib import Path
 
@@ -9,6 +10,9 @@ from koyo.typing import PathLike
 from tqdm import tqdm
 
 from image2image_reg.models import TransformSequence
+
+if ty.TYPE_CHECKING:
+    from image2image_reg.wrapper import ImageWrapper
 
 
 def transform_points(
@@ -308,3 +312,23 @@ def _transform_geojson_features(
                     geometry["coordinates"][j][i] = np.c_[x, y].tolist()
         result.append(feature)
     return result
+
+
+def transform_images_for_pyramid(
+    wrapper: ImageWrapper, transformation_sequence: TransformSequence | None, pyramid: int = -1
+) -> np.ndarray:
+    """Transform all images."""
+    import SimpleITK as sitk
+
+    reader = wrapper.reader
+    channel_axis, n_channels = reader.get_channel_axis_and_n_channels()
+    if transformation_sequence is None:
+        return np.asarray(reader.pyramid[pyramid])
+
+    transformed = []
+    for channel_index in reader.channel_ids:
+        image = np.squeeze(reader.get_channel(channel_index, pyramid, split_rgb=True))
+        image = sitk.GetImageFromArray(image)
+        image.SetSpacing(reader.scale_for_pyramid(pyramid))
+        transformed.append(sitk.GetArrayFromImage(transformation_sequence(image)))
+    return np.stack(transformed, axis=channel_axis)

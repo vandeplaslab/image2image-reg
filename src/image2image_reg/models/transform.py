@@ -156,7 +156,14 @@ class TransformMixin:
             transformed_points = transformed_points * inv_target_pixel_size
         return transformed_points
 
-    def set_output_spacing(self, spacing: tuple[float, float] | tuple[int, int]) -> None:
+    def set_output_size(self, new_size: tuple[int, int]) -> None:
+        """Set output size."""
+        self.output_size = new_size
+        self._build_resampler()
+
+    def set_output_spacing(
+        self, spacing: tuple[float, float] | tuple[int, int], output_size: tuple[int, int] | None = None
+    ) -> None:
         """Method that allows setting the output spacing of the resampler to resampled to any pixel spacing desired.
 
         This will also change the output_size to match.
@@ -165,13 +172,16 @@ class TransformMixin:
         ----------
         spacing: tuple of float
             Spacing to set the new image. Will also change the output size to match.
+        output_size: tuple of int
+            Size of the output image. If None, will be calculated from the output_spacing
         """
-        output_size_scaling = np.asarray(self.output_spacing) / np.asarray(spacing)
-        new_size = np.ceil(np.multiply(self.output_size, output_size_scaling))
-        new_size: tuple[int, int] = tuple([int(i) for i in new_size])  # type: ignore[no-redef]
+        if output_size is None:
+            output_size_scaling = np.asarray(self.output_spacing) / np.asarray(spacing)
+            new_size = np.ceil(np.multiply(self.output_size, output_size_scaling))
+            output_size: tuple[int, int] = tuple([int(i) for i in new_size])  # type: ignore[no-redef]
 
         self.output_spacing = spacing
-        self.output_size = new_size  # type: ignore[assignment]
+        self.output_size = output_size
         self._build_resampler()
 
     def as_array(

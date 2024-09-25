@@ -1,41 +1,14 @@
 """Visuals."""
 
+from __future__ import annotations
+
 import colour
 import numba as nb
 import numpy as np
+from image2image_io.utils.utilities import get_shape_of_image, guess_rgb
 from scipy.spatial import distance
 from skimage import exposure
-
-
-def get_n_colors(rgb, n):
-    """
-    Pick n most different colors in rgb. Differences based of rgb values in the CAM16UCS colorspace
-    Based on https://larssonjohan.com/post/2016-10-30-farthest-points/.
-    """
-    with colour.utilities.suppress_warnings(colour_usage_warnings=True):
-        if 1 < rgb.max() <= 255 and np.issubdtype(rgb.dtype, np.integer):
-            cam = colour.convert(rgb / 255, "sRGB", "CAM16UCS")
-        else:
-            cam = colour.convert(rgb, "sRGB", "CAM16UCS")
-
-    sq_D = distance.cdist(cam, cam)
-    max_D = sq_D.max()
-    most_dif_2Didx = np.where(sq_D == max_D)  # 2 most different colors
-    most_dif_img1 = most_dif_2Didx[0][0]
-    most_dif_img2 = most_dif_2Didx[1][0]
-    rgb_idx = [most_dif_img1, most_dif_img2]
-
-    possible_idx = list(range(sq_D.shape[0]))
-    possible_idx.remove(most_dif_img1)
-    possible_idx.remove(most_dif_img2)
-
-    for _new_color in range(2, n):
-        max_d_idx = np.argmax([np.min(sq_D[i, rgb_idx]) for i in possible_idx])
-        new_rgb_idx = possible_idx[max_d_idx]
-        rgb_idx.append(new_rgb_idx)
-        possible_idx.remove(new_rgb_idx)
-
-    return rgb[rgb_idx]
+from skimage.color import lab2rgb, rgb2gray, rgb2lab
 
 
 @nb.njit(fastmath=True, cache=True)
@@ -95,7 +68,7 @@ def blend_colors(img: np.ndarray, colors: np.ndarray, scale_by: str):
     return blended_img
 
 
-def jzazbz_cmap(luminosity=0.012, colorfulness=0.02, max_h=260):
+def jzazbz_cmap(luminosity: float = 0.012, colorfulness: float = 0.02, max_h: float = 260) -> np.ndarray:
     """
     Get colormap based on JzAzBz colorspace, which has good hue linearity.
     Already preceptually uniform.
@@ -121,7 +94,6 @@ def jzazbz_cmap(luminosity=0.012, colorfulness=0.02, max_h=260):
     rgb = np.clip(rgb, 0, 1)[0]
     if max_h != 360:
         rgb = rgb[0:max_h]
-
     return rgb
 
 
@@ -199,5 +171,124 @@ def color_multichannel(
     srgb_blended = np.clip(srgb_blended, 0, 1)
     if not is_srgb_01:
         srgb_blended = (255 * srgb_blended).astype(marker_colors.dtype)
-
     return srgb_blended
+
+
+def get_n_colors(rgb: np.ndarray, n: int) -> np.ndarray:
+    """
+    Pick n most different colors in rgb. Differences based of rgb values in the CAM16UCS colorspace
+    Based on https://larssonjohan.com/post/2016-10-30-farthest-points/
+    """
+    n_clrs = rgb.shape[0]
+    if n_clrs < n:
+        n_full_rep = n // n_clrs
+        n_extra = n % n_clrs
+
+        all_colors = np.vstack([*[rgb] * n_full_rep, rgb[0:n_extra]])
+        assert all_colors.shape[0] == n
+
+        np.random.shuffle(all_colors)
+
+        return all_colors
+
+    with colour.utilities.suppress_warnings(colour_usage_warnings=True):
+        if 1 < rgb.max() <= 255 and np.issubdtype(rgb.dtype, np.integer):
+            cam = colour.convert(rgb / 255, "sRGB", "CAM16UCS")
+        else:
+            cam = colour.convert(rgb, "sRGB", "CAM16UCS")
+
+    sq_D = distance.cdist(cam, cam)
+    max_D = sq_D.max()
+    most_dif_2Didx = np.where(sq_D == max_D)  # 2 most different colors
+    most_dif_img1 = most_dif_2Didx[0][0]
+    most_dif_img2 = most_dif_2Didx[1][0]
+    rgb_idx = [most_dif_img1, most_dif_img2]
+
+    possible_idx = list(range(sq_D.shape[0]))
+    possible_idx.remove(most_dif_img1)
+    possible_idx.remove(most_dif_img2)
+
+    for new_color in range(2, n):
+        max_d_idx = np.argmax([np.min(sq_D[i, rgb_idx]) for i in possible_idx])
+        new_rgb_idx = possible_idx[max_d_idx]
+        rgb_idx.append(new_rgb_idx)
+        possible_idx.remove(new_rgb_idx)
+    return rgb[rgb_idx]
+
+
+def get_shape(img: np.ndarray) -> np.ndarray:
+    """Get shape of image (row, col, nchannels)
+
+    Parameters
+    ----------
+    img : numpy.array, pyvips.Image
+        Image to get shape of
+
+    Returns
+    -------
+    shape_rc : numpy.array
+        Number of rows and columns and channels in the image
+
+    """
+    shape_rc = np.array(img.shape[0:2])
+    ndim = img.shape[2] if img.ndim > 2 else 1
+    shape = np.array([*shape_rc, ndim])
+    return shape
+
+
+def create_overlap_img(img_list: list[np.ndarray], cmap: np.ndarray | None = None) -> np.ndarray:
+    """
+    Parameters
+    ----------
+    img_list : list
+        list of single channel images to create overlap from
+    cmap : ndarray, optional
+        colormap to use for coloring the images
+
+    Returns
+    -------
+    blended : ndarray
+        Overlap of images in `img_list` colored by `cmap`
+    """
+    if cmap is None:
+        cmap = jzazbz_cmap()
+
+    n_imgs = len(img_list)
+    color_list = get_n_colors(cmap, n_imgs)
+
+    grey_img_list = []
+    for img in img_list:
+        _, channel_axis, shape = get_shape_of_image(img)
+        is_rgb = guess_rgb(img.shape)
+        if is_rgb:
+            grey_img_list.append(rgb2gray(img))
+        elif channel_axis is None:
+            grey_img_list.append(img)
+        # elif channel_axis == 2:
+        #     grey_img_list.append(img[:, :, 0])
+        # elif channel_axis == 0:
+        #     grey_img_list.append(img[0, :, :])
+        else:
+            grey_img_list.append(np.mean(img, axis=channel_axis))
+
+    # normalize the images
+    for i in range(len(grey_img_list)):
+        grey_img_list[i] = exposure.rescale_intensity(grey_img_list[i], out_range=(0, 1))
+
+    eps = np.finfo("float").eps
+    sum_img = np.full(get_shape(grey_img_list[0])[0:2], eps)
+    blended_img = np.zeros((*sum_img.shape, 3))
+
+    max_v = 0
+    for i in range(len(grey_img_list)):
+        sum_img += grey_img_list[i]
+        max_v = max(max_v, grey_img_list[i].max())
+
+    vips_lab_color_list = [rgb2lab(np.array([[clr]])) * 255 for clr in color_list]
+    for i in range(len(grey_img_list)):
+        weight = grey_img_list[i] / sum_img
+        lab_clr = vips_lab_color_list[i]
+        blended_img += lab_clr * np.dstack([grey_img_list[i] / max_v * weight] * 3)
+
+    blended = lab2rgb(blended_img)
+    return np.asarray(blended)
