@@ -151,7 +151,7 @@ class ElastixReg(Workflow):
             if modality.name not in self.preprocessed_cache["image_spacing"]:
                 wrapper = ImageWrapper(modality)
                 self.preprocessed_cache["image_spacing"][modality.name] = wrapper.reader.scale
-                self.preprocessed_cache["image_sizes"][modality.name] = wrapper.reader.image_shape
+                self.preprocessed_cache["image_sizes"][modality.name] = wrapper.reader.image_shape[::-1]
 
     def print_summary(self, func: ty.Callable = logger.info) -> None:
         """Print summary about the project."""
@@ -937,14 +937,13 @@ class ElastixReg(Workflow):
 
     def preview(self, **kwargs: ty.Any) -> None:
         """Preview registration."""
+        self.load_preprocessed_cache()
         self._generate_overlap_image()
 
     def _generate_overlap_image(self, pyramid: int = -1) -> None:
         """Generate overlap of images."""
-        from image2image_io.utils.utilities import get_shape_of_image
-        from koyo.visuals import save_gray, save_rgb
+        from koyo.visuals import save_rgb
 
-        from image2image_reg.elastix.utilities import transform_images_for_pyramid
         from image2image_reg.utils.visuals import create_overlap_img
 
         if not self.is_registered:
@@ -952,18 +951,53 @@ class ElastixReg(Workflow):
             return
 
         images_from_all = []
+        logger.trace(f"Generating overlap images at pyramid level of {pyramid}")
         # let's iterate through all registration paths
         for source, target_pair in self.registration_paths.items():
-            images, names = [], []
-            target, through = (target_pair[-1], target_pair[0]) if len(target_pair) == 2 else (target_pair[0], None)
+            images, names = self._generate_overlap_image_for_modality(source, pyramid)
+            images_from_all.extend(images)
+
+        # also export all images
+        try:
+            overlap, _ = create_overlap_img(images_from_all)
+            path = self.overlap_dir / "all_overlap.png"
+            save_rgb(path, overlap)
+            logger.trace(f"Saved overlap image to '{path}'.")
+        except Exception as e:
+            logger.error(f"Could not save overlap image of all images. {e}")
+
+    def _generate_overlap_image_for_modality(self, source: str, pyramid: int = -1) -> tuple[list, list]:
+        from image2image_io.utils.utilities import get_shape_of_image
+        from koyo.visuals import save_gray, save_rgb
+
+        from image2image_reg.elastix.utilities import transform_images_for_pyramid
+        from image2image_reg.utils.visuals import create_overlap_img
+
+        target_pair = self.registration_paths[source]
+
+        images, names = [], []
+        target, through = (target_pair[-1], target_pair[0]) if len(target_pair) == 2 else (target_pair[0], None)
+        path = self.overlap_dir / f"overlap_{source}_to_{target}.png"
+        if path.exists():
+            logger.warning(f"Overlap image already exists at '{path}'. Skipping.")
+            return images, names
+
+        with MeasureTimer() as timer:
             target_modality = self.modalities[target]
             target_wrapper = self.get_wrapper(name=target_modality.name)
             assert target_wrapper, f"Could not find wrapper for {target_modality.name}"
             _, transformation, _ = self._prepare_transform(target_modality.name)
+            if transformation:
+                shape = target_wrapper.reader.pyramid[pyramid].shape
+                _, _, shape = get_shape_of_image(shape)
+                transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
             target_image = transform_images_for_pyramid(target_wrapper, transformation, pyramid)
+            logger.trace(f"Transformed {target} in {timer(since_last=True)}")
             _, _, shape = get_shape_of_image(target_image)
+            # TODO: resample to maximum shape e.g. 1000px
             images.append(target_image)
             names.append(target_modality.name)
+            logger.trace(f"Previewing overview with {shape} ({pyramid})")
 
             source_modality = self.modalities[source]
             source_wrapper = self.get_wrapper(name=source_modality.name)
@@ -973,6 +1007,7 @@ class ElastixReg(Workflow):
             transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
             images.append(transform_images_for_pyramid(source_wrapper, transformation, pyramid))
             names.append(source_modality.name)
+            logger.trace(f"Transformed {source} in {timer(since_last=True)}")
 
             if through:
                 through_modality = self.modalities[through]
@@ -983,25 +1018,19 @@ class ElastixReg(Workflow):
                 transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
                 images.insert(1, transform_images_for_pyramid(through_wrapper, transformation, pyramid))
                 names.append(through_modality.name)
+                logger.trace(f"Transformed {through} in {timer(since_last=True)}")
 
-            images_from_all.extend(images)
+            # create overlap plot
             overlap, greys = create_overlap_img(images)
-            path = self.overlap_dir / f"overlap_{source}_to_{target}.png"
             save_rgb(path, overlap)
             logger.trace(f"Saved overlap image to '{path}'.")
             for name, grey in zip(names, greys):
                 path = self.overlap_dir / f"grey_{name}.png"
+                if path.exists():
+                    continue
                 save_gray(path, grey, multiplier=1)
                 logger.trace(f"Saved greyscale image to '{path}'.")
-
-        # also export all images
-        try:
-            overlap, _ = create_overlap_img(images_from_all)
-            path = self.overlap_dir / "all_overlap.png"
-            save_rgb(path, overlap)
-            logger.trace(f"Saved overlap image to '{path}'.")
-        except Exception as e:
-            logger.error(f"Could not save overlap image of all images. {e}")
+        return images, names
 
     def write(
         self,
@@ -1109,11 +1138,8 @@ class ElastixReg(Workflow):
         paths = []
         to_write = []
         for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
-            image_modality, _, output_path = self._prepare_registered_transform(
-                modality,
-                attachment=False,
-                to_original_size=to_original_size,
-                rename=rename,
+            image_modality, _, output_path = self._prepare_transform(
+                modality, to_original_size=to_original_size, rename=rename
             )
 
             if _get_with_suffix(output_path, fmt).exists() and not overwrite:
@@ -1158,16 +1184,14 @@ class ElastixReg(Workflow):
         to_write = []
         for modality in tqdm(modalities, desc="Exporting not-registered images..."):
             try:
-                image_modality, transformations, output_path = self._prepare_not_registered_transform(
-                    modality,
-                    to_original_size=to_original_size,
-                    rename=rename,
+                image_modality, transformation, output_path = self._prepare_transform(
+                    modality, to_original_size=to_original_size, rename=rename
                 )
                 if _get_with_suffix(output_path, fmt).exists() and not overwrite:
                     logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
                     continue
                 logger.trace(f"Exporting {modality} to {output_path}... (registered)")
-                to_write.append((image_modality, transformations, output_path, fmt, tile_size, as_uint8))
+                to_write.append((image_modality, transformation, output_path, fmt, tile_size, as_uint8))
             except KeyError:
                 logger.exception(f"Could not find transformation data for {modality}.")
         if to_write:
@@ -1200,10 +1224,7 @@ class ElastixReg(Workflow):
                 shape_pixel_size = attached_shape_dict["pixel_size"]
                 attach_to_modality = self.modalities[attached_to]
                 if attached_to not in attached_to_modality_transform:
-                    if self._is_being_registered(attach_to_modality):
-                        _, transform_sequence, _ = self._prepare_registered_transform(attach_to_modality.name)
-                    else:
-                        _, transform_sequence, _ = self._prepare_not_registered_transform(attach_to_modality.name)
+                    _, transform_sequence, _ = self._prepare_transform(attach_to_modality.name)
                     attached_to_modality_transform[attached_to] = transform_sequence
                 transform_sequence = attached_to_modality_transform[attached_to]
 
@@ -1243,10 +1264,7 @@ class ElastixReg(Workflow):
                 shape_pixel_size = attached_shape_dict["pixel_size"]
                 attach_to_modality = self.modalities[attached_to]
                 if attached_to not in attached_to_modality_transform:
-                    if self._is_being_registered(attach_to_modality):
-                        _, transform_sequence, _ = self._prepare_registered_transform(attach_to_modality.name)
-                    else:
-                        _, transform_sequence, _ = self._prepare_not_registered_transform(attach_to_modality.name)
+                    _, transform_sequence, _ = self._prepare_transform(attach_to_modality.name)
                     attached_to_modality_transform[attached_to] = transform_sequence
                 transform_sequence = attached_to_modality_transform[attached_to]
                 for file in attached_shape_dict["files"]:
@@ -1338,11 +1356,16 @@ class ElastixReg(Workflow):
             logger.info(f"Exporting attachment images took {timer()}.")
         return paths
 
-    def _prepare_transform(self, edge_key: str) -> tuple[Modality, TransformSequence | None, Path]:
+    def _prepare_transform(
+        self,
+        edge_key: str,
+        to_original_size: bool = True,
+        rename: bool = True,
+    ) -> tuple[Modality, TransformSequence | None, Path]:
         try:
-            return self._prepare_registered_transform(edge_key)
+            return self._prepare_registered_transform(edge_key, to_original_size=to_original_size, rename=rename)
         except KeyError:
-            return self._prepare_not_registered_transform(edge_key)
+            return self._prepare_not_registered_transform(edge_key, to_original_size=to_original_size, rename=rename)
 
     def _prepare_registered_transform(
         self,

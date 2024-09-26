@@ -315,7 +315,10 @@ def _transform_geojson_features(
 
 
 def transform_images_for_pyramid(
-    wrapper: ImageWrapper, transformation_sequence: TransformSequence | None, pyramid: int = -1
+    wrapper: ImageWrapper,
+    transformation_sequence: TransformSequence | None,
+    pyramid: int = -1,
+    channel_ids: list[int] = None,
 ) -> np.ndarray:
     """Transform all images."""
     import SimpleITK as sitk
@@ -326,7 +329,8 @@ def transform_images_for_pyramid(
         return np.asarray(reader.pyramid[pyramid])
 
     transformed = []
-    for channel_index in reader.channel_ids:
+    channel_ids = channel_ids or reader.channel_ids
+    for channel_index in channel_ids:
         image = np.squeeze(reader.get_channel(channel_index, pyramid, split_rgb=True))
         image = sitk.GetImageFromArray(image)
         image.SetSpacing(reader.scale_for_pyramid(pyramid))
