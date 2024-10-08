@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import re
 import typing as ty
+import warnings
 from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from koyo.typing import PathLike
+from koyo.utilities import find_nearest_index_batch
 from loguru import logger
 from natsort import natsorted
 from tqdm import tqdm
@@ -53,6 +55,157 @@ def transform_points(
     return _transform_points(slide_src, x, y, crop=crop, non_rigid=non_rigid, silent=silent)
 
 
+def transform_points_as_image(
+    registrar: Valis,
+    source_path: PathLike,
+    x: np.ndarray,
+    y: np.ndarray,
+    df: pd.DataFrame,
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
+    silent: bool = False,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    """Transform points."""
+    from valis.valtils import get_name
+
+    # retrieve slide
+    slide_src = registrar.get_slide(get_name(str(source_path)))
+    if not Path(slide_src.src_f).exists():
+        raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
+    return _transform_points_as_image(slide_src, x, y, df, crop=crop, non_rigid=non_rigid, silent=silent)
+
+
+def _transform_points_as_image(
+    slide_src: Slide,
+    x: np.ndarray,
+    y: np.ndarray,
+    df: pd.DataFrame,
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
+    trim: bool = True,
+    silent: bool = False,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    image_of_index, index_of_coords, x, y, df = _prepare_transform_coordinate_image(slide_src, x, y, df)
+    image_of_index_transformed, _ = _transform_coordinate_image(
+        slide_src, image_of_index, crop=crop, non_rigid=non_rigid
+    )
+    new_x, new_y, df = _cleanup_transform_coordinate_image(
+        slide_src, image_of_index_transformed, index_of_coords, df, trim=trim
+    )
+
+    return new_x, new_y, df
+
+
+def _prepare_transform_coordinate_image(
+    slide_src: Slide, x: np.ndarray, y: np.ndarray, df: pd.DataFrame
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, pd.DataFrame]:
+    # get coordinates of the image
+    x = np.round(x).astype(int)
+    y = np.round(y).astype(int)
+    index_of_coords = np.arange(len(x)) + 1
+
+    # get slide shape
+    shape = slide_src.slide_dimensions_wh[0]
+    width, height = shape
+
+    # crop so that only the coordinates within the slide are kept
+    x[x < 0] = 0
+    x[x >= width] = width - 1
+    y[y < 0] = 0
+    y[y >= height] = height - 1
+
+    # indices = np.where((x >= 0) & (x < width) & (y >= 0) & (y < height))
+    # index_of_coords = index_of_coords[indices]
+    # x = x[indices]
+    # y = y[indices]
+    # df = df.iloc[indices]
+    # df.reset_index(drop=True, inplace=True)
+
+    # let's create a image  of the same shape as the source image
+    # image_of_index = np.full(shape[::-1], np.nan, dtype=np.float32)
+    image_of_index = np.zeros(shape[::-1], dtype=np.int32)
+    image_of_index[y, x] = index_of_coords
+    return image_of_index, index_of_coords, x, y, df
+
+
+def _transform_coordinate_image(
+    slide_src: Slide,
+    image_of_index: np.ndarray,
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        image_of_index_ = slide_src.warp_img(image_of_index, crop=crop, non_rigid=non_rigid, interp_method="nearest")
+    return image_of_index_, image_of_index_.flatten()
+
+
+def _cleanup_transform_coordinate_image(
+    slide_src: Slide, image_of_index: np.ndarray, index_of_coords: np.ndarray, df: pd.DataFrame, trim: bool = True
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    yy, xx = np.nonzero(image_of_index)
+    values = image_of_index[yy, xx]
+    sort = np.argsort(values)
+    values = values[sort]
+    xx = xx[sort]
+    yy = yy[sort]
+    indices = find_nearest_index_batch(values, index_of_coords)
+    new_x = xx[indices]
+    new_x = new_x + np.random.uniform(-0.1, 0.1, len(indices))
+    new_y = yy[indices]
+    new_y = new_y + np.random.uniform(-0.1, 0.1, len(indices))
+    # indices = find_nearest_index_batch(image_of_index_flat, index_of_coords, sort=True)
+    # if trim:
+    #     retain_indices = np.where(image_of_index_flat[indices] == index_of_coords)
+    #     indices = indices[retain_indices]
+    #     df = df.iloc[retain_indices]
+    #
+    # # get image coordinates
+    # height, width = slide_src.slide_shape_rc
+    # yy, xx = np.meshgrid(np.arange(0, height), np.arange(0, width))
+    # xx = xx.flatten()
+    # new_x = xx[indices]
+    # # add slight wobble to avoid overlapping points - avoid repeating values
+    # new_x = new_x + np.random.uniform(-0.1, 0.1, len(indices))
+    # yy = yy.flatten()
+    # new_y = yy[indices]
+    # new_y = new_y + np.random.uniform(-0.1, 0.1, len(indices))
+    return new_x, new_y, df
+
+
+def _filter_transform_coordinate_image(
+    slide_src: Slide,
+    x: np.ndarray,
+    y: np.ndarray,
+    df: pd.DataFrame,
+    fraction: float = 0.15,
+) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+    width, height = slide_src.slide_dimensions_wh[0]
+    frac_width = width * fraction
+    frac_height = height * fraction
+
+    diff_x = np.abs(df.x - x)
+    max_shift_x = np.max(diff_x)
+    # if point shifts by more than 50% then it's likely very fishy!
+    if max_shift_x > frac_width:
+        logger.warning(f"Warning: x shift is more than {fraction:.1%} of the slide width - {max_shift_x:.1f}")
+        mask = diff_x < frac_width
+        x = x[mask]
+        y = y[mask]
+        df = df.loc[mask]
+
+    diff_y = np.abs(df.y - y)
+    max_shift_y = np.max(diff_y)
+    if max_shift_y > frac_height:
+        logger.warning(f"Warning: y shift is more than {fraction:.1%} of the slide height - {max_shift_y:.1f}")
+        mask = diff_y < frac_height
+        x = x[mask]
+        y = y[mask]
+        df = df.loc[mask]
+    df.reset_index(drop=True, inplace=True)
+    return x, y, df
+
+
 def transform_points_df(
     registrar: Valis,
     source_path: PathLike,
@@ -63,6 +216,7 @@ def transform_points_df(
     y_key: str = "y",
     suffix: str = "_transformed",
     replace: bool = False,
+    as_image: bool = False,
     silent: bool = False,
 ) -> pd.DataFrame:
     """Transform points in a dataframe.
@@ -87,6 +241,8 @@ def transform_points_df(
         Suffix to add to the transformed columns, by default "_transformed"
     replace : bool, optional
         Whether to replace the original columns with the transformed ones, by default False
+    as_image : bool, optional
+        Whether the points are in image coordinates, by default False
     silent : bool, optional
         Whether to show progress bar, by default False
     """
@@ -100,6 +256,7 @@ def transform_points_df(
         non_rigid=non_rigid,
         suffix=suffix,
         replace=replace,
+        as_image=as_image,
         silent=silent,
     )
 
@@ -114,6 +271,7 @@ def _transform_points_df(
     non_rigid: bool = True,
     suffix: str = "_transformed",
     replace: bool = False,
+    as_image: bool = False,
     silent: bool = False,
 ) -> pd.DataFrame:
     if x_key not in df.columns or y_key not in df.columns:
@@ -123,7 +281,12 @@ def _transform_points_df(
 
     x = df[x_key].values
     y = df[y_key].values
-    x, y = transform_points(registrar, source_path, x, y, crop=crop, non_rigid=non_rigid, silent=silent)
+    if as_image:
+        x, y, df = transform_points_as_image(
+            registrar, source_path, x, y, df, crop=crop, non_rigid=non_rigid, silent=silent
+        )
+    else:
+        x, y = transform_points(registrar, source_path, x, y, crop=crop, non_rigid=non_rigid, silent=silent)
     if f"{x_key}{suffix}" in df.columns:
         df.drop(columns=[f"{x_key}{suffix}"], inplace=True)
     if f"{y_key}{suffix}" in df.columns:
@@ -131,8 +294,8 @@ def _transform_points_df(
     if replace:
         df.insert(max(0, df.columns.get_loc(x_key)), f"{x_key}{suffix}", df[x_key])
         df.insert(max(0, df.columns.get_loc(y_key)), f"{y_key}{suffix}", df[y_key])
-        df[x_key] = x
-        df[y_key] = y
+        df.loc[:, x_key] = x
+        df.loc[:, y_key] = y
     else:
         df.insert(df.columns.get_loc(x_key), f"{x_key}{suffix}", x)
         df.insert(df.columns.get_loc(y_key), f"{y_key}{suffix}", y)
@@ -379,6 +542,7 @@ def transform_attached_points(
     non_rigid: bool = True,
     suffix: str = "_previous",
     overwrite: bool = False,
+    as_image: bool = False,
 ) -> list[Path]:
     """Transform attached points."""
     from image2image_io.readers.points_reader import read_points
@@ -418,8 +582,8 @@ def transform_attached_points(
             if x_key not in df.columns or y_key not in df.columns:
                 raise ValueError(f"Invalid columns: {df.columns}")
             # change dtype to float64
-            df[x_key] = df[x_key].astype(np.float64)
-            df[y_key] = df[y_key].astype(np.float64)
+            df.loc[:, x_key] = df[x_key].astype(np.float64)
+            df.loc[:, y_key] = df[y_key].astype(np.float64)
 
             # Valis operates in index units, so we need to convert from physical units to index units explicitly
             df[x_key], df[y_key] = _transform_original_from_um_to_px(df[x_key], df[y_key], is_px, source_pixel_size)
@@ -435,6 +599,7 @@ def transform_attached_points(
                 replace=True,
                 suffix=suffix,
                 non_rigid=non_rigid,
+                as_image=as_image,
             )
             df_transformed[x_key], df_transformed[y_key] = _transform_transformed_from_px_to_um(
                 df_transformed[x_key], df_transformed[y_key], is_px, target_pixel_size
@@ -459,12 +624,14 @@ def transform_attached_shapes(
     source_pixel_size: float,
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
+    as_image: bool = False,
     overwrite: bool = False,
 ) -> list[Path]:
     """Transform attached shapes."""
     import json
 
     from image2image_io.readers.shapes_reader import ShapesReader
+    from koyo.json import write_json_data
     from valis.valtils import get_name
 
     slide_src = registrar.get_slide(get_name(str(attach_to)))
@@ -492,23 +659,147 @@ def transform_attached_shapes(
         geojson_data = deepcopy(reader.geojson_data)
         if isinstance(geojson_data, list):
             if "type" in geojson_data[0] and geojson_data[0]["type"] == "Feature":
-                geojson_data = _transform_geojson_features(
-                    geojson_data,
-                    slide_src,
-                    is_px=is_px,
-                    as_px=is_px,
-                    source_pixel_size=source_pixel_size,
-                    target_pixel_size=target_pixel_size,
-                    crop=crop,
-                    non_rigid=non_rigid,
-                )
+                if as_image:
+                    geojson_data = _transform_geojson_features_as_image(
+                        geojson_data,
+                        slide_src,
+                        is_px=is_px,
+                        as_px=is_px,
+                        source_pixel_size=source_pixel_size,
+                        target_pixel_size=target_pixel_size,
+                        crop=crop,
+                        non_rigid=non_rigid,
+                    )
+                else:
+                    geojson_data = _transform_geojson_features(
+                        geojson_data,
+                        slide_src,
+                        is_px=is_px,
+                        as_px=is_px,
+                        source_pixel_size=source_pixel_size,
+                        target_pixel_size=target_pixel_size,
+                        crop=crop,
+                        non_rigid=non_rigid,
+                    )
             else:
                 raise ValueError("Invalid GeoJSON data.")
 
-        with open(output_path, "w") as f:
-            json.dump(geojson_data, f, indent=1)
+        write_json_data(output_path, geojson_data, indent=1)
+        # with open(output_path, "w") as f:
+        #     json.dump(geojson_data, f, indent=1)
         paths_.append(output_path)
     return paths_
+
+
+def _transform_geojson_features_as_image(
+    geojson_data: list[dict],
+    slide_src: Slide,
+    is_px: bool,
+    as_px: bool,
+    source_pixel_size: float = 1.0,
+    target_pixel_size: float = 1.0,
+    crop: str | bool | ValisCrop = "reference",
+    non_rigid: bool = True,
+) -> list[dict]:
+    df, n_to_prop = _convert_geojson_to_df(geojson_data, is_px, source_pixel_size)
+    x, y, df = _transform_points_as_image(
+        slide_src, df.x.values, df.y.values, df, crop=crop, non_rigid=non_rigid, trim=False
+    )
+    x, y, df = _filter_transform_coordinate_image(slide_src, x, y, df)
+    return _convert_df_to_geojson(df, x, y, as_px, target_pixel_size, n_to_prop=n_to_prop)
+
+
+def _convert_geojson_to_df(
+    geojson_data: list[dict], is_px: bool, source_pixel_size: float = 1.0
+) -> tuple[pd.DataFrame, dict[int, dict]]:
+    """Convert GeoJSON data so that it can be transformed back to GeoJSON."""
+    # types: pt = Point; pg = Polygon; mp = MultiPolygon
+    data = []  # columns: x, y, unique_index, inner, outer, type
+    n_to_prop = {}
+    n = 1
+    for feature in geojson_data:
+        geometry = feature["geometry"]
+        if geometry["type"] == "Point":
+            x, y = geometry["coordinates"]
+            x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
+            data.append([x, y, n, 0, 0, "pt"])
+            n_to_prop[n] = feature.get("properties", {})
+            n += 1
+        elif geometry["type"] == "Polygon":
+            for i, ring in enumerate(geometry["coordinates"]):
+                for x, y in ring:
+                    x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
+                    data.append([x, y, n, i, 0, "pg"])
+                n_to_prop[n] = feature.get("properties", {})
+                n += 1
+        elif geometry["type"] == "MultiPolygon":
+            for j, polygon in enumerate(geometry["coordinates"]):
+                for i, ring in enumerate(polygon):
+                    for x, y in ring:
+                        x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
+                        data.append([x, y, n, i, j, "mp"])
+                    n_to_prop[n] = feature.get("properties", {})
+                    n += 1
+    df = pd.DataFrame(data, columns=["x", "y", "unique_index", "inner", "outer", "type"])
+    return df, n_to_prop
+
+
+def _convert_df_to_geojson(
+    df: pd.DataFrame,
+    x: np.ndarray,
+    y: np.ndarray,
+    as_px: bool,
+    target_pixel_size: float,
+    n_to_prop: dict[int, dict] | None = None,
+) -> list[dict]:
+    """Convert DataFrame back to GeoJSON."""
+    from shapely.geometry import Polygon, mapping
+    from shapely.validation import make_valid
+
+    if n_to_prop is None:
+        n_to_prop = {}
+
+    failed = False
+    geojson_data, geojson_data_fixed = [], []
+    for unique_index, dff in df.groupby("unique_index"):
+        prop = n_to_prop.get(unique_index, {})
+        geometry = {}
+        if dff["type"].iloc[0] == "pt":
+            x_, y_ = _transform_transformed_from_px_to_um(x[dff.index], y[dff.index], as_px, target_pixel_size)
+            geometry["type"] = "Point"
+            geometry["coordinates"] = [x_[0], y_[0]]
+        elif dff["type"].iloc[0] == "pg":
+            geometry["type"] = "Polygon"
+            geometry["coordinates"] = []
+            for i, row in dff.iterrows():
+                x_, y_ = _transform_transformed_from_px_to_um(x[i], y[i], as_px, target_pixel_size)
+                if row.inner == 0 and len(geometry["coordinates"]) == 0:
+                    geometry["coordinates"].append([])
+                geometry["coordinates"][row.inner].append([x_, y_])
+        elif dff["type"].iloc[0] == "mp":
+            geometry["type"] = "MultiPolygon"
+            geometry["coordinates"] = []
+            for i, row in dff.iterrows():
+                x_, y_ = _transform_transformed_from_px_to_um(x[i], y[i], as_px, target_pixel_size)
+                if row.inner == 0:
+                    geometry["coordinates"].append([])
+                if row.outer == 0:
+                    geometry["coordinates"][row.outer].append([])
+                geometry["coordinates"][row.outer][row.inner].append([x_, y_])
+        # skip broken geometries
+        if not geometry or not geometry.get("coordinates"):
+            continue
+        if not failed:
+            try:
+                for shape in geometry["coordinates"]:
+                    polygon = make_valid(Polygon(shape))
+                    geometry = mapping(polygon)
+                    geojson_data_fixed.append({"type": "Feature", "geometry": geometry, "properties": prop})
+            except Exception:
+                failed = True
+                logger.warning("Failed to automatically fix shape to GeoJSON.")
+        geojson_data.append({"type": "Feature", "geometry": geometry, "properties": prop})
+    return geojson_data if failed else geojson_data_fixed
 
 
 def _transform_geojson_features(
@@ -521,7 +812,7 @@ def _transform_geojson_features(
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
 ) -> list[dict]:
-    inv_source_pixel_size = 1 / source_pixel_size
+    # inv_source_pixel_size = 1 / source_pixel_size
 
     # iterate over features and depending on the geometry type, transform the coordinates
     result = []
@@ -836,7 +1127,7 @@ def get_valis_registrar_alt(project_dir: PathLike, name: str, init_jvm: bool = F
         registration.init_jvm()
 
     registrar = None
-    registrar_path = Path(project_dir) / "data" / f"{name}_registrar.pickle"
+    registrar_path = get_registrar_path(project_dir, name)
     if registrar_path.exists():
         import pickle
 
@@ -845,7 +1136,18 @@ def get_valis_registrar_alt(project_dir: PathLike, name: str, init_jvm: bool = F
     return registrar
 
 
-def update_registrar_paths(registrar: ty.Any, project_dir: PathLike):
+def get_registrar_path(project_dir: PathLike, name: str) -> Path:
+    """Get registrar path."""
+    project_dir = Path(project_dir) / "data"
+    path = project_dir / f"{name}_registrar.pickle"
+    if not path.exists():
+        paths = list(project_dir.glob("*.pickle"))
+        if len(paths) == 1:
+            path = paths[0]
+    return path
+
+
+def update_registrar_paths(registrar: ty.Any, project_dir: PathLike) -> None:
     """Update registrar paths."""
     project_dir = Path(project_dir)
     data_dir = Path(registrar.data_dir)

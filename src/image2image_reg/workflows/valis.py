@@ -73,7 +73,9 @@ class ValisReg(Workflow):
     @property
     def is_registered(self) -> bool:
         """Check if the project has been registered."""
-        registrar_path = self.project_dir / "data" / f"{self.name}_registrar.pickle"
+        from image2image_reg.valis.utilities import get_registrar_path
+
+        registrar_path = get_registrar_path(self.project_dir, self.name)
         return registrar_path.exists()
 
     @classmethod
@@ -568,6 +570,7 @@ class ValisReg(Workflow):
                     source_pixel_size,
                     overwrite=overwrite,
                     non_rigid=self.non_rigid_registration,
+                    as_image=True,
                 )
                 paths.extend(paths_)
         if paths:
@@ -594,6 +597,7 @@ class ValisReg(Workflow):
                     source_pixel_size,
                     overwrite=overwrite,
                     non_rigid=self.non_rigid_registration,
+                    as_image=True,
                 )
                 paths.extend(paths_)
         if paths:
