@@ -32,7 +32,12 @@ def _transform_points(
     silent: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Transform points."""
-    xy_transformed = slide_src.warp_xy(np.c_[x, y], crop=crop, non_rigid=non_rigid)
+    # xy_transformed = slide_src.warp_xy(np.c_[x, y], crop=crop, non_rigid=non_rigid)
+    slide_ref = slide_src.val_obj.get_ref_slide()
+    if slide_ref is None:
+        xy_transformed = slide_src.warp_xy(np.c_[x, y], crop=crop, non_rigid=non_rigid)
+    else:
+        xy_transformed = slide_src.warp_xy_from_to(np.c_[x, y], slide_ref, non_rigid=non_rigid)
     return xy_transformed[:, 0], xy_transformed[:, 1]
 
 
@@ -85,7 +90,9 @@ def _transform_points_as_image(
     silent: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     image_of_index, index_of_coords, x, y, df = _prepare_transform_coordinate_image(slide_src, x, y, df)
-    image_of_index_transformed, _ = _transform_coordinate_image(slide_src, image_of_index, non_rigid=non_rigid)
+    image_of_index_transformed, _ = _transform_coordinate_image(
+        slide_src, image_of_index, crop=crop, non_rigid=non_rigid
+    )
     new_x, new_y, df = _cleanup_transform_coordinate_image(image_of_index_transformed, index_of_coords, df)
     return new_x, new_y, df
 
@@ -150,8 +157,8 @@ def _cleanup_transform_coordinate_image(
     values = image_of_index[yy, xx]
     sort = np.argsort(values)
     values = values[sort]
-    xx = xx[sort]
-    yy = yy[sort]
+    xx = xx[sort] - 1
+    yy = yy[sort] - 1
     indices = find_nearest_index_batch(values, index_of_coords)
     new_x = xx[indices]
     new_x = new_x + np.random.uniform(-0.1, 0.1, len(indices))
@@ -687,9 +694,7 @@ def _transform_geojson_features_as_image(
     non_rigid: bool = True,
 ) -> list[dict]:
     df, n_to_prop = _convert_geojson_to_df(geojson_data, is_px, source_pixel_size)
-    x, y, df = _transform_points_as_image(
-        slide_src, df.x.values, df.y.values, df, crop=crop, non_rigid=non_rigid, trim=False
-    )
+    x, y, df = _transform_points_as_image(slide_src, df.x.values, df.y.values, df, crop=crop, non_rigid=non_rigid)
     x, y, df = _filter_transform_coordinate_image(slide_src, x, y, df)
     return _convert_df_to_geojson(df, x, y, as_px, target_pixel_size, n_to_prop=n_to_prop)
 
