@@ -82,17 +82,11 @@ def _transform_points_as_image(
     df: pd.DataFrame,
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
-    trim: bool = True,
     silent: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     image_of_index, index_of_coords, x, y, df = _prepare_transform_coordinate_image(slide_src, x, y, df)
-    image_of_index_transformed, _ = _transform_coordinate_image(
-        slide_src, image_of_index, crop=crop, non_rigid=non_rigid
-    )
-    new_x, new_y, df = _cleanup_transform_coordinate_image(
-        slide_src, image_of_index_transformed, index_of_coords, df, trim=trim
-    )
-
+    image_of_index_transformed, _ = _transform_coordinate_image(slide_src, image_of_index, non_rigid=non_rigid)
+    new_x, new_y, df = _cleanup_transform_coordinate_image(image_of_index_transformed, index_of_coords, df)
     return new_x, new_y, df
 
 
@@ -134,14 +128,23 @@ def _transform_coordinate_image(
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
+    slide_ref = slide_src.val_obj.get_ref_slide()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        image_of_index_ = slide_src.warp_img(image_of_index, crop=crop, non_rigid=non_rigid, interp_method="nearest")
+        if slide_ref:
+            image_of_index_ = slide_src.warp_img_from_to(
+                image_of_index, slide_ref, non_rigid=non_rigid, interp_method="nearest"
+            )
+        else:
+            image_of_index_ = slide_src.warp_img(
+                image_of_index, crop=crop, non_rigid=non_rigid, interp_method="nearest"
+            )
+
     return image_of_index_, image_of_index_.flatten()
 
 
 def _cleanup_transform_coordinate_image(
-    slide_src: Slide, image_of_index: np.ndarray, index_of_coords: np.ndarray, df: pd.DataFrame, trim: bool = True
+    image_of_index: np.ndarray, index_of_coords: np.ndarray, df: pd.DataFrame
 ) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
     yy, xx = np.nonzero(image_of_index)
     values = image_of_index[yy, xx]
@@ -154,22 +157,6 @@ def _cleanup_transform_coordinate_image(
     new_x = new_x + np.random.uniform(-0.1, 0.1, len(indices))
     new_y = yy[indices]
     new_y = new_y + np.random.uniform(-0.1, 0.1, len(indices))
-    # indices = find_nearest_index_batch(image_of_index_flat, index_of_coords, sort=True)
-    # if trim:
-    #     retain_indices = np.where(image_of_index_flat[indices] == index_of_coords)
-    #     indices = indices[retain_indices]
-    #     df = df.iloc[retain_indices]
-    #
-    # # get image coordinates
-    # height, width = slide_src.slide_shape_rc
-    # yy, xx = np.meshgrid(np.arange(0, height), np.arange(0, width))
-    # xx = xx.flatten()
-    # new_x = xx[indices]
-    # # add slight wobble to avoid overlapping points - avoid repeating values
-    # new_x = new_x + np.random.uniform(-0.1, 0.1, len(indices))
-    # yy = yy.flatten()
-    # new_y = yy[indices]
-    # new_y = new_y + np.random.uniform(-0.1, 0.1, len(indices))
     return new_x, new_y, df
 
 
@@ -628,8 +615,6 @@ def transform_attached_shapes(
     overwrite: bool = False,
 ) -> list[Path]:
     """Transform attached shapes."""
-    import json
-
     from image2image_io.readers.shapes_reader import ShapesReader
     from koyo.json import write_json_data
     from valis.valtils import get_name
