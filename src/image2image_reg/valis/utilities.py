@@ -491,14 +491,23 @@ def transform_attached_image(
             continue
 
         # warp image
-        warped = slide_src.warp_slide(
-            level=pyramid,
-            interp_method=interp_method,
-            crop=crop,
-            src_f=str(path),
-            non_rigid=non_rigid,
-            reader=reader_cls(str(path), series=0),
-        )
+        try:
+            warped = slide_src.warp_slide(
+                level=pyramid,
+                interp_method=interp_method,
+                crop=crop,
+                src_f=str(path),
+                non_rigid=non_rigid,
+                reader=reader_cls(str(path), series=0),
+            )
+        except TypeError:
+            warped = slide_src.warp_slide(
+                level=pyramid,
+                interp_method=interp_method,
+                crop=crop,
+                src_f=str(path),
+                non_rigid=non_rigid,
+            )
         if not isinstance(warped, np.ndarray):
             warped = vips2numpy(warped)
 
