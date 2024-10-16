@@ -676,9 +676,7 @@ def transform_attached_shapes(
             else:
                 raise ValueError("Invalid GeoJSON data.")
 
-        write_json_data(output_path, geojson_data, indent=1)
-        # with open(output_path, "w") as f:
-        #     json.dump(geojson_data, f, indent=1)
+        write_json_data(output_path, geojson_data, compress=True, check_existing=False)
         paths_.append(output_path)
     return paths_
 

@@ -1,10 +1,10 @@
 """Registration utilities."""
 from __future__ import annotations
 
-import json
 import typing as ty
 from pathlib import Path
 
+from koyo.json import write_json_data, read_json_data
 import itk
 import SimpleITK as sitk
 from koyo.timer import MeasureTimer
@@ -73,8 +73,7 @@ def pmap_dict_to_json(pmap_dict: dict, output_file: str) -> None:
     output_file : str
         filepath of where to save the json
     """
-    with open(output_file, "w") as fp:
-        json.dump(pmap_dict, fp, indent=4)
+    write_json_data(output_file, pmap_dict)
 
 
 def json_to_pmap_dict(json_file: str) -> dict[str, ty.Any]:
@@ -86,9 +85,7 @@ def json_to_pmap_dict(json_file: str) -> dict[str, ty.Any]:
     json_file : dict
         filepath to json contained SimpleElastix parameter map
     """
-    with open(json_file) as fp:
-        pmap_dict = json.load(fp)
-    return pmap_dict
+    return read_json_data(json_file)
 
 
 def _prepare_reg_models(reg_params: list[str | Registration | dict[str, list[str]]]) -> list[dict[str, list[str]]]:

@@ -359,7 +359,9 @@ class ElastixReg(Workflow):
         source = edge["modalities"]["source"]
         transform_tag = f"{source}_to_{target}_transformations.json"
         if transform_tag and not (self.transformations_dir / transform_tag).exists():
+            logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
             transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
+            print(list(self.transformations_dir.glob("*")))
             if transform_tag and not (self.transformations_dir / transform_tag).exists():
                 logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
                 return None
@@ -1241,7 +1243,7 @@ class ElastixReg(Workflow):
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
                     path = transform_attached_shape(transform_sequence, file, shape_pixel_size, output_path)
-                    logger.trace(f"Exported {file} to {attached_to}...")
+                    logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
                     paths.append(path)
         if paths:
             logger.info(f"Exporting attachment shapes took {timer()}.")
@@ -1282,7 +1284,7 @@ class ElastixReg(Workflow):
                     path = transform_attached_point(
                         transform_sequence, file, shape_pixel_size, output_path, silent=False
                     )
-                    logger.trace(f"Exported {file} to {attached_to}...")
+                    logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
                     paths.append(path)
         if paths:
             logger.info(f"Exporting attachment points took {timer()}.")

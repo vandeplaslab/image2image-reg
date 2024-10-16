@@ -91,6 +91,8 @@ def cli(
     elif dev:
         uninstall_debugger_hook()
     set_logger(verbosity, no_color, log)
+    if dev:
+        logger.debug("Debugger hook installed.")
 
 
 cli.add_command(elastix, help_group="Registration")
