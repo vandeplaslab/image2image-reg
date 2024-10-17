@@ -236,9 +236,8 @@ def transform_attached_shape(
     silent: bool = False,
 ) -> Path:
     """Transform points data."""
-    from koyo.json import write_json_data
-
     from image2image_io.readers.shapes_reader import ShapesReader
+    from koyo.json import write_json_data
 
     # if value is equal to 1.0, then the coordinates are in pixels
     is_in_px = source_pixel_size != 1.0
@@ -293,7 +292,7 @@ def _transform_geojson_features(
                     silent=False,
                     source_pixel_size=source_pixel_size,
                 )
-                geometry["coordinates"][i] = np.round(np.c_[x, y],3).tolist()
+                geometry["coordinates"][i] = np.round(np.c_[x, y], 3).tolist()
         elif geometry["type"] == "MultiPolygon":
             for j, polygon in enumerate(geometry["coordinates"]):
                 for i, ring in enumerate(tqdm(polygon, desc="Transforming MultiPolygon", leave=False, mininterval=1)):
@@ -307,7 +306,7 @@ def _transform_geojson_features(
                         silent=True,
                         source_pixel_size=source_pixel_size,
                     )
-                    geometry["coordinates"][j][i] = np.round(np.c_[x, y],3).tolist()
+                    geometry["coordinates"][j][i] = np.round(np.c_[x, y], 3).tolist()
         result.append(feature)
     return result
 

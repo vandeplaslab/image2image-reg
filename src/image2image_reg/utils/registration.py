@@ -4,9 +4,9 @@ from __future__ import annotations
 import typing as ty
 from pathlib import Path
 
-from koyo.json import write_json_data, read_json_data
 import itk
 import SimpleITK as sitk
+from koyo.json import read_json_data, write_json_data
 from koyo.timer import MeasureTimer
 from loguru import logger
 
