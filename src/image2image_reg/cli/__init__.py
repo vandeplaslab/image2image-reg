@@ -88,7 +88,7 @@ def cli(
     if dev:
         install_debugger_hook()
         verbosity = 0
-    elif dev:
+    else:
         uninstall_debugger_hook()
     set_logger(verbosity, no_color, log)
     if dev:

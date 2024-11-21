@@ -798,8 +798,11 @@ class Workflow:
         write_json_data(path, config)
 
     @classmethod
-    def update_paths(cls, path: PathLike, source_dirs: list[PathLike]) -> None:
+    def update_paths(cls, path: PathLike, source_dirs: str | list[PathLike]) -> None:
         """Update source paths."""
+        if not isinstance(source_dirs, list):
+            source_dirs = [source_dirs]
+
         config = cls.read_config(path)
         config["modalities"] = cls._update_modality_paths(config["modalities"], source_dirs)
         config["attachment_shapes"] = cls._update_attachment_paths(config["attachment_shapes"], source_dirs)
@@ -807,7 +810,9 @@ class Workflow:
         cls.write_config(path, config)
 
     @staticmethod
-    def _update_modality_paths(config: dict[str, dict], source_dirs: list[PathLike]) -> dict:
+    def _update_modality_paths(config: dict[str, dict], source_dirs: str | list[PathLike]) -> dict:
+        if not isinstance(source_dirs, list):
+            source_dirs = [source_dirs]
         for modality in config.values():
             name = modality["name"]
             path = clean_path(modality["path"])
