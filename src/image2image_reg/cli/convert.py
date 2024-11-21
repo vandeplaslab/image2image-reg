@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import click
-from koyo.click import cli_parse_paths_sort
+from koyo.click import Parameter, cli_parse_paths_sort, print_parameters
+
+from image2image_reg.cli._common import (
+    ALLOW_EXTRA_ARGS,
+)
 
 
 @click.option(
@@ -50,8 +54,8 @@ from koyo.click import cli_parse_paths_sort
     required=True,
 )
 @click.option(
-    "-p",
-    "--path",
+    "-i",
+    "--image",
     help="Path(s) of images to be converted.",
     type=click.UNPROCESSED,
     show_default=True,
@@ -59,10 +63,10 @@ from koyo.click import cli_parse_paths_sort
     multiple=True,
     callback=cli_parse_paths_sort,
 )
-@click.command("convert")
-def convert(path: list[str], output_dir: str, fmt: str, tile_size: str, as_uint8: bool, overwrite: bool) -> None:
+@click.command("convert", context_settings=ALLOW_EXTRA_ARGS)
+def convert(image: list[str], output_dir: str, fmt: str, tile_size: str, as_uint8: bool, overwrite: bool) -> None:
     """Convert images to pyramidal OME-TIFF."""
-    convert_runner(path, output_dir, fmt, tile_size, as_uint8, overwrite)
+    convert_runner(image, output_dir, fmt, tile_size, as_uint8, overwrite)
 
 
 def convert_runner(
@@ -75,6 +79,15 @@ def convert_runner(
 ) -> None:
     """Convert images to pyramidal OME-TIFF."""
     from image2image_io.writers import images_to_ome_tiff
+
+    print_parameters(
+        Parameter("Images", "-i/--image", paths),
+        Parameter("Output directory", "-o/--output_dir", output_dir),
+        Parameter("Output format", "-f/--fmt", fmt),
+        Parameter("Tile size", "-t/--tile_size", tile_size),
+        Parameter("Downcast to uint8", "-u/--as_uint8", as_uint8),
+        Parameter("Overwrite", "-W/--overwrite", overwrite),
+    )
 
     for _ in images_to_ome_tiff(paths, output_dir, tile_size=int(tile_size), as_uint8=as_uint8, overwrite=overwrite):
         pass
