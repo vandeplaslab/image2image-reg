@@ -725,9 +725,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -955,7 +955,7 @@ class ElastixReg(Workflow):
         images_from_all = []
         logger.trace(f"Generating overlap images at pyramid level of {pyramid}")
         # let's iterate through all registration paths
-        for source, target_pair in self.registration_paths.items():
+        for source, _target_pair in self.registration_paths.items():
             images, names = self._generate_overlap_image_for_modality(source, pyramid)
             images_from_all.extend(images)
 
