@@ -586,7 +586,7 @@ def preprocess_runner(
             for path in paths:
                 _preprocess(path, n_parallel, overwrite)
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
-    logger.info(f"Finished processing all projects in {timer()}.")
+    logger.info(f"Finished pre-processing all projects in {timer()}.")
 
 
 def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> PathLike:
@@ -754,7 +754,7 @@ def register_runner(
             if errors:
                 errors = "\n- ".join(errors)
                 logger.error(f"Failed to register the following projects: {errors}")
-    logger.info(f"Finished processing all projects in {timer()}.")
+    logger.info(f"Finished registering all projects in {timer()}.")
 
 
 def _register(
@@ -973,7 +973,7 @@ def export_runner(
                     overwrite=overwrite,
                 )
                 logger.info(f"Finished processing {path} in {timer(since_last=True)}")
-    logger.info(f"Finished processing all projects in {timer()}.")
+    logger.info(f"Finished exporting all projects in {timer()}.")
 
 
 def _export(

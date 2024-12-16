@@ -315,13 +315,14 @@ def transform_images_for_pyramid(
     wrapper: ImageWrapper,
     transformation_sequence: TransformSequence | None,
     pyramid: int = -1,
-    channel_ids: list[int] = None,
+    channel_ids: list[int] | None = None,
 ) -> np.ndarray:
     """Transform all images."""
     import SimpleITK as sitk
 
     reader = wrapper.reader
     channel_axis, n_channels = reader.get_channel_axis_and_n_channels()
+    channel_axis = channel_axis or 0
     if transformation_sequence is None:
         return np.asarray(reader.pyramid[pyramid])
 

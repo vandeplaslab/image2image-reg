@@ -205,10 +205,10 @@ def affine_to_itk_affine2(
     # center_of_rot = image.TransformContinuousIndexToPhysicalPoint(
     #     ((bound_w - 1) / 2, (bound_h - 1) / 2),
     # )  # type: ignore[no-untyped-call]
-    w, h = image_shape
+    # w, h = image_shape
     # center_of_rot = ((w - 1) / 2, (h - 1) / 2)
-    center_of_rot = ((bound_w - 1) / 2, (bound_h - 1) / 2)
-    tform["CenterOfRotationPoint"] = [str(center_of_rot[0]), str(center_of_rot[1])]
+    (rot_x_phy, rot_y_phy) = ((bound_w - 1) / 2, (bound_h - 1) / 2)
+    tform["CenterOfRotationPoint"] = [str(rot_x_phy), str(rot_y_phy)]
 
     # adjust for pixel spacing
     tform["Size"] = [str(int(math.ceil(bound_w))), str(int(math.ceil(bound_h)))]
@@ -450,19 +450,19 @@ def generate_rigid_rotation_transform(image: sitk.Image, spacing: float, angle_d
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle_deg=angle_deg)
     # calculate rotation center point
-    rot_x, rot_y = image.TransformContinuousIndexToPhysicalPoint(
+    (rot_x_phy, rot_y_phy) = image.TransformContinuousIndexToPhysicalPoint(
         ((bound_w - 1) / 2, (bound_h - 1) / 2),
     )  # type: ignore[no-untyped-call]
 
     size = image.GetSize()
     c_x, c_y = (size[0] - 1) / 2, (size[1] - 1) / 2  # type: ignore[no-untyped-call]
     c_x_phy, c_y_phy = image.TransformContinuousIndexToPhysicalPoint((c_x, c_y))  # type: ignore[no-untyped-call]
-    t_x = rot_x - c_x_phy
-    t_y = rot_y - c_y_phy
+    t_x = rot_x_phy - c_x_phy
+    t_y = rot_y_phy - c_y_phy
 
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(int(math.ceil(bound_w))), str(int(math.ceil(bound_h)))]
-    tform["CenterOfRotationPoint"] = [str(rot_x), str(rot_y)]
+    tform["CenterOfRotationPoint"] = [str(rot_x_phy), str(rot_y_phy)]
     tform["TransformParameters"] = [
         str(np.radians(angle_deg)),
         str(-1 * t_x),
@@ -490,14 +490,14 @@ def generate_rigid_translation_transform(
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle_deg=0)
 
-    rot_cent_phy = image.TransformContinuousIndexToPhysicalPoint(
+    (rot_x_phy, rot_y_phy) = image.TransformContinuousIndexToPhysicalPoint(
         ((bound_w - 1) / 2, (bound_h - 1) / 2),
     )  # type: ignore[no-untyped-call]
     size_x_px, size_y_px = size_x_phy * inv_spacing, size_y_phy * inv_spacing
 
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(math.ceil(size_x_px)), str(math.ceil(size_y_px))]
-    tform["CenterOfRotationPoint"] = [str(rot_cent_phy[0]), str(rot_cent_phy[1])]
+    tform["CenterOfRotationPoint"] = [str(rot_x_phy), str(rot_y_phy)]
     tform["TransformParameters"] = [str(0), str(int(translation_x_phy)), str(int(translation_y_phy))]
     return tform
 
@@ -519,7 +519,7 @@ def generate_rigid_translation_transform_alt2(
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle_deg=0)
 
-    (rot_x, rot_y) = image.TransformContinuousIndexToPhysicalPoint(
+    (rot_x_phy, rot_y_phy) = image.TransformContinuousIndexToPhysicalPoint(
         ((bound_w - 1) / 2, (bound_h - 1) / 2),
     )  # type: ignore[no-untyped-call]
     (
@@ -537,7 +537,7 @@ def generate_rigid_translation_transform_alt2(
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(w), str(h)]
     # tform["Origin"] = [str(int(w)), str(int(h))]
-    tform["CenterOfRotationPoint"] = [str(rot_x), str(rot_y)]
+    tform["CenterOfRotationPoint"] = [str(rot_x_phy), str(rot_y_phy)]
     tform["TransformParameters"] = [
         str(0),
         str(translation_x_phy),
@@ -563,7 +563,7 @@ def generate_rigid_translation_transform_alt(
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle_deg=0)
 
-    (rot_x, rot_y) = image.TransformContinuousIndexToPhysicalPoint(
+    (rot_x_phy, rot_y_phy) = image.TransformContinuousIndexToPhysicalPoint(
         ((bound_w - 1) / 2, (bound_h - 1) / 2),
     )  # type: ignore[no-untyped-call]
     (translation_x, translation_y) = image.TransformPhysicalPointToContinuousIndex(
@@ -584,7 +584,7 @@ def generate_rigid_translation_transform_alt(
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(w), str(h)]
     # tform["Origin"] = [str(int(w // 2)), str(int(h // 2))]
-    tform["CenterOfRotationPoint"] = [str(rot_x), str(rot_y)]
+    tform["CenterOfRotationPoint"] = [str(rot_x_phy), str(rot_y_phy)]
     tform["TransformParameters"] = [
         str(0),
         str(translation_x_phy),
@@ -621,12 +621,12 @@ def generate_affine_flip_transform(image: sitk.Image, spacing: float, flip: str 
     tform = deepcopy(BASE_AFFINE_TRANSFORM)
     image.SetSpacing((spacing, spacing))
     bound_w, bound_h = compute_rotation_bounds_for_image(image, angle_deg=0)
-    rot_cent_pt = image.TransformContinuousIndexToPhysicalPoint(((bound_w - 1) / 2, (bound_h - 1) / 2))
+    (rot_x_phy, rot_y_phy) = image.TransformContinuousIndexToPhysicalPoint(((bound_w - 1) / 2, (bound_h - 1) / 2))
 
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(int(bound_w)), str(int(bound_h))]
 
-    tform["CenterOfRotationPoint"] = [str(rot_cent_pt[0]), str(rot_cent_pt[1])]
+    tform["CenterOfRotationPoint"] = [str(rot_x_phy), str(rot_y_phy)]
     if flip == "h":
         tform_params = ["-1", "0", "0", "1", "0", "0"]
     elif flip == "v":

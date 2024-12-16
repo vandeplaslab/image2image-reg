@@ -327,6 +327,7 @@ class ElastixReg(Workflow):
             # check whether the registered version of the config exists
             if (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
                 registered_config: ElastixRegConfig = read_json_data(self.project_dir / self.REGISTERED_CONFIG_NAME)
+                logger.trace(f"Loading registered configuration from {self.REGISTERED_CONFIG_NAME}.")
                 # load transformation data from file
                 transformations = {}
                 for registered_edge in registered_config["registration_graph_edges"]:
@@ -352,10 +353,11 @@ class ElastixReg(Workflow):
         """Load registered transform and make sure all attributes are correctly set-up."""
         from image2image_reg.wrapper import ImageWrapper
 
-        edge_ = self._find_edge_by_edge(edge)
+        index, edge_ = self._find_edge_by_edge(edge)
         if not edge_:
             logger.warning("Could not find appropriate registration node.")
             return None
+
         source = edge["modalities"]["source"]
         transform_tag = f"{source}_to_{target}_transformations.json"
         if transform_tag and not (self.transformations_dir / transform_tag).exists():
@@ -395,6 +397,7 @@ class ElastixReg(Workflow):
         edge_["transforms"] = {"registration": transforms_partial_seq, "initial": initial_transforms_seq}
         edge_["registered"] = True
         edge_["transform_tag"] = f"{source}_to_{target}_transformations.json"
+        self.registration_nodes[index] = edge_
         logger.trace(f"Restored previous transformation data for {source} - {target}")
         return {
             f"initial-{source}": initial_transforms_seq,
@@ -402,12 +405,14 @@ class ElastixReg(Workflow):
             "full-transform-seq": transforms_full_seq,
         }
 
-    def _find_edge_by_edge(self, edge: SerializedRegisteredRegistrationNode) -> RegistrationNode | None:
+    def _find_edge_by_edge(
+        self, edge: SerializedRegisteredRegistrationNode
+    ) -> tuple[int | None, RegistrationNode | None]:
         """Find edge by another edge, potentially from cache."""
-        for edge_ in self.registration_nodes:
+        for index, edge_ in enumerate(self.registration_nodes):
             if edge_["modalities"]["source"] == edge["modalities"]["source"]:
                 if edge_["modalities"]["target"] == edge["modalities"]["target"]:
-                    return edge_
+                    return index, edge_
         return None
 
     def load_from_wsireg(self) -> None:
@@ -474,7 +479,12 @@ class ElastixReg(Workflow):
         elif isinstance(preprocessing, dict):
             assert "target" in preprocessing, "Preprocessing must contain target key."
             assert "source" in preprocessing, "Preprocessing must contain source key."
-        self._add_registration_node(source, target, through, transform, preprocessing)
+        # check whether the (source, target) pair already exists
+        if self.has_registration_path(source, target, through):
+            logger.warning(f"Registration path from '{source}' to '{target}' through '{through}' already exists.")
+            self.update_registration_path(source, target, transform, through, preprocessing)
+        else:
+            self._add_registration_node(source, target, through, transform, preprocessing)
 
     def update_registration_path(
         self,
@@ -778,7 +788,7 @@ class ElastixReg(Workflow):
             self.preprocess(n_parallel=n_parallel)
 
         # compute transformation information
-        for edge in tqdm(self.registration_nodes, desc="Registering nodes..."):
+        for edge in tqdm(reversed(self.registration_nodes), desc="Registering nodes..."):
             if edge["registered"]:
                 logger.trace(
                     f"Skipping registration for {edge['modalities']['source']} to {edge['modalities']['target']}."

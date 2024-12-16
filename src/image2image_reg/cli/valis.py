@@ -475,7 +475,7 @@ if is_installed("valis"):
                 if errors:
                     errors_str = "\n- ".join(errors)
                     logger.error(f"Failed to register the following projects: {errors_str}")
-        logger.info(f"Finished processing all projects in {timer()}.")
+        logger.info(f"Finished registering all projects in {timer()}.")
 
     @overwrite_
     @parallel_mode_
@@ -618,7 +618,7 @@ if is_installed("valis"):
                         overwrite=overwrite,
                     )
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
-        logger.info(f"Finished processing all projects in {timer()}.")
+        logger.info(f"Finished exporting all projects in {timer()}.")
 
     def _valis_export(
         path: PathLike,

@@ -529,7 +529,7 @@ def preprocess_reg_image_spatial(
     transforms: list[dict] = []
     original_size = image.GetSize()
 
-    if preprocessing.downsample > 1:
+    if preprocessing.downsample > 1 and spatial:
         logger.trace(f"Performing downsampling by factor: {preprocessing.downsample}")
         image.SetSpacing((pixel_size, pixel_size))
         image = sitk.Shrink(image, (preprocessing.downsample, preprocessing.downsample))

@@ -175,20 +175,20 @@ class Preprocessing(BaseModel):
         if self.channel_indices:
             text += f"ids: {self.channel_indices}\n"
             tooltip += f"Channel indices: {self.channel_indices}\n"
-        if self.flip:
+        if self.flip and not valis:
             text += f"flip-{self.flip.value}; "
             tooltip += f"Flip: {self.flip.value}\n"
-        if self.translate_x or self.translate_y:
+        if (self.translate_x or self.translate_y) and not valis:
             text += f"translate({self.translate_x}, {self.translate_y}); "
             tooltip += f"Translate: ({self.translate_x}, {self.translate_y})\n"
-        if self.rotate_counter_clockwise:
+        if self.rotate_counter_clockwise and not valis:
             text += f"{self.rotate_counter_clockwise}°"
             tooltip += f"Rotate: {self.rotate_counter_clockwise}°\n"
         if text.endswith("; "):
             text = text[:-2]
         if not text.endswith("\n"):
             text += "\n"
-        if self.downsample > 1:
+        if self.downsample > 1 and not valis:
             text += f"x{self.downsample} downsample"
             tooltip += f"Downsample: x{self.downsample}\n"
         if self.is_masked():

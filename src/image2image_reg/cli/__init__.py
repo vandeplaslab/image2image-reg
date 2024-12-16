@@ -91,6 +91,7 @@ def cli(
     else:
         uninstall_debugger_hook()
     set_logger(verbosity, no_color, log)
+    logger.trace(f"Executed command: {sys.argv}")
     if dev:
         logger.debug("Debugger hook installed.")
 
