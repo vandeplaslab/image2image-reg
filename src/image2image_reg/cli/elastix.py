@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import typing as ty
 from pathlib import Path
 
@@ -13,6 +15,7 @@ from koyo.click import (
     info_msg,
     print_parameters,
     warning_msg,
+exit_with_error
 )
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
@@ -701,6 +704,7 @@ def register_runner(
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
 
+    errors = []
     with MeasureTimer() as timer:
         if n_parallel > 1 and len(paths) > 1 and parallel_mode == "outer":
             with WorkerPool(n_parallel) as pool:
@@ -727,7 +731,6 @@ def register_runner(
                 ):
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
         else:
-            errors = []
             for path in paths:
                 try:
                     _register(
@@ -755,6 +758,8 @@ def register_runner(
                 errors = "\n- ".join(errors)
                 logger.error(f"Failed to register the following projects: {errors}")
     logger.info(f"Finished registering all projects in {timer()}.")
+    if errors:
+        return exit_with_error()
 
 
 def _register(

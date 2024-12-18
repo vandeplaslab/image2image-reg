@@ -932,8 +932,9 @@ class ElastixReg(Workflow):
                 f"Saved transformations to '{output_path}'. source={source_modality}; target={target_modalities}."
             )
 
+        not_registered_modalities = self._find_not_registered_modalities()
         for attached_modality, attached_to_modality in self.attachment_images.items():
-            if attached_modality not in self._find_not_registered_modalities():
+            if attached_to_modality not in not_registered_modalities:
                 target_modalities = self.registration_paths[attached_to_modality]
                 target_modality = target_modalities[-1]
                 output_path = (

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import typing as ty
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -242,11 +243,13 @@ class Workflow:
         self.modalities[old_name].name = new_name
         self.modalities[new_name] = self.modalities.pop(old_name)
         # rename attachment images
+        attachment_images = deepcopy(self.attachment_images)
         for name, attach_to in self.attachment_images.items():
             if attach_to == old_name:
-                self.attachment_images[name] = new_name
+                attachment_images[name] = new_name
             if name == old_name:
-                self.attachment_images[new_name] = self.attachment_images.pop(old_name)
+                attachment_images[new_name] = attachment_images.pop(old_name)
+        self.attachment_images = attachment_images
         # rename attachment shapes
         for _, shape_dict in self.attachment_shapes.items():
             if shape_dict["attach_to"] == old_name:
@@ -260,6 +263,16 @@ class Workflow:
     def is_attachment(self, modality: str) -> bool:
         """Check if modality is an attachment."""
         return modality in self.attachment_images
+
+    def has_attachments(self, name: str | None = None) -> bool:
+        """Return True if there are any attachments."""
+        if name:
+            return (
+                self.get_attachment_list(name, "image")
+                or self.get_attachment_list(name, "geojson")
+                or self.get_attachment_list(name, "points")
+            )
+        return bool(self.attachment_images or self.attachment_shapes or self.attachment_points)
 
     def get_image_modalities(self, with_attachment: bool = True) -> list[str]:
         """Return list of image modalities."""

@@ -142,9 +142,9 @@ def draw_workflow(
         legend["attached image"] = {"markerfacecolor": "green", "marker": "o"}
 
     for shape_set_name, shape_info in workflow.attachment_shapes.items():
-        g.add_node(shape_set_name, color="red")
+        g.add_node(shape_set_name, color="purple")
         g_layout.add_edge(shape_set_name, shape_info["attach_to"])
-        legend["attached shape"] = {"markerfacecolor": "red", "marker": "o"}
+        legend["attached shape"] = {"markerfacecolor": "purple", "marker": "^"}
 
     for point_set_name, point_info in workflow.attachment_points.items():
         g.add_node(point_set_name, color="yellow")

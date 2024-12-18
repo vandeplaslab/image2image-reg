@@ -10,6 +10,7 @@ from click_groups import GroupedGroup
 from koyo.click import (
     Parameter,
     cli_parse_paths_sort,
+    exit_with_error,
     print_parameters,
     warning_msg,
 )
@@ -426,6 +427,7 @@ if is_installed("valis"):
             Parameter("Overwrite", "-W/--overwrite", overwrite),
         )
 
+        errors: list[str] = []
         with MeasureTimer() as timer:
             if n_parallel > 1 and len(paths) > 1 and parallel_mode == "outer":
                 with WorkerPool(n_parallel) as pool:
@@ -450,7 +452,6 @@ if is_installed("valis"):
                     ):
                         logger.info(f"Finished processing {path} in {timer(since_last=True)}")
             else:
-                errors: list[str] = []
                 for path in paths:
                     # try:
                     _valis_register(
@@ -476,6 +477,8 @@ if is_installed("valis"):
                     errors_str = "\n- ".join(errors)
                     logger.error(f"Failed to register the following projects: {errors_str}")
         logger.info(f"Finished registering all projects in {timer()}.")
+        if errors:
+            return exit_with_error()
 
     @overwrite_
     @parallel_mode_
