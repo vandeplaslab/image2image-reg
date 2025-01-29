@@ -183,6 +183,8 @@ class Workflow:
 
         from koyo.logging import get_loguru_env, set_loguru_log
 
+        from image2image_reg.utils.utilities import print_versions
+
         if self.log_file is None:
             n = len(list(self.log_dir.glob("*_log.txt")))
             ts = time.strftime("%Y%m%d-%H%M%S")
@@ -202,6 +204,7 @@ class Workflow:
             [logger.enable(module) for module in ("image2image_io", "image2image_reg", "koyo")]  # type: ignore
             logger.info(f"Setup logging to file - '{self.log_file!s}'")
             logger.trace(f"Executed command: {sys.argv}")
+            print_versions()
 
     def get_modality(
         self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None

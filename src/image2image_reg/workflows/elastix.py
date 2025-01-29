@@ -735,9 +735,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
-                        registered_edge_transform["registration"]
-                    )
+                    transforms[modality][
+                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
+                    ] = registered_edge_transform["registration"]
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -1821,20 +1821,23 @@ class ElastixReg(Workflow):
         # add modalities
         for modality in obj.modalities.values():
             iwsreg.modalities[modality.name] = deepcopy(modality)
-            iwsreg.modalities[modality.name].preprocessing.method = None
-
-        reference = obj.reference
-        if reference:
-            for name, modality in obj.modalities.items():
-                if name == reference:
-                    continue
-                iwsreg.add_registration_path(name, reference, ["rigid", "affine", "nl"])
+            if iwsreg.modalities[modality.name].preprocessing:
+                iwsreg.modalities[modality.name].preprocessing.method = None
 
         # copy other attributes
         iwsreg.attachment_images = deepcopy(obj.attachment_images)
         iwsreg.attachment_shapes = deepcopy(obj.attachment_shapes)
         iwsreg.attachment_points = deepcopy(obj.attachment_points)
         iwsreg.merge_modalities = deepcopy(obj.merge_modalities)
+
+        reference = obj.reference
+        if reference:
+            for name, modality in obj.modalities.items():
+                if name == reference:
+                    continue
+                if iwsreg.is_attachment(name):
+                    continue
+                iwsreg.add_registration_path(name, reference, ["rigid", "affine", "nl"])
         iwsreg.save()
         return iwsreg
 
