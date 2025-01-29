@@ -735,9 +735,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
-                        registered_edge_transform["registration"]
-                    )
+                    transforms[modality][
+                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
+                    ] = registered_edge_transform["registration"]
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -1227,21 +1227,26 @@ class ElastixReg(Workflow):
 
         paths = []
         attached_to_modality_transform = {}
+        attached_to_modality_image_shape = {}
+
         # export attachment modalities
         with MeasureTimer() as timer:
-            for name, attached_shape_dict in tqdm(
-                self.attachment_shapes.items(), desc="Exporting attachment shapes..."
-            ):
-                attached_to = attached_shape_dict["attach_to"]
+            for name, attached_dict in tqdm(self.attachment_shapes.items(), desc="Exporting attachment shapes..."):
+                attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
-                shape_pixel_size = attached_shape_dict["pixel_size"]
+                shape_pixel_size = attached_dict["pixel_size"]
                 attach_to_modality = self.modalities[attached_to]
                 if attached_to not in attached_to_modality_transform:
                     _, transform_sequence, _ = self._prepare_transform(attach_to_modality.name)
                     attached_to_modality_transform[attached_to] = transform_sequence
                 transform_sequence = attached_to_modality_transform[attached_to]
+                if attached_to not in attached_to_modality_image_shape:
+                    attached_to_modality_image_shape[attached_to] = self.get_wrapper(
+                        name=attached_to
+                    ).reader.image_shape
+                image_shape = attached_to_modality_image_shape[attached_to]
 
-                for file in attached_shape_dict["files"]:
+                for file in attached_dict["files"]:
                     logger.trace(f"Exporting {file} to {attached_to} with {transform_sequence}...")
                     name = Path(file).stem
                     suffix = Path(file).suffix
@@ -1253,7 +1258,15 @@ class ElastixReg(Workflow):
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
-                    path = transform_attached_shape(transform_sequence, file, shape_pixel_size, output_path)
+                    path = transform_attached_shape(
+                        transform_sequence,
+                        file,
+                        shape_pixel_size,
+                        output_path,
+                        silent=False,
+                        as_image=not transform_sequence.is_linear,
+                        image_shape=image_shape,
+                    )
                     logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
                     paths.append(path)
         if paths:
@@ -1267,20 +1280,24 @@ class ElastixReg(Workflow):
 
         paths = []
         attached_to_modality_transform = {}
+        attached_to_modality_image_shape = {}
         # export attachment modalities
         with MeasureTimer() as timer:
-            for name, attached_shape_dict in tqdm(
-                self.attachment_points.items(), desc="Exporting attachment shapes..."
-            ):
-                attached_to = attached_shape_dict["attach_to"]
+            for name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment shapes..."):
+                attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
-                shape_pixel_size = attached_shape_dict["pixel_size"]
+                shape_pixel_size = attached_dict["pixel_size"]
                 attach_to_modality = self.modalities[attached_to]
                 if attached_to not in attached_to_modality_transform:
                     _, transform_sequence, _ = self._prepare_transform(attach_to_modality.name)
                     attached_to_modality_transform[attached_to] = transform_sequence
                 transform_sequence = attached_to_modality_transform[attached_to]
-                for file in attached_shape_dict["files"]:
+                if attached_to not in attached_to_modality_image_shape:
+                    attached_to_modality_image_shape[attached_to] = self.get_wrapper(
+                        name=attached_to
+                    ).reader.image_shape
+                image_shape = attached_to_modality_image_shape[attached_to]
+                for file in attached_dict["files"]:
                     logger.trace(f"Exporting {file} to {attached_to}...")
                     name = Path(file).stem
                     suffix = Path(file).suffix
@@ -1293,7 +1310,13 @@ class ElastixReg(Workflow):
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
                     path = transform_attached_point(
-                        transform_sequence, file, shape_pixel_size, output_path, silent=False
+                        transform_sequence,
+                        file,
+                        shape_pixel_size,
+                        output_path,
+                        silent=False,
+                        as_image=not transform_sequence.is_linear,
+                        image_shape=image_shape,
                     )
                     logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
                     paths.append(path)

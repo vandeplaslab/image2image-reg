@@ -823,13 +823,12 @@ def valis_registration(
     from natsort import natsorted
     from valis import registration
 
+    from image2image_reg.valis.transform import transform_attached_image, transform_registered_image
     from image2image_reg.valis.utilities import (
         get_feature_detector,
         get_micro_registration_dimension,
         get_slide_path,
     )
-    from image2image_reg.valis.transform import transform_attached_image
-    from image2image_reg.valis.transform import transform_registered_image
 
     output_dir = Path(output_dir)
 

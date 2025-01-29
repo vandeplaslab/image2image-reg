@@ -135,6 +135,7 @@ def transform_points_df(
     replace: bool = False,
     source_pixel_size: float = 1.0,
     as_image: bool = False,
+    image_shape: tuple[int, int] = (0, 0),
     silent: bool = False,
 ) -> pd.DataFrame:
     """Transform points in a dataframe.
@@ -176,6 +177,7 @@ def transform_points_df(
         source_pixel_size=source_pixel_size,
         silent=silent,
         as_image=as_image,
+        image_shape=image_shape,
     )
 
 
@@ -240,6 +242,7 @@ def _transform_points_df(
     replace: bool = False,
     source_pixel_size: float = 1.0,
     as_image: bool = False,
+    image_shape: tuple[int, int] = (0, 0),
     silent: bool = False,
 ) -> pd.DataFrame:
     if x_key not in df.columns or y_key not in df.columns:
@@ -250,8 +253,18 @@ def _transform_points_df(
     x = df[x_key].values
     y = df[y_key].values
     if as_image:
+        height, width = image_shape
         x, y = transform_points_as_image(
-            seq, x, y, df=df, in_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size, silent=silent
+            seq,
+            x,
+            y,
+            height,
+            width,
+            df=df,
+            in_px=in_px,
+            as_px=as_px,
+            source_pixel_size=source_pixel_size,
+            silent=silent,
         )
     else:
         x, y = transform_points(seq, x, y, in_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size, silent=silent)
@@ -266,6 +279,7 @@ def transform_attached_point(
     output_path: PathLike,
     silent: bool = False,
     as_image: bool = False,
+    image_shape: tuple[int, int] = (0, 0),
 ) -> Path:
     """Transform points data."""
     from image2image_io.readers.points_reader import read_points
@@ -281,6 +295,11 @@ def transform_attached_point(
     if x_key not in df.columns or y_key not in df.columns:
         raise ValueError(f"Invalid columns: {df.columns}")
 
+    if as_image:
+        height, width = image_shape
+        if height == 0 or width == 0:
+            raise ValueError("Invalid image shape.")
+
     df_transformed = transform_points_df(
         transform_sequence,
         df.copy(),
@@ -292,6 +311,7 @@ def transform_attached_point(
         source_pixel_size=source_pixel_size,
         silent=silent,
         as_image=as_image,
+        image_shape=image_shape,
     )
     if path.suffix in [".csv", ".txt", ".tsv"]:
         sep = {"csv": ",", "txt": "\t", "tsv": "\t"}[path.suffix[1:]]
@@ -307,6 +327,8 @@ def transform_attached_shape(
     source_pixel_size: float,
     output_path: PathLike,
     silent: bool = False,
+    as_image: bool = False,
+    image_shape: tuple[int, int] = (0, 0),
 ) -> Path:
     """Transform points data."""
     from image2image_io.readers.shapes_reader import ShapesReader
@@ -315,22 +337,64 @@ def transform_attached_shape(
     # if value is equal to 1.0, then the coordinates are in pixels
     is_in_px = source_pixel_size != 1.0
 
+    if as_image:
+        height, width = image_shape
+        if height == 0 or width == 0:
+            raise ValueError("Invalid image shape.")
+
     reader = ShapesReader(path)
     geojson_data = deepcopy(reader.geojson_data)
     if isinstance(geojson_data, list):
         if "type" in geojson_data[0] and geojson_data[0]["type"] == "Feature":
             if transform_sequence is not None:
-                geojson_data = _transform_geojson_features(
-                    geojson_data,
-                    transform_sequence,
-                    in_px=is_in_px,
-                    as_px=is_in_px,
-                    source_pixel_size=source_pixel_size,
-                    silent=silent,
-                )
+                if as_image:
+                    geojson_data = _transform_geojson_features_as_image(
+                        geojson_data,
+                        transform_sequence,
+                        image_shape=image_shape,
+                        is_px=is_in_px,
+                        as_px=is_in_px,
+                        source_pixel_size=source_pixel_size,
+                    )
+                else:
+                    geojson_data = _transform_geojson_features(
+                        geojson_data,
+                        transform_sequence,
+                        in_px=is_in_px,
+                        as_px=is_in_px,
+                        source_pixel_size=source_pixel_size,
+                        silent=silent,
+                    )
         else:
             raise ValueError("Invalid GeoJSON data.")
     write_json_data(output_path, geojson_data, compress=True, check_existing=False)
+
+
+def _transform_geojson_features_as_image(
+    geojson_data: list[dict],
+    transform_sequence: TransformSequence,
+    image_shape: tuple[int, int],
+    is_px: bool,
+    as_px: bool,
+    source_pixel_size: float = 1.0,
+) -> list[dict]:
+    target_pixel_size = transform_sequence.output_spacing[0]
+
+    height, width = image_shape
+    df, n_to_prop = _convert_geojson_to_df(geojson_data, is_px, source_pixel_size)
+    x, y = transform_points_as_image(
+        transform_sequence,
+        df.x.values,
+        df.y.values,
+        height,
+        width,
+        df=df,
+        in_px=is_px,
+        as_px=as_px,
+        source_pixel_size=source_pixel_size,
+    )
+    x, y, df = _filter_transform_coordinate_image(*image_shape, x, y, df)
+    return _convert_df_to_geojson(df, x, y, as_px, target_pixel_size, n_to_prop=n_to_prop)
 
 
 def _transform_geojson_features(
