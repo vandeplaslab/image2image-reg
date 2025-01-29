@@ -735,9 +735,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -983,7 +983,7 @@ class ElastixReg(Workflow):
         from image2image_io.utils.utilities import get_shape_of_image
         from koyo.visuals import save_gray, save_rgb
 
-        from image2image_reg.elastix.utilities import transform_images_for_pyramid
+        from image2image_reg.elastix.transform import transform_images_for_pyramid
         from image2image_reg.utils.visuals import create_overlap_img
 
         target_pair = self.registration_paths[source]
@@ -1221,7 +1221,7 @@ class ElastixReg(Workflow):
     def _export_attachment_shapes(
         self, n_parallel: int = 1, rename: bool = True, overwrite: bool = False
     ) -> list[Path]:
-        from image2image_reg.elastix.utilities import transform_attached_shape
+        from image2image_reg.elastix.transform import transform_attached_shape
 
         # prepare attachment shapes
 
@@ -1263,7 +1263,7 @@ class ElastixReg(Workflow):
     def _export_attachment_points(
         self, n_parallel: int = 1, rename: bool = True, overwrite: bool = False
     ) -> list[Path]:
-        from image2image_reg.elastix.utilities import transform_attached_point
+        from image2image_reg.elastix.transform import transform_attached_point
 
         paths = []
         attached_to_modality_transform = {}
