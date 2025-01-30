@@ -529,7 +529,7 @@ class ValisReg(Workflow):
         rename: bool = True,
         overwrite: bool = False,
     ) -> list[Path]:
-        from image2image_reg.valis.utilities import transform_registered_image
+        from image2image_reg.valis.transform import transform_registered_image
 
         path_to_name_map = {Path(modality.path): modality.name for modality in self.modalities.values()}
 
@@ -551,7 +551,7 @@ class ValisReg(Workflow):
         return paths
 
     def _export_attachment_shapes(self, n_parallel: int = 1, overwrite: bool = False) -> list[Path]:
-        from image2image_reg.valis.utilities import transform_attached_shapes
+        from image2image_reg.valis.transform import transform_attached_shapes
 
         paths = []
         # export attachment modalities
@@ -578,7 +578,7 @@ class ValisReg(Workflow):
         return paths
 
     def _export_attachment_points(self, n_parallel: int = 1, overwrite: bool = False) -> list[Path]:
-        from image2image_reg.valis.utilities import transform_attached_points
+        from image2image_reg.valis.transform import transform_attached_points
 
         paths = []
         # export attachment modalities
@@ -612,7 +612,7 @@ class ValisReg(Workflow):
         rename: bool = True,
         overwrite: bool = False,
     ) -> list[Path]:
-        from image2image_reg.valis.utilities import transform_attached_image
+        from image2image_reg.valis.transform import transform_attached_image
 
         path_to_name_map = {Path(modality.path): modality.name for modality in self.modalities.values()}
 
@@ -823,12 +823,11 @@ def valis_registration(
     from natsort import natsorted
     from valis import registration
 
+    from image2image_reg.valis.transform import transform_attached_image, transform_registered_image
     from image2image_reg.valis.utilities import (
         get_feature_detector,
         get_micro_registration_dimension,
         get_slide_path,
-        transform_attached_image,
-        transform_registered_image,
     )
 
     output_dir = Path(output_dir)
