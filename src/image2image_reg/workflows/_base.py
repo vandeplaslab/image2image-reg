@@ -557,8 +557,7 @@ class Workflow:
         """
         if attach_to not in self.modalities:
             raise ValueError(
-                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment"
-                f" images."
+                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment images."
             )
         if isinstance(paths, (str, Path)):
             paths = [paths]
@@ -659,8 +658,7 @@ class Workflow:
 
         if attach_to not in self.modalities:
             raise ValueError(
-                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment"
-                f" objects."
+                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment objects."
             )
         paths_: list[Path] = []
         for path in paths:
