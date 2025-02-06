@@ -11,7 +11,7 @@ from koyo.system import IS_MAC
 from koyo.typing import PathLike
 from koyo.utilities import running_as_pyinstaller_app
 from loguru import logger
-
+import koyo.compat  # noqa
 from image2image_reg import __version__
 from image2image_reg.cli._common import set_logger
 from image2image_reg.cli.convert import convert
