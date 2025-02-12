@@ -507,18 +507,29 @@ class ValisReg(Workflow):
         if write_attached:
             write_attached_images = write_attached_points = write_attached_shapes = True
 
+        if n_parallel is None or n_parallel < 1:
+            n_parallel = 1
+
         paths = []
         # export registered images
         if write_registered:
-            paths.extend(self._export_registered_images(fmt, tile_size, as_uint8, rename, overwrite))
+            paths.extend(
+                self._export_registered_images(
+                    fmt=fmt, tile_size=tile_size, as_uint8=as_uint8, rename=rename, overwrite=overwrite
+                )
+            )
 
         # export attachment modalities
         if write_attached_shapes:
-            paths.extend(self._export_attachment_shapes(n_parallel, overwrite))
+            paths.extend(self._export_attachment_shapes(n_parallel=n_parallel, overwrite=overwrite))
         if write_attached_points:
-            paths.extend(self._export_attachment_points(n_parallel, overwrite))
+            paths.extend(self._export_attachment_points(n_parallel=n_parallel, overwrite=overwrite))
         if write_attached_images:
-            paths.extend(self._export_attachment_images(fmt, tile_size, as_uint8, rename, overwrite))
+            paths.extend(
+                self._export_attachment_images(
+                    fmt=fmt, tile_size=tile_size, as_uint8=as_uint8, rename=rename, overwrite=overwrite
+                )
+            )
         return paths
 
     def _export_registered_images(

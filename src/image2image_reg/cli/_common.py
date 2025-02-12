@@ -21,7 +21,7 @@ overwrite_ = click.option(
     "--overwrite",
     help="Overwrite existing data.",
     is_flag=True,
-    default=None,
+    default=False,
     show_default=True,
 )
 as_uint8_ = click.option(

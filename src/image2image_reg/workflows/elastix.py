@@ -735,9 +735,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
@@ -1071,6 +1071,9 @@ class ElastixReg(Workflow):
         if write_attached:
             write_attached_images = write_attached_points = write_attached_shapes = True
 
+        if n_parallel is None or n_parallel < 1:
+            n_parallel = 1
+
         # update cache
         self.load_preprocessed_cache()
 
@@ -1092,7 +1095,14 @@ class ElastixReg(Workflow):
         if write_not_registered and not_reg_modality_list:
             paths.extend(
                 self._export_not_registered_images(
-                    not_reg_modality_list, fmt, to_original_size, tile_size, as_uint8, rename, n_parallel, overwrite
+                    not_reg_modality_list,
+                    fmt=fmt,
+                    to_original_size=to_original_size,
+                    tile_size=tile_size,
+                    as_uint8=as_uint8,
+                    rename=rename,
+                    n_parallel=n_parallel,
+                    overwrite=overwrite,
                 )
             )
 
@@ -1100,18 +1110,32 @@ class ElastixReg(Workflow):
         if write_registered and reg_modality_list:
             paths.extend(
                 self._export_registered_images(
-                    reg_modality_list, fmt, to_original_size, tile_size, as_uint8, rename, n_parallel, overwrite
+                    reg_modality_list,
+                    fmt=fmt,
+                    to_original_size=to_original_size,
+                    tile_size=tile_size,
+                    as_uint8=as_uint8,
+                    rename=rename,
+                    n_parallel=n_parallel,
+                    overwrite=overwrite,
                 )
             )
 
         if write_attached_shapes:
-            paths.extend(self._export_attachment_shapes(n_parallel, rename, overwrite))
+            paths.extend(self._export_attachment_shapes(n_parallel=n_parallel, rename=rename, overwrite=overwrite))
         if write_attached_points:
-            paths.extend(self._export_attachment_points(n_parallel, rename, overwrite))
+            paths.extend(self._export_attachment_points(n_parallel=n_parallel, rename=rename, overwrite=overwrite))
         if write_attached_images:
             paths.extend(
                 self._export_attachment_images(
-                    merge_modalities, remove_merged, fmt, to_original_size, tile_size, as_uint8, rename, overwrite
+                    merge_modalities,
+                    remove_merged,
+                    to_original_size=to_original_size,
+                    tile_size=tile_size,
+                    as_uint8=as_uint8,
+                    rename=rename,
+                    n_parallel=n_parallel,
+                    overwrite=overwrite,
                 )
             )
 
@@ -1333,6 +1357,7 @@ class ElastixReg(Workflow):
         tile_size: int = 512,
         as_uint8: bool | None = None,
         rename: bool = True,
+        n_parallel: int = 1,
         overwrite: bool = False,
     ) -> list[Path]:
         # attachment images

@@ -926,10 +926,11 @@ def export_runner(
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
 
+    errors = []
     with MeasureTimer() as timer:
         if n_parallel > 1 and len(paths) > 1 and parallel_mode == "outer":
             with WorkerPool(n_parallel) as pool:
-                for path in pool.imap(
+                for path, success in pool.imap(
                     _export,
                     [
                         (
@@ -945,14 +946,18 @@ def export_runner(
                             original_size,
                             as_uint8,
                             rename,
+                            1,
                             overwrite,
                         )
                         for path in paths
                     ],
                 ):
-                    logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+                    log_func = logger.info if success else logger.error
+                    log_func(f"Finished processing {path} in {timer(since_last=True)}")
+                    if not success:
+                        errors.append(path)
         else:
-            for path in paths:
+            for path, success in paths:
                 _export(
                     path,
                     fmt,
@@ -969,8 +974,15 @@ def export_runner(
                     n_parallel=n_parallel,
                     overwrite=overwrite,
                 )
-                logger.info(f"Finished processing {path} in {timer(since_last=True)}")
+                log_func = logger.info if success else logger.error
+                log_func(f"Finished processing {path} in {timer(since_last=True)}")
+                if not success:
+                    errors.append(path)
     logger.info(f"Finished exporting all projects in {timer()}.")
+    if errors:
+        errors = "\n- ".join(errors)
+        logger.error(f"Failed to export the following projects:\n{errors}")
+        return exit_with_error()
 
 
 def _export(
@@ -988,30 +1000,34 @@ def _export(
     rename: bool = True,
     n_parallel: int = 1,
     overwrite: bool = False,
-) -> PathLike:
+) -> tuple[PathLike, bool]:
     from image2image_reg.workflows.elastix import ElastixReg
 
-    obj = ElastixReg.from_path(path)
-    obj.set_logger()
-    if not obj.is_registered:
-        warning_msg(f"Project {obj.name} is not registered.")
-        return path
-    obj.write(
-        fmt=fmt,
-        write_registered=write_registered,
-        write_not_registered=write_not_registered,
-        write_attached_images=write_attached_images,
-        write_attached_shapes=write_attached_shapes,
-        write_attached_points=write_attached_points,
-        write_merged=write_merged,
-        remove_merged=remove_merged,
-        to_original_size=original_size,
-        as_uint8=as_uint8,
-        rename=rename,
-        n_parallel=n_parallel,
-        overwrite=overwrite,
-    )
-    return path
+    try:
+        obj = ElastixReg.from_path(path)
+        obj.set_logger()
+        if not obj.is_registered:
+            warning_msg(f"Project {obj.name} is not registered.")
+            return path, False
+        obj.write(
+            fmt=fmt,
+            write_registered=write_registered,
+            write_not_registered=write_not_registered,
+            write_attached_images=write_attached_images,
+            write_attached_shapes=write_attached_shapes,
+            write_attached_points=write_attached_points,
+            write_merged=write_merged,
+            remove_merged=remove_merged,
+            to_original_size=original_size,
+            as_uint8=as_uint8,
+            rename=rename,
+            n_parallel=n_parallel,
+            overwrite=overwrite,
+        )
+        return path, True
+    except ValueError:
+        logger.exception(f"Failed to export {path}.")
+        return path, False
 
 
 @click.option(
