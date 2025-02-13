@@ -957,8 +957,8 @@ def export_runner(
                     if not success:
                         errors.append(path)
         else:
-            for path, success in paths:
-                _export(
+            for path in paths:
+                path, success = _export(
                     path,
                     fmt,
                     write_registered,
