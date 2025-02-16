@@ -973,7 +973,7 @@ class ElastixReg(Workflow):
         # also export all images
         try:
             overlap, _ = create_overlap_img(images_from_all)
-            path = self.overlap_dir / "all_overlap.png"
+            path = self.overlap_dir / "overlap_all.png"
             save_rgb(path, overlap)
             logger.trace(f"Saved overlap image to '{path}'.")
         except Exception as e:

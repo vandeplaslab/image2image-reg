@@ -155,9 +155,11 @@ def _convert_df_to_geojson(
                 x_, y_ = _transform_transformed_from_px_to_um(x[i], y[i], as_px, target_pixel_size)
                 if row.inner == 0:
                     geometry["coordinates"].append([])
-                if row.outer == 0:
-                    geometry["coordinates"][row.outer].append([])
-                geometry["coordinates"][row.outer][row.inner].append([x_, y_])
+                while len(geometry["coordinates"][row.inner]) <= row.outer:
+                    geometry["coordinates"][row.inner].append([])
+                # if not geometry["coordinates"][0]:  # row.outer == 0:
+                #     geometry["coordinates"][row.outer].append([])
+                geometry["coordinates"][row.inner][row.outer].append([x_, y_])
         # skip broken geometries
         if not geometry or not geometry.get("coordinates"):
             continue
