@@ -70,9 +70,17 @@ def update_kwargs_on_channel_names(search_names: list[str], **kwargs: ty.Any) ->
     channel_names_ = deepcopy(kwargs["channel_names"])
     channel_names_ = [ch.lower() for ch in channel_names_]
     indices = []
+    # perform basic check, if search name has same name as channel name
     for ch in search_names:
         if ch in channel_names_:
             indices.append(channel_names_.index(ch))
+    # alternatively, check whether search name is part of channel name - this can of course produce a number of
+    # false positives...
+    if not indices:
+        for chn in channel_names_:
+            for ch in search_names:
+                if ch in chn:
+                    indices.append(channel_names_.index(chn))
     if indices:
         kwargs["channel_indices"] = indices
         return True, kwargs
