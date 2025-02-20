@@ -47,7 +47,13 @@ from image2image_reg.cli._common import (
     write_not_registered_,
     write_registered_,
 )
-from image2image_reg.enums import ValisDetectorMethod, ValisMatcherMethod, ValisPreprocessingMethod, WriterMode
+from image2image_reg.enums import (
+    PreprocessingOptions,
+    ValisDetectorMethod,
+    ValisMatcherMethod,
+    ValisPreprocessingMethod,
+    WriterMode,
+)
 
 
 def cli_parse_method(ctx, param, value: list[str]) -> list[str]:
@@ -202,7 +208,7 @@ if is_installed("valis"):
         "-P",
         "--preprocessing",
         help="Kind of pre-processing that will be applied to the specified modality.",
-        type=click.Choice(["basic", "light", "dark"], case_sensitive=False),
+        type=click.Choice(PreprocessingOptions, case_sensitive=False),
         default=["basic"],
         show_default=True,
         required=False,

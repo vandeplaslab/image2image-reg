@@ -31,6 +31,10 @@ class CoordinateFlip(str, Enum):
     VERTICAL = "v"
 
 
+ProcessingDefaults = ty.Literal["none", "basic", "light", "dark", "he", "pas", "postaf", "mip"]
+PreprocessingOptionsWithNone = ty.get_args(ProcessingDefaults)
+PreprocessingOptions = PreprocessingOptionsWithNone[1::]
+
 NetworkTypes = ty.Literal[
     "random",
     "kk",

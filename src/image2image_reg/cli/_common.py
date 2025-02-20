@@ -281,6 +281,14 @@ def get_preprocessing(
         pre = Preprocessing.brightfield()
     elif preprocessing in ["basic"]:
         pre = Preprocessing.basic()
+    elif preprocessing in ["postaf"]:
+        pre = Preprocessing.postaf()
+    elif preprocessing in ["pas"]:
+        pre = Preprocessing.pas()
+    elif preprocessing in ["he"]:
+        pre = Preprocessing.he()
+    elif preprocessing in ["mip"]:
+        pre = Preprocessing.mip()
     else:
         pre = None
     if pre and affine:

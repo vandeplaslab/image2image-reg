@@ -45,7 +45,7 @@ from image2image_reg.cli._common import (
     write_not_registered_,
     write_registered_,
 )
-from image2image_reg.enums import WriterMode
+from image2image_reg.enums import PreprocessingOptions, PreprocessingOptionsWithNone, WriterMode
 from image2image_reg.parameters.registration import AVAILABLE_REGISTRATIONS
 
 
@@ -173,7 +173,7 @@ def validate_runner(paths: ty.Sequence[str], valis: bool = False) -> None:
     "-P",
     "--preprocessing",
     help="Kind of pre-processing that will be applied to the specified modality.",
-    type=click.Choice(["basic", "light", "dark"], case_sensitive=False),
+    type=click.Choice(PreprocessingOptions, case_sensitive=False),
     default=["basic"],
     show_default=True,
     required=False,
@@ -296,7 +296,7 @@ def add_modality_runner(
     "--target_preprocessing",
     help="Kind of pre-processing that will be applied to the specified modality - this will override modality-specific"
     " pre-processing.",
-    type=click.Choice(["none", "basic", "light", "dark"], case_sensitive=False),
+    type=click.Choice(PreprocessingOptionsWithNone, case_sensitive=False),
     default="none",
     show_default=True,
     required=False,
@@ -306,7 +306,7 @@ def add_modality_runner(
     "--source_preprocessing",
     help="Kind of pre-processing that will be applied to the specified modality - this will override modality-specific"
     " pre-processing.",
-    type=click.Choice(["none", "basic", "light", "dark"], case_sensitive=False),
+    type=click.Choice(PreprocessingOptionsWithNone, case_sensitive=False),
     default="none",
     show_default=True,
     required=False,
