@@ -25,7 +25,7 @@ def _transform_custom_proc(
     custom_procs: ty.Union[list[ty.Callable], tuple[ty.Callable, ...]],
 ) -> dict[str, ty.Callable]:
     """Transform custom processing."""
-    return {f"custom processing {str(idx+1).zfill(2)}": proc for idx, proc in enumerate(custom_procs)}
+    return {f"custom processing {str(idx + 1).zfill(2)}": proc for idx, proc in enumerate(custom_procs)}
 
 
 class Preprocessing(BaseModel):

@@ -146,12 +146,12 @@ ELX_TO_ITK_INTERPOLATORS: dict[str, ty.Any] = {
 
 __all__ = [
     "AVAILABLE_REGISTRATIONS",
-    "ArrayLike",
-    "CoordinateFlip",
     "ELX_LINEAR_TRANSFORMS",
     "ELX_TO_ITK_INTERPOLATORS",
-    "ImageType",
     "NUMERIC_ELX_PARAMETERS",
     "SITK_TO_NP_DTYPE",
+    "ArrayLike",
+    "CoordinateFlip",
+    "ImageType",
     "WriterMode",
 ]
