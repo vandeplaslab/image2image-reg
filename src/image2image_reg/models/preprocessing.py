@@ -11,6 +11,7 @@ from pydantic import BaseModel, validator
 
 from image2image_reg.enums import ArrayLike, CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
+from image2image_reg.utils.utilities import update_kwargs_on_channel_names
 
 
 def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:
@@ -245,35 +246,156 @@ class Preprocessing(BaseModel):
         return data
 
     @classmethod
-    def basic(cls, valis: bool = False) -> "Preprocessing":
+    def basic(
+        cls,
+        valis: bool = False,
+        image_type: ImageType = ImageType.DARK,
+        as_uint8: bool = True,
+        max_intensity_projection: bool = True,
+        **kwargs: ty.Any,
+    ) -> "Preprocessing":
         """Basic image preprocessing."""
         return cls(
-            image_type=ImageType.DARK,
-            as_uint8=True,
-            max_intensity_projection=True,
+            image_type=image_type,
+            as_uint8=as_uint8,
+            max_intensity_projection=max_intensity_projection,
             method="I2RegPreprocessor" if valis else None,
+            **kwargs,
         )
 
     @classmethod
-    def fluorescence(cls, valis: bool = False) -> "Preprocessing":
+    def fluorescence(
+        cls,
+        valis: bool = False,
+        image_type: ImageType = ImageType.DARK,
+        as_uint8: bool = True,
+        max_intensity_projection: bool = True,
+        contrast_enhance: bool = True,
+        **kwargs: ty.Any,
+    ) -> "Preprocessing":
         """Basic image preprocessing."""
         return cls(
-            image_type=ImageType.DARK,
-            as_uint8=True,
-            max_intensity_projection=True,
-            contrast_enhance=True,
+            image_type=image_type,
+            as_uint8=as_uint8,
+            max_intensity_projection=max_intensity_projection,
+            contrast_enhance=contrast_enhance,
             method="I2RegPreprocessor" if valis else None,
+            **kwargs,
         )
 
     @classmethod
-    def brightfield(cls, valis: bool = False) -> "Preprocessing":
+    def postaf(
+        cls,
+        valis: bool = False,
+        image_type: ImageType = ImageType.DARK,
+        as_uint8: bool = True,
+        max_intensity_projection: bool = True,
+        **kwargs: ty.Any,
+    ) -> "Preprocessing":
+        """Basic image preprocessing."""
+        changed, kwargs = update_kwargs_on_channel_names(["bright", "brightfield"], **kwargs)
+        if changed:
+            kwargs["invert_intensity"] = True
+            kwargs["equalize_histogram"] = True
+            kwargs["contrast_enhance"] = False
+        else:
+            changed, kwargs = update_kwargs_on_channel_names(["egfp"], **kwargs)
+            if changed:
+                kwargs["invert_intensity"] = False
+                kwargs["equalize_histogram"] = True
+                kwargs["contrast_enhance"] = False
+
+        return cls(
+            image_type=image_type,
+            as_uint8=as_uint8,
+            max_intensity_projection=max_intensity_projection,
+            method="I2RegPreprocessor" if valis else None,
+            **kwargs,
+        )
+
+    @classmethod
+    def mip(
+        cls,
+        valis: bool = False,
+        image_type: ImageType = ImageType.DARK,
+        as_uint8: bool = True,
+        max_intensity_projection: bool = True,
+        equalize_histogram: bool = True,
+        contrast_enhance: bool = False,
+        **kwargs: ty.Any,
+    ) -> "Preprocessing":
+        """Basic image preprocessing."""
+        _, kwargs = update_kwargs_on_channel_names(["dapi"], **kwargs)
+        return cls(
+            image_type=image_type,
+            as_uint8=as_uint8,
+            max_intensity_projection=max_intensity_projection,
+            method="I2RegPreprocessor" if valis else None,
+            equalize_histogram=equalize_histogram,
+            contrast_enhance=contrast_enhance,
+            **kwargs,
+        )
+
+    @classmethod
+    def brightfield(
+        cls,
+        valis: bool = False,
+        image_type: ImageType = ImageType.LIGHT,
+        as_uint8: bool = True,
+        max_intensity_projection: bool = False,
+        invert_intensity: bool = True,
+        **kwargs: ty.Any,
+    ) -> "Preprocessing":
         """Basic image preprocessing."""
         return cls(
-            image_type=ImageType.LIGHT,
-            as_uint8=True,
-            max_intensity_projection=False,
-            invert_intensity=True,
+            image_type=image_type,
+            as_uint8=as_uint8,
+            max_intensity_projection=max_intensity_projection,
+            invert_intensity=invert_intensity,
             method="I2RegPreprocessor" if valis else None,
+            **kwargs,
+        )
+
+    @classmethod
+    def he(
+        cls,
+        valis: bool = False,
+        image_type: ImageType = ImageType.LIGHT,
+        as_uint8: bool = True,
+        max_intensity_projection: bool = False,
+        invert_intensity: bool = True,
+        **kwargs: ty.Any,
+    ) -> "Preprocessing":
+        """Basic image preprocessing."""
+        return cls(
+            image_type=image_type,
+            as_uint8=as_uint8,
+            max_intensity_projection=max_intensity_projection,
+            invert_intensity=invert_intensity,
+            method="I2RegPreprocessor" if valis else None,
+            **kwargs,
+        )
+
+    @classmethod
+    def pas(
+        cls,
+        valis: bool = False,
+        image_type: ImageType = ImageType.LIGHT,
+        as_uint8: bool = True,
+        max_intensity_projection: bool = False,
+        invert_intensity: bool = True,
+        equalize_histogram: bool = True,
+        **kwargs: ty.Any,
+    ) -> "Preprocessing":
+        """Basic image preprocessing."""
+        return cls(
+            image_type=image_type,
+            as_uint8=as_uint8,
+            max_intensity_projection=max_intensity_projection,
+            invert_intensity=invert_intensity,
+            equalize_histogram=equalize_histogram,
+            method="I2RegPreprocessor" if valis else None,
+            **kwargs,
         )
 
     @validator("mask_bbox", "crop_bbox", pre=True)

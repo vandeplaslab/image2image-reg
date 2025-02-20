@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing as ty
+from copy import deepcopy
 from pathlib import Path
 from shutil import rmtree
 
@@ -59,3 +60,20 @@ def print_versions() -> None:
     logger.info(f"image2image-reg version: {get_version('image2image-reg')}")
     if is_installed("valis-wsi"):
         logger.info(f"valis version: {get_version('valis-wsi')}")
+
+
+def update_kwargs_on_channel_names(search_names: list[str], **kwargs: ty.Any) -> tuple[bool, dict]:
+    """Update keyword arguments based on input."""
+    if "channel_names" not in kwargs:
+        return False, kwargs
+    search_names = [se.lower() for se in search_names]
+    channel_names_ = deepcopy(kwargs["channel_names"])
+    channel_names_ = [ch.lower() for ch in channel_names_]
+    indices = []
+    for ch in search_names:
+        if ch in channel_names_:
+            indices.append(channel_names_.index(ch))
+    if indices:
+        kwargs["channel_indices"] = indices
+        return True, kwargs
+    return False, kwargs

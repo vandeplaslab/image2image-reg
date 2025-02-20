@@ -416,7 +416,7 @@ class Workflow:
         """Remove modality from the project."""
         modality = None
         if name is not None and name in self.modalities:
-            modality = self.modalities.pop(name)
+            modality = self.modalities.pop(name, None)
             logger.trace(f"Removed modality '{name}'.")
         elif path is not None:
             path = Path(path)
