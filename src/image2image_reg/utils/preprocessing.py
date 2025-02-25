@@ -72,16 +72,16 @@ def preprocess_dask_array(
         # perform max intensity projection
         if is_rgb:
             if preprocessing:
-                array_out = np.asarray(grayscale(array, is_interleaved=is_rgb))
-                array_out = sitk.GetImageFromArray(array_out)  # type: ignore[assignment]
+                array = np.asarray(grayscale(array, is_interleaved=is_rgb))
+                array = sitk.GetImageFromArray(array)  # type: ignore[assignment]
                 logger.trace(f"Converted RGB to greyscale in {timer()}")
             else:
-                array_out = np.asarray(array)
-                array_out = sitk.GetImageFromArray(array_out, isVector=True)  # type: ignore[assignment]
+                array = np.asarray(array)
+                array = sitk.GetImageFromArray(array, isVector=True)  # type: ignore[assignment]
                 logger.trace(f"Converted RGB to SimpleITK image in {timer()}")
         # no need to pre-process
         elif len(array.shape) == 2:
-            array_out = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
+            array = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
             logger.trace(f"Converted 2D array to SimpleITK image in {timer()}")
         else:
             # select channels
@@ -90,9 +90,17 @@ def preprocess_dask_array(
                 logger.trace(f"Pre-processing dask array with {channel_indices} channels.")
                 if channel_indices:
                     array = array[sort_indices(channel_indices), :, :]
-            array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
+            # to save memory, convert to uint8
+            if preprocessing and preprocessing.as_uint8:
+                array = np.asarray(
+                    [
+                        cv2.normalize(np.asarray(channel), None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+                        for channel in array
+                    ]
+                )
+            array = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
             logger.trace(f"Pre-processed dask array in {timer()}")
-    return array_out
+    return array
 
 
 def preprocess_valis_array(
@@ -642,6 +650,7 @@ def preprocess(
     spatial: bool = True,
 ) -> tuple[sitk.Image, sitk.Image, list, list]:
     """Run full intensity and spatial preprocessing."""
+    # force invert intensity for dark images
     if check:
         if preprocessing.image_type == ImageType.DARK:
             preprocessing.invert_intensity = False
@@ -650,8 +659,8 @@ def preprocess(
             preprocessing.contrast_enhance = False
             if is_rgb:
                 preprocessing.invert_intensity = True
-    if preprocessing.equalize_histogram or preprocessing.contrast_enhance:
-        preprocessing.as_uint8 = True
+    # Always convert to uint8
+    preprocessing.as_uint8 = True
 
     # intensity based pre-processing
     image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
