@@ -37,7 +37,7 @@ dependencies = [
     "scikit-image",
     "click-groups",
     "mpire",
-    "colour-science",
+    "colour-science>=0.4.1",
     "tabulate",
 ]
 
