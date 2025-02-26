@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -84,19 +85,19 @@ def read_elastix_intermediate_transform_data(transform_txt: Path | str) -> dict[
         Transform parameters for each transform in the sequence
 
     """
-    with open(transform_txt) as f:
-        transform_parameters = f.readlines()
-
     elastix_transform_data = {}
-    for param in transform_parameters:
-        if param[0] == "/":
-            continue
-        if param[0] == "\n":
-            continue
-        param = param.replace("(", "").replace(")", "").replace("\n", "").replace('"', "")
-        param_name, param_vals = param.split(" ", 1)
-        elastix_transform_data.update({param_name: param_vals})
+    with suppress(Exception):
+        with open(transform_txt) as f:
+            transform_parameters = f.readlines()
 
+        for param in transform_parameters:
+            if param[0] == "/":
+                continue
+            if param[0] == "\n":
+                continue
+            param = param.replace("(", "").replace(")", "").replace("\n", "").replace('"', "")
+            param_name, param_vals = param.split(" ", 1)
+            elastix_transform_data.update({param_name: param_vals})
     return elastix_transform_data
 
 
@@ -127,7 +128,8 @@ def read_elastix_transform_dir(registration_dir: Path | str) -> dict[int, dict[i
                 all_tform_data.update({model_idx: {}})
             res_idx = int(tform_fp.name.split(".")[2].strip("R"))
             model_res_data = read_elastix_intermediate_transform_data(tform_fp)
-            all_tform_data[model_idx].update({res_idx: model_res_data})
+            if model_res_data:
+                all_tform_data[model_idx].update({res_idx: model_res_data})
     return all_tform_data
 
 

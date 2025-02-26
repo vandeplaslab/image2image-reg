@@ -62,14 +62,14 @@ def _get_channel_indices(
 def preprocess_dask_array(
     array: da.core.Array,
     channel_names: list[str],
-    preprocessing: Preprocessing | None = None,
     is_rgb: bool | None = None,
+    preprocessing: Preprocessing | None = None,
 ) -> sitk.Image:
     """Pre-process dask array."""
     logger.trace(f"Pre-processing array of shape {array.shape}")
     is_rgb = is_rgb if isinstance(is_rgb, bool) else guess_rgb(array.shape)
     with MeasureTimer() as timer:
-        # perform max intensity projection
+        # handle RGB image
         if is_rgb:
             if preprocessing:
                 array = np.asarray(grayscale(array, is_interleaved=is_rgb))
@@ -79,10 +79,14 @@ def preprocess_dask_array(
                 array = np.asarray(array)
                 array = sitk.GetImageFromArray(array, isVector=True)  # type: ignore[assignment]
                 logger.trace(f"Converted RGB to SimpleITK image in {timer()}")
-        # no need to pre-process
+        # handle 2D image
         elif len(array.shape) == 2:
-            array = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
+            array = np.asarray(array)
+            if preprocessing and preprocessing.as_uint8:
+                array = cv2.normalize(np.asarray(array), None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+            array = sitk.GetImageFromArray(array)  # type: ignore[assignment]
             logger.trace(f"Converted 2D array to SimpleITK image in {timer()}")
+        # handle multi-channel image
         else:
             # select channels
             if preprocessing:
@@ -112,16 +116,16 @@ def preprocess_valis_array(
         # perform max intensity projection
         if is_rgb:
             if preprocessing:
-                array_out = np.asarray(grayscale(array, is_interleaved=is_rgb))
-                array_out = sitk.GetImageFromArray(array_out)  # type: ignore[assignment]
+                array = np.asarray(grayscale(array, is_interleaved=is_rgb))
+                array = sitk.GetImageFromArray(array)  # type: ignore[assignment]
                 logger.trace(f"Converted RGB to greyscale in {timer()}")
             else:
-                array_out = np.asarray(array)
-                array_out = sitk.GetImageFromArray(array_out, isVector=True)  # type: ignore[assignment]
+                array = np.asarray(array)
+                array = sitk.GetImageFromArray(array, isVector=True)  # type: ignore[assignment]
                 logger.trace(f"Converted RGB to SimpleITK image in {timer()}")
         # no need to pre-process
         elif len(array.shape) == 2:
-            array_out = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
+            array = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
             logger.trace(f"Converted 2D array to SimpleITK image in {timer()}")
         else:
             # select channels
@@ -130,9 +134,9 @@ def preprocess_valis_array(
                 logger.trace(f"Pre-processing dask array with {channel_indices} channels.")
                 if channel_indices:
                     array = array[:, :, sort_indices(channel_indices)]
-            array_out = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
+            array = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
             logger.trace(f"Pre-processed dask array in {timer()}")
-    return array_out
+    return array
 
 
 def convert_and_cast(image: sitk.Image, preprocessing: Preprocessing | None = None) -> sitk.Image:
@@ -321,9 +325,9 @@ def remove_background_rolling_ball(image: sitk.Image) -> sitk.Image:
 def remove_background_black_tophat(image: sitk.Image) -> sitk.Image:
     """Remove background using black tophat algorithm."""
     # use openCV
+    size = 15
     spacing = image.GetSpacing()
     image = sitk.GetArrayFromImage(image)
-    size = 15
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
     image = cv2.morphologyEx(image, cv2.MORPH_BLACKHAT, kernel)
     image = sitk.GetImageFromArray(image)
@@ -509,7 +513,7 @@ def compute_mask_to_bbox(mask: sitk.Image, mask_padding: int = 100) -> BoundingB
     return BoundingBox(x_min, y_min, x_width, y_height)
 
 
-def preprocess_reg_image_spatial(
+def preprocess_spatial(
     image: sitk.Image,
     preprocessing: Preprocessing,
     pixel_size: float,
@@ -673,7 +677,7 @@ def preprocess(
         )
 
     # spatial pre-processing
-    image, mask, transforms, original_size_transform = preprocess_reg_image_spatial(
+    image, mask, transforms, original_size_transform = preprocess_spatial(
         image, preprocessing, pixel_size, mask, transforms, transform_mask=transform_mask, spatial=spatial
     )
     return image, mask, transforms, original_size_transform
@@ -736,10 +740,10 @@ def preprocess_preview(
     """Complete pre-processing."""
     channel_names = preprocessing.channel_names
 
-    if valis:
-        image = preprocess_valis_array(image, channel_names, is_rgb, preprocessing)
-    else:
-        image = preprocess_dask_array(image, channel_names, preprocessing, is_rgb=is_rgb)
+    # if valis:
+    #     image = preprocess_valis_array(image, channel_names, is_rgb=is_rgb, preprocessing=preprocessing)
+    # else:
+    image = preprocess_dask_array(image, channel_names, is_rgb=is_rgb, preprocessing=preprocessing)
     # convert and cast
     image = convert_and_cast(image, preprocessing)
 
@@ -772,7 +776,7 @@ def preprocess_preview_valis(
     if preprocessing.method == "I2RegPreprocessor":
         channel_names = preprocessing.channel_names
 
-        image = preprocess_dask_array(image, channel_names, preprocessing)
+        image = preprocess_dask_array(image, channel_names, preprocessing=preprocessing)
         # convert and cast
         image = convert_and_cast(image, preprocessing)
 
