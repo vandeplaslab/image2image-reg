@@ -793,6 +793,7 @@ def _register(
     return path
 
 
+@overwrite_
 @click.option(
     "-l",
     "--pyramid",
@@ -804,24 +805,25 @@ def _register(
 )
 @project_path_multi_
 @elastix.command("preview", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-def preview_cmd(project_dir: ty.Sequence[str], pyramid: int) -> None:
+def preview_cmd(project_dir: ty.Sequence[str], pyramid: int, overwrite: bool = False) -> None:
     """Update project paths (e.g after folder move)."""
-    preview_runner(project_dir, pyramid)
+    preview_runner(project_dir, pyramid, overwrite)
 
 
-def preview_runner(paths: ty.Sequence[str], pyramid: int, valis: bool = False) -> None:
+def preview_runner(paths: ty.Sequence[str], pyramid: int, overwrite: bool = False, valis: bool = False) -> None:
     """Register images."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Source directories", "-l/--pyramid", pyramid),
+        Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
 
     for path in paths:
         obj = (ElastixReg if not valis else ValisReg).from_path(path)
         obj.set_logger()
-        obj.preview()
+        obj.preview(pyramid, overwrite)
 
 
 @overwrite_

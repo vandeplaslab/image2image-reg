@@ -177,7 +177,7 @@ def color_multichannel(
 def get_n_colors(rgb: np.ndarray, n: int) -> np.ndarray:
     """
     Pick n most different colors in rgb. Differences based of rgb values in the CAM16UCS colorspace
-    Based on https://larssonjohan.com/post/2016-10-30-farthest-points/
+    Based on https://larssonjohan.com/post/2016-10-30-farthest-points/.
     """
     n_clrs = rgb.shape[0]
     if n_clrs < n:
@@ -208,7 +208,7 @@ def get_n_colors(rgb: np.ndarray, n: int) -> np.ndarray:
     possible_idx.remove(most_dif_img1)
     possible_idx.remove(most_dif_img2)
 
-    for new_color in range(2, n):
+    for _new_color in range(2, n):
         max_d_idx = np.argmax([np.min(sq_D[i, rgb_idx]) for i in possible_idx])
         new_rgb_idx = possible_idx[max_d_idx]
         rgb_idx.append(new_rgb_idx)
@@ -217,7 +217,7 @@ def get_n_colors(rgb: np.ndarray, n: int) -> np.ndarray:
 
 
 def get_shape(img: np.ndarray) -> np.ndarray:
-    """Get shape of image (row, col, nchannels)
+    """Get shape of image (row, col, nchannels).
 
     Parameters
     ----------
@@ -301,3 +301,17 @@ def create_overlap_img(images: list[np.ndarray], cmap: np.ndarray | None = None)
     # overlap_img = exposure.equalize_adapthist(overlap_img)
     overlap_img = exposure.rescale_intensity(overlap_img, out_range=(0, 255)).astype(np.uint8)
     return overlap_img, grey_images
+
+
+def crop_overlap_img(image: np.ndarray, frac: float = 0.25) -> np.ndarray:
+    """Crop overlap image."""
+    # find centroid point in the image and add padding around the image, ensuring  that it captures ~128 pixels
+    # but does not go outside of the image
+    r, c, _ = image.shape
+    size = int(min(r, c) * frac)
+    r_center, c_center = r // 2, c // 2
+    r_start = max(0, r_center - size // 2)
+    r_end = min(r, r_center + size // 2)
+    c_start = max(0, c_center - size // 2)
+    c_end = min(c, c_center + size // 2)
+    return image[r_start:r_end, c_start:c_end, :]

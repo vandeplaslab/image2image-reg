@@ -290,15 +290,19 @@ class Preprocessing(BaseModel):
         image_type: ImageType = ImageType.DARK,
         as_uint8: bool = True,
         max_intensity_projection: bool = True,
+        which: ty.Literal["any", "brightfield", "egfp"] = "any",
         **kwargs: ty.Any,
     ) -> "Preprocessing":
         """Basic image preprocessing."""
-        changed, kwargs = update_kwargs_on_channel_names(["bright", "brightfield"], **kwargs)
-        if changed:
-            kwargs["invert_intensity"] = True
-            kwargs["equalize_histogram"] = True
-            kwargs["contrast_enhance"] = False
-        else:
+        changed = False
+        if which in ["any", "brightfield"]:
+            changed, kwargs = update_kwargs_on_channel_names(["bright", "brightfield"], **kwargs)
+            if changed:
+                kwargs["invert_intensity"] = True
+                kwargs["equalize_histogram"] = True
+                kwargs["contrast_enhance"] = False
+
+        if (which == "any" and not changed) or which == "egfp":
             changed, kwargs = update_kwargs_on_channel_names(["egfp"], **kwargs)
             if changed:
                 kwargs["invert_intensity"] = False
@@ -314,7 +318,7 @@ class Preprocessing(BaseModel):
         )
 
     @classmethod
-    def mip(
+    def dapi(
         cls,
         valis: bool = False,
         image_type: ImageType = ImageType.DARK,

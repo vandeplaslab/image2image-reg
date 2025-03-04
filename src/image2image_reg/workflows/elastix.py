@@ -948,12 +948,12 @@ class ElastixReg(Workflow):
                 )
         return out
 
-    def preview(self, **kwargs: ty.Any) -> None:
+    def preview(self, pyramid: int = -1, overwrite: bool = False, **kwargs: ty.Any) -> None:
         """Preview registration."""
         self.load_preprocessed_cache()
-        self._generate_overlap_image()
+        self._generate_overlap_image(pyramid=pyramid, overwrite=overwrite)
 
-    def _generate_overlap_image(self, pyramid: int = -1) -> None:
+    def _generate_overlap_image(self, pyramid: int = -1, overwrite: bool = False) -> None:
         """Generate overlap of images."""
         from koyo.visuals import save_rgb
 
@@ -967,10 +967,13 @@ class ElastixReg(Workflow):
         logger.trace(f"Generating overlap images at pyramid level of {pyramid}")
         # let's iterate through all registration paths
         for source, _target_pair in self.registration_paths.items():
-            images, names = self._generate_overlap_image_for_modality(source, pyramid)
-            images_from_all.extend(images)
+            images, names = self._generate_overlap_image_for_modality(source, pyramid, overwrite)
+            if images:
+                images_from_all.extend(images)
 
-        # also export all images
+        # also export all images but don't bother if it's a single image
+        if len(images_from_all) <= 2:
+            return
         try:
             overlap, _ = create_overlap_img(images_from_all)
             path = self.overlap_dir / "overlap_all.png"
@@ -979,7 +982,9 @@ class ElastixReg(Workflow):
         except Exception as e:
             logger.error(f"Could not save overlap image of all images. {e}")
 
-    def _generate_overlap_image_for_modality(self, source: str, pyramid: int = -1) -> tuple[list, list]:
+    def _generate_overlap_image_for_modality(
+        self, source: str, pyramid: int = -1, overwrite: bool = False
+    ) -> tuple[list, list]:
         from image2image_io.utils.utilities import get_shape_of_image
         from koyo.visuals import save_gray, save_rgb
 
@@ -991,7 +996,7 @@ class ElastixReg(Workflow):
         images, names = [], []
         target, through = (target_pair[-1], target_pair[0]) if len(target_pair) == 2 else (target_pair[0], None)
         path = self.overlap_dir / f"overlap_{source}_to_{target}.png"
-        if path.exists():
+        if path.exists() and not overwrite:
             logger.warning(f"Overlap image already exists at '{path}'. Skipping.")
             return images, names
 
@@ -1033,10 +1038,14 @@ class ElastixReg(Workflow):
                 names.append(through_modality.name)
                 logger.trace(f"Transformed {through} in {timer(since_last=True)}")
 
-            # create overlap plot
+            # create overlap images
             overlap, greys = create_overlap_img(images)
+
+            # export gray-scale images
             save_rgb(path, overlap)
             logger.trace(f"Saved overlap image to '{path}'.")
+
+            # export gray-scale images
             for name, grey in zip(names, greys):
                 path = self.overlap_dir / f"grey_{name}.png"
                 if path.exists():

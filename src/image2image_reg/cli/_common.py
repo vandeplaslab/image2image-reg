@@ -288,7 +288,7 @@ def get_preprocessing(
     elif preprocessing in ["he"]:
         pre = Preprocessing.he()
     elif preprocessing in ["mip"]:
-        pre = Preprocessing.mip()
+        pre = Preprocessing.dapi()
     else:
         pre = None
     if pre and affine:

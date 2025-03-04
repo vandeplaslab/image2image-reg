@@ -40,7 +40,7 @@ def draw_registration_nodes(
     g = nx.DiGraph()
     for idx, modality in enumerate(workflow.modalities):
         color = get_next_color(idx)
-        g.add_node(modality, color=color, cstyle=f"arc3,rad=-{(idx+1)*0.08+0.05}")
+        g.add_node(modality, color=color, cstyle=f"arc3,rad=-{(idx + 1) * 0.08 + 0.05}")
 
     for src, tgts in workflow.registration_paths.items():
         g.add_edge(src, tgts[0])
@@ -270,6 +270,7 @@ def draw_workflow(
         )
         path_targets = nx.algorithms.shortest_path(g, source, targets[-1])[1:]
 
+        legend["direct modality"] = {"color": "white", "ls": "solid"}
         if len(path_targets) > 1:
             legend["through modality"] = {"color": "white", "ls": "dotted"}
             for idx, cont_src in enumerate(path_targets[:-1]):
