@@ -1,4 +1,5 @@
 """Export model."""
+
 import typing as ty
 
 from pydantic import BaseModel, field_validator
