@@ -498,7 +498,7 @@ class ValisReg(Workflow):
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        rename: bool = True,
+        rename: bool = False,
         overwrite: bool = False,
         **kwargs: ty.Any,
     ) -> list | None:
@@ -538,7 +538,7 @@ class ValisReg(Workflow):
         fmt: str | WriterMode = "ome-tiff",
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        rename: bool = True,
+        rename: bool = False,
         overwrite: bool = False,
     ) -> list[Path]:
         from image2image_reg.valis.transform import transform_registered_image
@@ -621,7 +621,7 @@ class ValisReg(Workflow):
         fmt: str | WriterMode = "ome-tiff",
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        rename: bool = True,
+        rename: bool = False,
         overwrite: bool = False,
     ) -> list[Path]:
         from image2image_reg.valis.transform import transform_attached_image

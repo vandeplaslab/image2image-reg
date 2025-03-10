@@ -37,6 +37,75 @@ class TransformMixin:
                 raise ValueError("Resampler not built, call `build_resampler` first")
         return self.resampler.Execute(image)  # type: ignore[no-any-return, no-untyped-call]
 
+    def transform_points(
+        self,
+        points: np.ndarray,
+        is_px: bool = True,
+        as_px: bool = True,
+        source_pixel_size: float = 1,
+        silent: bool = False,
+    ) -> np.ndarray:
+        """
+        Transform point sets using the transformation chain.
+
+        Parameters
+        ----------
+        points: np.ndarray
+            Point data in xy order in micrometer space
+        is_px: bool
+            Whether point data is in pixel or physical coordinate space
+        source_pixel_size: float
+            spacing of the pixels associated with pt_data if they are not in physical coordinate space
+        as_px: bool
+            return transformed points to pixel indices in the output_spacing's reference space.
+        silent: bool
+            Whether to show progress bar
+
+
+        Returns
+        -------
+        transformed_points: np.ndarray
+            Transformed points
+        """
+        if not self.output_spacing:
+            raise ValueError("Output spacing not set, call `set_output_spacing` first")
+
+        target_pixel_size = self.output_spacing[0]
+        inv_target_pixel_size = 1 / target_pixel_size
+        # convert from px to um by multiplying by the pixel size
+        if is_px:
+            points = points * source_pixel_size
+
+        transformed_points = np.asarray(points, dtype=np.float64)
+        for i, point in enumerate(
+            tqdm(
+                transformed_points,
+                desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
+                f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
+                leave=False,
+                disable=silent,
+                mininterval=1,
+            )
+        ):
+            transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
+
+        # for transform in self.transforms:
+        #     for i, point in enumerate(
+        #         tqdm(
+        #             transformed_points,
+        #             desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
+        #             f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})-{transform}",
+        #             leave=False,
+        #             disable=silent,
+        #             mininterval=1,
+        #         )
+        #     ):
+        #         transformed_points[i] = transform.inverse_final_transform.TransformPoint(point)
+
+        if as_px:
+            transformed_points = transformed_points * inv_target_pixel_size
+        return transformed_points
+
     def __repr__(self) -> str:
         """Return repr."""
         return (
@@ -48,6 +117,11 @@ class TransformMixin:
     def n_transforms(self) -> int:
         """Number of transformations in sequence."""
         return len(self.transforms)
+
+    @property
+    def resolution(self) -> float:
+        """Return resolution."""
+        return self.output_spacing[0]
 
     @property
     def inverse_final_transform(self) -> sitk.Transform:
@@ -76,7 +150,6 @@ class TransformMixin:
 
         interpolator = ELX_TO_ITK_INTERPOLATORS[self.resample_interpolator]
         resampler.SetInterpolator(interpolator)  # type: ignore[no-untyped-call]
-        # transform = self.inverse_final_transform if inverse else self.final_transform
         resampler.SetTransform(self.final_transform)  # type: ignore[no-untyped-call]
         self.resampler = resampler
 
@@ -93,68 +166,7 @@ class TransformMixin:
             displacement_field = sitk.InvertDisplacementField(displacement_field)  # type: ignore[no-untyped-call]
             displacement_field = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
             self.inverse_transform = displacement_field
-        logger.trace(f"Computed inverse transform in {timer()}")
-
-    def transform_points(
-        self,
-        points: np.ndarray,
-        is_px: bool = True,
-        as_px: bool = True,
-        source_pixel_size: float = 1,
-        silent: bool = False,
-    ) -> np.ndarray:
-        """
-        Transform point sets using the transformation chain.
-
-        Parameters
-        ----------
-        points: np.ndarray
-            Point data in xy order
-        is_px: bool
-            Whether point data is in pixel or physical coordinate space
-        source_pixel_size: float
-            spacing of the pixels associated with pt_data if they are not in physical coordinate space
-        as_px: bool
-            return transformed points to pixel indices in the output_spacing's reference space.
-        silent: bool
-            Whether to show progress bar
-
-
-        Returns
-        -------
-        transformed_points: np.ndarray
-            Transformed points
-        """
-        if not self.output_spacing:
-            raise ValueError("Output spacing not set, call `set_output_spacing` first")
-
-        target_pixel_size = self.output_spacing[0]
-        inv_target_pixel_size = 1 / target_pixel_size
-        # convert from px to um by multiplying by the pixel size
-        if is_px:
-            points = points * source_pixel_size
-
-        points = np.asarray(points)
-        transformed_points = np.zeros_like(points)
-        points = points.tolist()
-        for i, point in enumerate(
-            tqdm(
-                points,
-                desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
-                f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
-                leave=False,
-                disable=silent,
-                mininterval=1,
-            )
-        ):
-            # transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
-            for transform_ in self.transforms:
-                point = transform_.inverse_final_transform.TransformPoint(point)
-            transformed_points[i] = point
-
-        if as_px:
-            transformed_points = transformed_points * inv_target_pixel_size
-        return transformed_points
+        logger.trace(f"Computed inverse transform of {self} in {timer()}")
 
     def set_output_size(self, new_size: tuple[int, int]) -> None:
         """Set output size."""
@@ -215,10 +227,7 @@ class TransformMixin:
             raise ValueError("Final transform does not exist yet.")
 
         if self.is_linear:
-            if yx:
-                order = slice(None, None, -1)
-            else:
-                order = slice(None, None, 1)
+            order = slice(None, None, -1 if yx else 1)
 
             transform = self.final_transform.GetInverse() if inverse else self.final_transform
 
@@ -238,7 +247,7 @@ class TransformMixin:
             full_matrix[0:2, n_dim - 1] = -np.dot(transform_matrix, center) + translation + center
 
             return full_matrix
-        warn("Non-linear transformations can not be represented converted" "to homogenous matrix", stacklevel=2)
+        warn("Non-linear transformations can not be represented converted to homogenous matrix", stacklevel=2)
         return None
 
 

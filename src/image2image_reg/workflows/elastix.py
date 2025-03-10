@@ -1068,7 +1068,8 @@ class ElastixReg(Workflow):
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        rename: bool = True,
+        clip: str = "ignore",
+        rename: bool = False,
         n_parallel: int = 1,
         overwrite: bool = False,
     ) -> list | None:
@@ -1131,9 +1132,13 @@ class ElastixReg(Workflow):
             )
 
         if write_attached_shapes:
-            paths.extend(self._export_attachment_shapes(n_parallel=n_parallel, rename=rename, overwrite=overwrite))
+            paths.extend(
+                self._export_attachment_shapes(n_parallel=n_parallel, clip=clip, rename=rename, overwrite=overwrite)
+            )
         if write_attached_points:
-            paths.extend(self._export_attachment_points(n_parallel=n_parallel, rename=rename, overwrite=overwrite))
+            paths.extend(
+                self._export_attachment_points(n_parallel=n_parallel, clip=clip, rename=rename, overwrite=overwrite)
+            )
         if write_attached_images:
             paths.extend(
                 self._export_attachment_images(
@@ -1177,7 +1182,7 @@ class ElastixReg(Workflow):
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        rename: bool = True,
+        rename: bool = False,
         n_parallel: int = 1,
         overwrite: bool = False,
     ) -> list[Path]:
@@ -1221,7 +1226,7 @@ class ElastixReg(Workflow):
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        rename: bool = True,
+        rename: bool = False,
         n_parallel: int = 1,
         overwrite: bool = False,
     ) -> list[Path]:
@@ -1252,7 +1257,7 @@ class ElastixReg(Workflow):
         return paths
 
     def _export_attachment_shapes(
-        self, n_parallel: int = 1, rename: bool = True, overwrite: bool = False
+        self, n_parallel: int = 1, clip: str = "ignore", rename: bool = False, overwrite: bool = False
     ) -> list[Path]:
         from image2image_reg.elastix.transform import transform_attached_shape
 
@@ -1302,6 +1307,7 @@ class ElastixReg(Workflow):
                                 silent=False,
                                 as_image=False,  # not transform_sequence.is_linear,
                                 image_shape=image_shape,
+                                clip=clip,
                             )
                             logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
                             paths.append(path)
@@ -1315,7 +1321,7 @@ class ElastixReg(Workflow):
         return paths
 
     def _export_attachment_points(
-        self, n_parallel: int = 1, rename: bool = True, overwrite: bool = False
+        self, n_parallel: int = 1, clip: str = "ignore", rename: bool = False, overwrite: bool = False
     ) -> list[Path]:
         from image2image_reg.elastix.transform import transform_attached_point
 
@@ -1325,7 +1331,7 @@ class ElastixReg(Workflow):
         attached_to_modality_image_shape = {}
         # export attachment modalities
         with MeasureTimer() as timer:
-            for name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment shapes..."):
+            for name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment points..."):
                 attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
                 shape_pixel_size = attached_dict["pixel_size"]
@@ -1363,6 +1369,7 @@ class ElastixReg(Workflow):
                                 silent=False,
                                 as_image=False,  # not transform_sequence.is_linear,
                                 image_shape=image_shape,
+                                clip=clip,
                             )
                             logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
                             paths.append(path)
@@ -1383,7 +1390,7 @@ class ElastixReg(Workflow):
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
-        rename: bool = True,
+        rename: bool = False,
         n_parallel: int = 1,
         overwrite: bool = False,
     ) -> list[Path]:
@@ -1449,7 +1456,7 @@ class ElastixReg(Workflow):
         self,
         edge_key: str,
         to_original_size: bool = True,
-        rename: bool = True,
+        rename: bool = False,
     ) -> tuple[Modality, TransformSequence | None, Path]:
         try:
             return self._prepare_registered_transform(edge_key, to_original_size=to_original_size, rename=rename)
@@ -1462,7 +1469,7 @@ class ElastixReg(Workflow):
         attachment: bool = False,
         attachment_modality: Modality | None = None,
         to_original_size: bool = True,
-        rename: bool = True,
+        rename: bool = False,
     ) -> tuple[Modality, TransformSequence, Path]:
         final_modality = self.registration_paths[edge_key][-1]
         transformations = copy(self.transformations[edge_key]["full-transform-seq"])
@@ -1504,7 +1511,7 @@ class ElastixReg(Workflow):
         attachment: bool = False,
         attachment_modality: Modality | None = None,
         to_original_size: bool = True,
-        rename: bool = True,
+        rename: bool = False,
     ) -> tuple[Modality, TransformSequence | None, Path]:
         from image2image_reg.utils.transformation import identity_elx_transform
         from image2image_reg.wrapper import ImageWrapper
