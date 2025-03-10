@@ -137,7 +137,8 @@ class ValisReg(Workflow):
         # add modalities
         for modality in obj.modalities.values():
             valis.modalities[modality.name] = deepcopy(modality)
-            valis.modalities[modality.name].preprocessing.method = "I2RegPreprocessor"
+            if valis.modalities[modality.name].preprocessing:
+                valis.modalities[modality.name].preprocessing.method = "I2RegPreprocessor"
 
         # try to get reference
         references = []
