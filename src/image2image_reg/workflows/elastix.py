@@ -1256,8 +1256,7 @@ class ElastixReg(Workflow):
     ) -> list[Path]:
         from image2image_reg.elastix.transform import transform_attached_shape
 
-        # prepare attachment shapes
-
+        errors = []
         paths = []
         attached_to_modality_transform = {}
         attached_to_modality_image_shape = {}
@@ -1291,17 +1290,26 @@ class ElastixReg(Workflow):
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
-                    path = transform_attached_shape(
-                        transform_sequence,
-                        file,
-                        shape_pixel_size,
-                        output_path,
-                        silent=False,
-                        as_image=not transform_sequence.is_linear,
-                        image_shape=image_shape,
-                    )
-                    logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
-                    paths.append(path)
+                    if transform_sequence is None:
+                        output_path.write_bytes(file.read_bytes())
+                    else:
+                        try:
+                            path = transform_attached_shape(
+                                transform_sequence,
+                                file,
+                                shape_pixel_size,
+                                output_path,
+                                silent=False,
+                                as_image=False,  # not transform_sequence.is_linear,
+                                image_shape=image_shape,
+                            )
+                            logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
+                            paths.append(path)
+                        except (KeyError, ValueError):
+                            errors.append(file)
+                            logger.exception(f"Could not export {file} to {attached_to}.")
+        if errors:
+            logger.error(f"Failed to export {len(errors)} attachment shapes.")
         if paths:
             logger.info(f"Exporting attachment shapes took {timer()}.")
         return paths
@@ -1311,6 +1319,7 @@ class ElastixReg(Workflow):
     ) -> list[Path]:
         from image2image_reg.elastix.transform import transform_attached_point
 
+        errors = []
         paths = []
         attached_to_modality_transform = {}
         attached_to_modality_image_shape = {}
@@ -1342,17 +1351,26 @@ class ElastixReg(Workflow):
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
                         continue
-                    path = transform_attached_point(
-                        transform_sequence,
-                        file,
-                        shape_pixel_size,
-                        output_path,
-                        silent=False,
-                        as_image=not transform_sequence.is_linear,
-                        image_shape=image_shape,
-                    )
-                    logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
-                    paths.append(path)
+                    if transform_sequence is None:
+                        output_path.write_bytes(file.read_bytes())
+                    else:
+                        try:
+                            path = transform_attached_point(
+                                transform_sequence,
+                                file,
+                                shape_pixel_size,
+                                output_path,
+                                silent=False,
+                                as_image=False,  # not transform_sequence.is_linear,
+                                image_shape=image_shape,
+                            )
+                            logger.trace(f"Exported {file} to {attached_to} in {timer(since_last=True)}")
+                            paths.append(path)
+                        except KeyError:  # ValueError):
+                            logger.exception(f"Could not export {file} to {attached_to}.")
+                            errors.append(file)
+        if errors:
+            logger.error(f"Failed to export {len(errors)} attachment points.")
         if paths:
             logger.info(f"Exporting attachment points took {timer()}.")
         return paths
@@ -1369,7 +1387,7 @@ class ElastixReg(Workflow):
         n_parallel: int = 1,
         overwrite: bool = False,
     ) -> list[Path]:
-        # attachment images
+        errors = []
         paths = []
         to_write = []
 
@@ -1414,14 +1432,15 @@ class ElastixReg(Workflow):
                     )
                 )
             if to_write:
-                # if n_parallel > 1:
-                #     with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
-                #         res = pool.imap(self._transform_write_image, to_write)
-                #     paths.extend(list(res))
-                # else:
                 for args in tqdm(to_write, desc="Exporting attachment modalities..."):
-                    path = self._transform_write_image(*args)
-                    paths.append(path)
+                    try:
+                        path = self._transform_write_image(*args)
+                        paths.append(path)
+                    except (ValueError, KeyError):
+                        errors.append(args)
+                        logger.exception(f"Could not export {args[0]} to {args[2]}.")
+        if errors:
+            logger.error(f"Failed to export {len(errors)} attachment images.")
         if paths:
             logger.info(f"Exporting attachment images took {timer()}.")
         return paths
@@ -1566,10 +1585,6 @@ class ElastixReg(Workflow):
                 transformations.set_output_spacing((output_spacing_target, output_spacing_target))
             else:
                 transformations.set_output_spacing(modality.output_pixel_size)
-        # source_key = None
-        # if attachment and attachment_modality:
-        #     source_key = copy(modality_key)
-        # modality_key = attachment_modality.name
         if attachment and attachment_modality:
             modality = attachment_modality
             if rename:
@@ -1577,9 +1592,6 @@ class ElastixReg(Workflow):
             else:
                 filename = Path(modality.path).name
             output_path = self.image_dir / filename
-            # modality = self.modalities[attachment_modality]
-        # if attachment and source_key:
-        #     modality = self.modalities[source_key]
         return modality, transformations, output_path
 
     def _transform_write_image(
