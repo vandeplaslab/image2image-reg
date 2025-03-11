@@ -115,10 +115,18 @@ write_ = click.option(
 )
 rename_ = click.option(
     "--rename/--no_rename",
-    help="Rename images.",
+    help="Rename modalities (e.g. imageA -> imageA_to_imageB).",
     is_flag=True,
-    default=True,
+    default=False,
     show_default=True,
+)
+clip_ = click.option(
+    "--clip",
+    help="Clip points/shapes outside of the image area.",
+    type=click.Choice(["ignore", "clip", "part-remove", "remove"], case_sensitive=False),
+    default="ignore",
+    show_default=True,
+    required=False,
 )
 fmt_ = click.option(
     "-f",

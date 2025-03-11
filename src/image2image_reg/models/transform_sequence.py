@@ -108,10 +108,9 @@ class TransformSequence(TransformMixin):
 
     @transform_sequence_index.setter
     def transform_sequence_index(self, transform_seq: list[int]) -> None:
+        reindex_val = 0
         if len(self._transform_sequence_index) > 0:
             reindex_val = np.max(self._transform_sequence_index) + 1
-        else:
-            reindex_val = 0
         transform_seq = [x + reindex_val for x in transform_seq]
         self._transform_sequence_index = self._transform_sequence_index + transform_seq
 

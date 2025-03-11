@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from koyo.json import read_json_data
 from koyo.typing import PathLike
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 
 from image2image_reg.enums import ArrayLike, CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
@@ -402,25 +402,30 @@ class Preprocessing(BaseModel):
             **kwargs,
         )
 
-    @validator("mask_bbox", "crop_bbox", pre=True)
+    @field_validator("mask_bbox", "crop_bbox", mode="before")
+    @classmethod
     def _validate_bbox(cls, v) -> ty.Optional[BoundingBox]:
         return _transform_to_bbox(v)
 
-    @validator("mask_polygon", "crop_polygon", pre=True)
+    @field_validator("mask_polygon", "crop_polygon", mode="before")
+    @classmethod
     def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
         return _transform_to_polygon(v)
 
-    @validator("channel_indices", "channel_names", pre=True)
+    @field_validator("channel_indices", "channel_names", mode="before")
+    @classmethod
     def _make_ch_list(cls, v):
         return _index_to_list(v)
 
-    @validator("custom_processing", pre=True)
+    @field_validator("custom_processing", mode="before")
+    @classmethod
     def _check_custom_prepro(cls, v):
         if isinstance(v, (list, tuple)):
             return _transform_custom_proc(v)
         return v
 
-    @validator("affine", pre=True)
+    @field_validator("affine", mode="before")
+    @classmethod
     def _check_affine(cls, v):
         if v is not None:
             if isinstance(v, (str, Path)):
@@ -431,7 +436,8 @@ class Preprocessing(BaseModel):
             assert v.shape[0] == 3, "affine must be 3x3"
         return v
 
-    @validator("rotate_counter_clockwise", pre=True)
+    @field_validator("rotate_counter_clockwise", mode="before")
+    @classmethod
     def _validate_rotate_counter_clockwise(cls, v):
         if v == 360:
             v = 0

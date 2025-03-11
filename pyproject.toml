@@ -29,7 +29,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "pydantic<2",
+    "pydantic>=2",
     "numpy",
     "itk-elastix",
     "opencv-python",

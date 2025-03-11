@@ -22,6 +22,7 @@ from image2image_reg.cli._common import (
     attach_points_,
     attach_shapes_,
     attach_to_,
+    clip_,
     fmt_,
     get_preprocessing,
     image_,
@@ -596,6 +597,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
 @overwrite_
 @parallel_mode_
 @n_parallel_
+@clip_
 @rename_
 @as_uint8_
 @original_size_
@@ -635,6 +637,7 @@ def register_cmd(
     original_size: bool,
     as_uint8: bool | None,
     rename: bool,
+    clip: str,
     n_parallel: int,
     parallel_mode: str,
     overwrite: bool,
@@ -653,6 +656,7 @@ def register_cmd(
         original_size=original_size,
         as_uint8=as_uint8,
         rename=rename,
+        clip=clip,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
         overwrite=overwrite,
@@ -671,7 +675,8 @@ def register_runner(
     remove_merged: bool = True,
     original_size: bool = False,
     as_uint8: bool | None = False,
-    rename: bool = True,
+    rename: bool = False,
+    clip: str = "ignore",
     n_parallel: int = 1,
     parallel_mode: str = "outer",
     overwrite: bool = False,
@@ -716,6 +721,7 @@ def register_runner(
                             original_size,
                             as_uint8,
                             rename,
+                            clip,
                             overwrite,
                         )
                         for path in paths
@@ -738,6 +744,7 @@ def register_runner(
                         original_size,
                         as_uint8=as_uint8,
                         rename=rename,
+                        clip=clip,
                         n_parallel=n_parallel,
                         overwrite=overwrite,
                     )
@@ -766,7 +773,8 @@ def _register(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
-    rename: bool = True,
+    rename: bool = False,
+    clip: str = "ignore",
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> PathLike:
@@ -789,6 +797,7 @@ def _register(
             n_parallel=n_parallel,
             overwrite=overwrite,
             rename=rename,
+            clip=clip,
         )
     return path
 
@@ -829,6 +838,7 @@ def preview_runner(paths: ty.Sequence[str], pyramid: int, overwrite: bool = Fals
 @overwrite_
 @parallel_mode_
 @n_parallel_
+@clip_
 @rename_
 @as_uint8_
 @original_size_
@@ -857,6 +867,7 @@ def export_cmd(
     original_size: bool,
     as_uint8: bool | None,
     rename: bool,
+    clip: str,
     n_parallel: int,
     parallel_mode: str,
     overwrite: bool,
@@ -876,6 +887,7 @@ def export_cmd(
         original_size=original_size,
         as_uint8=as_uint8,
         rename=rename,
+        clip=clip,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
         overwrite=overwrite,
@@ -895,7 +907,8 @@ def export_runner(
     remove_merged: bool = True,
     original_size: bool = False,
     as_uint8: bool | None = None,
-    rename: bool = True,
+    rename: bool = False,
+    clip: str = "ignore",
     n_parallel: int = 1,
     parallel_mode: str = "outer",
     overwrite: bool = False,
@@ -948,6 +961,7 @@ def export_runner(
                             original_size,
                             as_uint8,
                             rename,
+                            clip,
                             1,
                             overwrite,
                         )
@@ -973,6 +987,7 @@ def export_runner(
                     original_size,
                     as_uint8,
                     rename=rename,
+                    clip=clip,
                     n_parallel=n_parallel,
                     overwrite=overwrite,
                 )
@@ -999,7 +1014,8 @@ def _export(
     remove_merged: bool,
     original_size: bool,
     as_uint8: bool | None,
-    rename: bool = True,
+    rename: bool = False,
+    clip: str = "ignore",
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> tuple[PathLike, bool]:
@@ -1023,6 +1039,7 @@ def _export(
             to_original_size=original_size,
             as_uint8=as_uint8,
             rename=rename,
+            clip=clip,
             n_parallel=n_parallel,
             overwrite=overwrite,
         )
