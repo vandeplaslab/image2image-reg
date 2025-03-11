@@ -814,7 +814,7 @@ class Workflow:
     @classmethod
     def update_paths(cls, path: PathLike, source_dirs: str | list[PathLike]) -> None:
         """Update source paths."""
-        if not isinstance(source_dirs, list):
+        if isinstance(source_dirs, (str, Path)):
             source_dirs = [source_dirs]
 
         config = cls.read_config(path)
@@ -825,7 +825,7 @@ class Workflow:
 
     @staticmethod
     def _update_modality_paths(config: dict[str, dict], source_dirs: str | list[PathLike]) -> dict:
-        if not isinstance(source_dirs, list):
+        if isinstance(source_dirs, (str, Path)):
             source_dirs = [source_dirs]
         for modality in config.values():
             name = modality["name"]

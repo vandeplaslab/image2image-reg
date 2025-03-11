@@ -745,9 +745,9 @@ if is_installed("valis"):
         required=True,
         multiple=True,
     )
-    @project_path_single_
+    @project_path_multi_
     @valis.command("update", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-    def update_cmd(project_dir: ty.Sequence[str], source_dir: list[str]) -> None:
+    def update_cmd(project_dir: list[str], source_dir: list[str]) -> None:
         """Update project paths (e.g after folder move)."""
         from image2image_reg.cli.elastix import update_runner
 

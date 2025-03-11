@@ -1106,20 +1106,21 @@ def clear_runner(
     required=True,
     multiple=True,
 )
-@project_path_single_
+@project_path_multi_
 @elastix.command("update", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-def update_cmd(project_dir: str, source_dir: list[str]) -> None:
+def update_cmd(project_dir: list[str], source_dir: list[str]) -> None:
     """Update project paths (e.g after folder move)."""
     update_runner(project_dir, source_dir, valis=False)
 
 
-def update_runner(path: PathLike, source_dirs: list[PathLike], valis: bool = False) -> None:
+def update_runner(paths: list[PathLike], source_dirs: list[PathLike], valis: bool = False) -> None:
     """Register images."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
     print_parameters(
-        Parameter("Project directory", "-p/--project_dir", path),
+        Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Source directories", "--source_dirs", source_dirs),
     )
 
-    ElastixReg.update_paths(path, source_dirs) if not valis else ValisReg.update_paths(path, source_dirs)
+    for path in paths:
+        ElastixReg.update_paths(path, source_dirs) if not valis else ValisReg.update_paths(path, source_dirs)
