@@ -812,38 +812,37 @@ class Workflow:
         write_json_data(path, config)
 
     @classmethod
-    def update_paths(cls, path: PathLike, source_dirs: str | list[PathLike]) -> None:
+    def update_paths(cls, path: PathLike, source_dirs: PathLike | list[PathLike], recursive: bool = False) -> None:
         """Update source paths."""
         if isinstance(source_dirs, (str, Path)):
             source_dirs = [source_dirs]
 
+        source_dirs = [Path(source_dir) for source_dir in source_dirs]
         config = cls.read_config(path)
-        config["modalities"] = cls._update_modality_paths(config["modalities"], source_dirs)
-        config["attachment_shapes"] = cls._update_attachment_paths(config["attachment_shapes"], source_dirs)
-        config["attachment_points"] = cls._update_attachment_paths(config["attachment_points"], source_dirs)
+        config["modalities"] = cls._update_modality_paths(config["modalities"], source_dirs, recursive)
+        config["attachment_shapes"] = cls._update_attachment_paths(config["attachment_shapes"], source_dirs, recursive)
+        config["attachment_points"] = cls._update_attachment_paths(config["attachment_points"], source_dirs, recursive)
         cls.write_config(path, config)
 
     @staticmethod
-    def _update_modality_paths(config: dict[str, dict], source_dirs: str | list[PathLike]) -> dict:
-        if isinstance(source_dirs, (str, Path)):
-            source_dirs = [source_dirs]
+    def _update_modality_paths(config: dict[str, dict], source_dirs: list[Path], recursive: bool = False) -> dict:
         for modality in config.values():
             name = modality["name"]
             path = clean_path(modality["path"])
             if not path.exists():
                 logger.trace(f"Path '{path}' does not exist for modality={name}.")
                 for source_dir in source_dirs:
-                    source_dir = Path(source_dir)
-                    updated, new_path = _get_new_path(path, source_dir)
+                    updated, new_path = _get_new_path(path, source_dir, recursive=recursive)
                     if updated:
                         modality["path"] = str(new_path)
                         logger.trace(f"Updated path for modality={name} to '{new_path}'.")
-
+            else:
+                logger.success(f"Path '{path}' exists for modality={name}.")
         return config
 
     @staticmethod
     def _update_attachment_paths(
-        config: dict[str, AttachedShapeOrPointDict] | None, source_dirs: list[PathLike]
+        config: dict[str, AttachedShapeOrPointDict] | None, source_dirs: list[Path], recursive: bool = False
     ) -> AttachedShapeOrPointDict | None:
         if not config:
             return config
@@ -853,14 +852,16 @@ class Workflow:
                 if not path.exists():
                     logger.trace(f"Path '{path}' does not exist for attachment={attachment}.")
                     for source_dir in source_dirs:
-                        updated, new_path = _get_new_path(path, source_dir)
+                        updated, new_path = _get_new_path(path, source_dir, recursive=recursive)
                         if new_path.exists():
                             attachment["files"][i] = str(new_path)
                             logger.trace(f"Updated path for attachment={attachment} to '{new_path}'.")
+                else:
+                    logger.success(f"Path '{path}' exists for attachment={attachment}.")
         return config
 
 
-def _get_new_path(path: Path, source_dir: Path) -> tuple[bool, Path]:
+def _get_new_path(path: Path, source_dir: Path, recursive: bool = False) -> tuple[bool, Path]:
     # check if the file exists in the source directory
     new_path = source_dir / path.name
     if new_path.exists():
@@ -873,4 +874,10 @@ def _get_new_path(path: Path, source_dir: Path) -> tuple[bool, Path]:
                     new_path = Path(source_dir).joinpath(*path.parts[i + 1 :])
                     if new_path.exists():
                         return True, new_path
+    if recursive:
+        for sub_dir in source_dir.glob("*"):
+            if sub_dir.is_dir():
+                updated, new_path = _get_new_path(path, sub_dir, recursive=True)
+                if updated:
+                    return updated, new_path
     return False, path

@@ -737,6 +737,14 @@ if is_installed("valis"):
         logger.info(f"Finished clearing all projects in {timer()}.")
 
     @click.option(
+        "-R",
+        "--recursive",
+        help="Recursively search for paths.",
+        is_flag=True,
+        default=False,
+        show_default=True,
+    )
+    @click.option(
         "-i",
         "--source_dir",
         help="Source directory where images/files should be searched for.",
@@ -747,10 +755,10 @@ if is_installed("valis"):
     )
     @project_path_multi_
     @valis.command("update", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-    def update_cmd(project_dir: list[str], source_dir: list[str]) -> None:
+    def update_cmd(project_dir: list[str], source_dir: list[str], recursive: bool) -> None:
         """Update project paths (e.g after folder move)."""
         from image2image_reg.cli.elastix import update_runner
 
-        update_runner(project_dir, source_dir, valis=True)
+        update_runner(project_dir, source_dir, recursive, valis=True)
 else:
     valis = None

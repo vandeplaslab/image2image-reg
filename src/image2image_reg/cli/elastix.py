@@ -1115,6 +1115,14 @@ def clear_runner(
 
 
 @click.option(
+    "-R",
+    "--recursive",
+    help="Recursively search for paths.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
     "-s",
     "--source_dir",
     help="Source directory where images/files should be searched for.",
@@ -1125,19 +1133,28 @@ def clear_runner(
 )
 @project_path_multi_
 @elastix.command("update", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-def update_cmd(project_dir: list[str], source_dir: list[str]) -> None:
+def update_cmd(project_dir: list[str], source_dir: list[str], recursive: bool) -> None:
     """Update project paths (e.g after folder move)."""
-    update_runner(project_dir, source_dir, valis=False)
+    update_runner(project_dir, source_dir, recursive, valis=False)
 
 
-def update_runner(paths: list[PathLike], source_dirs: list[PathLike], valis: bool = False) -> None:
+def update_runner(
+    paths: list[PathLike], source_dirs: list[PathLike], recursive: bool = False, valis: bool = False
+) -> None:
     """Register images."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Source directories", "--source_dirs", source_dirs),
+        Parameter("Recursive", "-R/--recursive", recursive),
     )
 
     for path in paths:
-        ElastixReg.update_paths(path, source_dirs) if not valis else ValisReg.update_paths(path, source_dirs)
+        klass = ElastixReg if not valis else ValisReg
+        klass.update_paths(path, source_dirs, recursive=recursive)
+        try:
+            obj = klass.from_path(path)
+            obj.validate(allow_not_registered=True, require_paths=True)
+        except ValueError:
+            pass
