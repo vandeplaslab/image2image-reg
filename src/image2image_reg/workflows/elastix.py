@@ -223,6 +223,26 @@ class ElastixReg(Workflow):
         for i, (name, merge_modalities) in enumerate(self.merge_modalities.items()):
             func(f" {elbow if i == n else tee}{name} ({merge_modalities})")
 
+    def validate_paths(self, log: bool = True) -> tuple[bool, list[str]]:
+        """Validate paths."""
+        errors = []
+        for name in self.get_image_modalities(with_attachment=False):
+            modality = self.get_modality(name=name)
+            if modality is not None and not self._is_being_registered(modality, check_target=True):
+                errors.append(f"❌ Modality '{name}' has been defined but isn't being registered.")
+        for source, targets in self.registration_paths.items():
+            if source not in self.modalities:
+                errors.append(f"❌ Source modality '{source}' does not exist.")
+            for target in targets:
+                if target not in self.modalities:
+                    errors.append(f"❌ Target modality '{target}' does not exist.")
+                if source == target:
+                    errors.append("❌ Source and target modalities cannot be the same.")
+        if log:
+            for error in errors:
+                logger.error(error)
+        return len(errors) == 0, errors
+
     def validate(self, allow_not_registered: bool = True, require_paths: bool = False) -> tuple[bool, list[str]]:
         """Perform several checks on the project."""
         # check whether the paths are still where they were set up
@@ -742,11 +762,15 @@ class ElastixReg(Workflow):
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
 
-    def _is_being_registered(self, modality: Modality):
+    def _is_being_registered(self, modality: Modality, check_target: bool = False):
         """Check whether the modality will be registered or is simply an attachment."""
         if modality.name in self.attachment_images:
             return False
-        elif modality.name not in self.registration_paths:
+        if check_target:
+            for edge in self.registration_nodes:
+                if modality.name == edge["modalities"]["target"]:
+                    return True
+        if modality.name not in self.registration_paths:
             return False
         return True
 
