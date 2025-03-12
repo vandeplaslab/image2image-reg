@@ -23,7 +23,11 @@ from image2image_reg.cli.valis import valis
 
 
 @click.group(
-    context_settings={"help_option_names": ["-h", "--help"], "max_content_width": 120, "ignore_unknown_options": True},
+    context_settings={
+        "help_option_names": ["-h", "--help"],
+        "max_content_width": 120,
+        "ignore_unknown_options": True,
+    },
     cls=GroupedGroup,
 )
 @click.version_option(__version__, prog_name="i2reg")
