@@ -8,6 +8,7 @@ from multiprocessing import freeze_support, set_start_method
 import click
 import koyo.compat
 from click_groups import GroupedGroup
+from image2image_io.cli.convert import convert
 from koyo.system import IS_MAC
 from koyo.typing import PathLike
 from koyo.utilities import running_as_pyinstaller_app
@@ -15,7 +16,6 @@ from loguru import logger
 
 from image2image_reg import __version__
 from image2image_reg.cli._common import set_logger
-from image2image_reg.cli.convert import convert
 from image2image_reg.cli.elastix import elastix
 from image2image_reg.cli.merge import merge
 from image2image_reg.cli.simple_valis import simple_valis
@@ -65,7 +65,6 @@ from image2image_reg.cli.valis import valis
     default=None,
     show_default=True,
 )
-# @click.argument("extra_args", nargs=-1, type=click.UNPROCESSED)
 def cli(
     verbosity: float = 1,
     no_color: bool = False,
@@ -111,7 +110,7 @@ cli.add_command(merge, help_group="Utility")
 
 
 def main():
-    """Execute the "imimspy" command line program."""
+    """Execute the "i2reg" command line program."""
     freeze_support()
     if sys.platform == "darwin":
         set_start_method("spawn", True)
@@ -119,7 +118,4 @@ def main():
 
 
 if __name__ == "__main__":
-    freeze_support()
-    if sys.platform == "darwin":
-        set_start_method("spawn", True)
-    cli.main(windows_expand_args=False)
+    main()

@@ -5,12 +5,11 @@ from __future__ import annotations
 import typing as ty
 
 import click
+from image2image_io.cli._common import arg_split_bbox, as_uint8_, fmt_, overwrite_
+from image2image_io.enums import WriterMode
 from koyo.click import Parameter, arg_parse_framelist_multi, cli_parse_paths_sort, print_parameters
 from koyo.timer import MeasureTimer
 from loguru import logger
-
-from image2image_reg.cli._common import arg_split_bbox, as_uint8_, fmt_, overwrite_
-from image2image_reg.enums import WriterMode
 
 
 @overwrite_
