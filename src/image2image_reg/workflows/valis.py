@@ -88,14 +88,15 @@ class ValisReg(Workflow):
             path = path.parent
         if not path.is_dir():
             raise ValueError("Path is not a directory.")
-        if not path.suffix == ".valis":
+        config_path = path / cls.CONFIG_NAME
+        if not path.suffix == ".valis" and not config_path.exists():
             raise ValueError("Path is not a valid Valis project.")
 
         with MeasureTimer() as timer:
-            config_path = path / cls.CONFIG_NAME
             config: dict | ValisRegConfig | None = None
             if config_path.exists():
-                config = read_json_data(path / cls.CONFIG_NAME)
+                if config_path.exists():
+                    config = read_json_data(config_path)
             if config and "name" not in config:
                 config["name"] = path.stem
             obj = cls(project_dir=path, **config)

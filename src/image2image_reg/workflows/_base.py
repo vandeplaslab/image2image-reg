@@ -45,7 +45,10 @@ class Workflow:
     ):
         # setup project directory
         if project_dir:
-            self.project_dir = Path(project_dir).with_suffix(self.EXTENSION).resolve()
+            project_dir = Path(project_dir)
+            if not project_dir.exists():
+                project_dir = project_dir.with_suffix(self.EXTENSION)
+            self.project_dir = project_dir.resolve()
             name = self.project_dir.stem
         else:
             if name is None:
@@ -53,6 +56,8 @@ class Workflow:
             if output_dir is None:
                 raise ValueError("Output directory must be provided.")
             self.project_dir = (Path(output_dir) / self.format_project_name(name)).with_suffix(self.EXTENSION).resolve()
+        if not self.project_dir.suffix == self.EXTENSION:
+            logger.warning(f"Project directory '{self.project_dir}' does not have the correct extension but that's ok.")
         self.name = self.format_project_name(name)
         self.cache_images = cache
         self.merge_images = merge

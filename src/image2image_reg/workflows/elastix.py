@@ -117,14 +117,14 @@ class ElastixReg(Workflow):
             path = path.parent
         if not path.is_dir():
             raise ValueError("Path is not a directory.")
-        if not path.suffix == ".wsireg":
-            raise ValueError("Path is not a valid WsiReg project.")
+        config_path = path / cls.CONFIG_NAME
+        if not path.suffix == ".wsireg" and not config_path.exists():
+            raise ValueError("Path is not a valid ElastiX project.")
 
         with MeasureTimer() as timer:
-            config_path = path / cls.CONFIG_NAME
             config: dict | ElastixRegConfig | None = None
             if config_path.exists():
-                config = read_json_data(path / cls.CONFIG_NAME)
+                config = read_json_data(config_path)
             if config and "name" not in config:
                 config["name"] = path.stem
             if config and "pairwise" not in config:
@@ -755,9 +755,9 @@ class ElastixReg(Workflow):
                         full_tform_seq.append(registered_edge_transform["initial"])
                     full_tform_seq.append(registered_edge_transform["registration"])
                 else:
-                    transforms[modality][
-                        f"{str(index).zfill(3)}-to-{edges[index]['target']}"
-                    ] = registered_edge_transform["registration"]
+                    transforms[modality][f"{str(index).zfill(3)}-to-{edges[index]['target']}"] = (
+                        registered_edge_transform["registration"]
+                    )
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
