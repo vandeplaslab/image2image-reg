@@ -341,6 +341,7 @@ class Workflow:
             channel_names=reader.channel_names,
             preprocessing=preprocessing,
             export=export,
+            reader_kws=reader.reader_kws,
             overwrite=overwrite,
         )
 
@@ -358,6 +359,7 @@ class Workflow:
         mask_polygon: np.ndarray | Polygon | None = None,
         output_pixel_size: tuple[float, float] | None = None,
         export: Export | dict[str, ty.Any] | None = None,
+        reader_kws: dict[str, ty.Any] | None = None,
         method: str | None = None,
         overwrite: bool = False,
         raise_on_error: bool = True,
@@ -413,6 +415,7 @@ class Workflow:
             preprocessing=preprocessing,
             output_pixel_size=output_pixel_size,
             export=export,
+            reader_kws=reader_kws,
         )
         logger.trace(f"Added modality '{name}'.")
         return self.modalities[name]

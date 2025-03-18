@@ -6,13 +6,15 @@ import dask.array as da
 import numpy as np
 import zarr
 from koyo.typing import PathLike
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from image2image_reg.enums import ArrayLike
 from image2image_reg.models.export import Export
 from image2image_reg.models.preprocessing import Preprocessing
 
 # TODO: move mask/mask_bbox/mask_polygon/transform_mask to pre-processing
+if ty.TYPE_CHECKING:
+    from image2image_reg.wrapper import ImageWrapper
 
 
 class Modality(BaseModel):
@@ -32,6 +34,7 @@ class Modality(BaseModel):
     channel_colors: ty.Optional[list[str]] = None
     pixel_size: float = 1.0
     output_pixel_size: ty.Optional[tuple[float, float]] = None
+    reader_kws: ty.Optional[dict[str, ty.Any]] = Field(None)
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Convert to dict."""
@@ -61,7 +64,7 @@ class Modality(BaseModel):
                 data.pop("export")
         return data
 
-    def to_wrapper(self):
+    def to_wrapper(self) -> "ImageWrapper":
         """Convert to ImageWrapper."""
         from image2image_reg.wrapper import ImageWrapper
 

@@ -1,4 +1,5 @@
 """Registration utilities."""
+
 from __future__ import annotations
 
 import typing as ty
@@ -181,6 +182,8 @@ def register_2d_images(
     with MeasureTimer() as timer:
         selx = itk.ElastixRegistrationMethod.New(source.image, target.image)
         selx.SetLogToConsole(True)
+        selx.LogToConsoleOn()
+        selx.SetLogToFile(True)
         selx.SetOutputDirectory(str(output_dir))
         if source.mask is not None:
             selx.SetMovingMask(source.mask)
@@ -223,10 +226,9 @@ def register_2d_images(
             tform[k] = v
         tform_list.append(tform)
 
-    if not return_image:
-        return tform_list
-
-    image = selx.GetOutput()
-    image = itk_image_to_sitk_image(image)
-    image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
-    return tform_list, image
+    if return_image:
+        image = selx.GetOutput()
+        image = itk_image_to_sitk_image(image)
+        image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
+        return tform_list, image
+    return tform_list

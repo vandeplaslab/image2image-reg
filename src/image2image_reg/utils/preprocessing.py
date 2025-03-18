@@ -78,14 +78,14 @@ def preprocess_dask_array(
             else:
                 array = np.asarray(array)
                 array = sitk.GetImageFromArray(array, isVector=True)  # type: ignore[assignment]
-                logger.trace(f"Converted RGB to SimpleITK image in {timer()}")
+                logger.trace(f"Converted RGB to SimpleITK image in {timer()} ({array.GetSize()})")
         # handle 2D image
         elif len(array.shape) == 2:
             array = np.asarray(array)
             if preprocessing and preprocessing.as_uint8:
                 array = cv2.normalize(np.asarray(array), None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
             array = sitk.GetImageFromArray(array)  # type: ignore[assignment]
-            logger.trace(f"Converted 2D array to SimpleITK image in {timer()}")
+            logger.trace(f"Converted 2D array to SimpleITK image in {timer()} ({array.GetSize()})")
         # handle multi-channel image
         else:
             # select channels
@@ -103,39 +103,7 @@ def preprocess_dask_array(
                     ]
                 )
             array = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
-            logger.trace(f"Pre-processed dask array in {timer()}")
-    return array
-
-
-def preprocess_valis_array(
-    array: da.core.Array, channel_names: list[str], is_rgb: bool, preprocessing: Preprocessing | None = None
-) -> sitk.Image:
-    """Pre-process dask array."""
-    logger.trace(f"Pre-processing array of shape {array.shape}")
-    with MeasureTimer() as timer:
-        # perform max intensity projection
-        if is_rgb:
-            if preprocessing:
-                array = np.asarray(grayscale(array, is_interleaved=is_rgb))
-                array = sitk.GetImageFromArray(array)  # type: ignore[assignment]
-                logger.trace(f"Converted RGB to greyscale in {timer()}")
-            else:
-                array = np.asarray(array)
-                array = sitk.GetImageFromArray(array, isVector=True)  # type: ignore[assignment]
-                logger.trace(f"Converted RGB to SimpleITK image in {timer()}")
-        # no need to pre-process
-        elif len(array.shape) == 2:
-            array = sitk.GetImageFromArray(np.asarray(array))  # type: ignore[assignment]
-            logger.trace(f"Converted 2D array to SimpleITK image in {timer()}")
-        else:
-            # select channels
-            if preprocessing:
-                channel_indices = _get_channel_indices(array, channel_names, preprocessing)
-                logger.trace(f"Pre-processing dask array with {channel_indices} channels.")
-                if channel_indices:
-                    array = array[:, :, sort_indices(channel_indices)]
-            array = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
-            logger.trace(f"Pre-processed dask array in {timer()}")
+            logger.trace(f"Pre-processed dask array in {timer()} ({array.GetSize()})")
     return array
 
 
@@ -145,7 +113,7 @@ def convert_and_cast(image: sitk.Image, preprocessing: Preprocessing | None = No
         if preprocessing is not None and preprocessing.as_uint8 and image.GetPixelID() != sitk.sitkUInt8:
             image = sitk.RescaleIntensity(image)
             image = sitk.Cast(image, sitk.sitkUInt8)
-        logger.trace(f"Converted image to uint8 in {timer()}")
+        logger.trace(f"Converted image to uint8 in {timer()} ({image.GetSize()})")
     return image
 
 
@@ -166,7 +134,6 @@ def sitk_vect_to_gs(image: sitk.Image) -> sitk.Image:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     elif image.shape[2] == 4:
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
-
     return sitk.GetImageFromArray(image, isVector=False)
 
 
@@ -436,26 +403,26 @@ def preprocess_intensity(
         image = convert_and_cast(image, preprocessing)
         if preprocessing.max_intensity_projection:
             image = sitk_max_int_proj(image)
-            logger.trace(f"Maximum intensity projection applied in {timer(since_last=True)}")
+            logger.trace(f"Maximum intensity projection applied in {timer(since_last=True)} ({image.GetSize()})")
         if image.GetDepth() > 1:
             logger.warning("Image has more than one channel, mean intensity projection will be used")
             image = sitk_mean_int_proj(image)
-            logger.trace(f"Mean intensity projection applied in {timer(since_last=True)}")
+            logger.trace(f"Mean intensity projection applied in {timer(since_last=True)} ({image.GetSize()})")
         if preprocessing.equalize_histogram:
             # image = equalize_histogram(image)
             image = equalize_clahe(image)
-            logger.trace(f"Equalized histogram applied in {timer(since_last=True)}")
+            logger.trace(f"Equalized histogram applied in {timer(since_last=True)} ({image.GetSize()})")
         # image = remove_background_black_tophat(image)
         # logger.trace(f"Background removed in {timer(since_last=True)}")
         if preprocessing.contrast_enhance:
             image = contrast_enhance(image)
-            logger.trace(f"Contrast enhancement applied in {timer(since_last=True)}")
+            logger.trace(f"Contrast enhancement applied in {timer(since_last=True)} ({image.GetSize()})")
         if preprocessing.invert_intensity:
             image = sitk_inv_int(image)
-            logger.trace(f"Inverted intensity in {timer(since_last=True)}")
+            logger.trace(f"Inverted intensity in {timer(since_last=True)} ({image.GetSize()})")
         if preprocessing.custom_processing:
             for k, v in preprocessing.custom_processing.items():
-                logger.trace(f"Performing preprocessing step: {k} in {timer(since_last=True)}")
+                logger.trace(f"Performing preprocessing step: {k} in {timer(since_last=True)} ({image.GetSize()})")
                 image = v(image)
         image.SetSpacing((pixel_size, pixel_size))
     return image
@@ -541,104 +508,110 @@ def preprocess_spatial(
     transforms: list[dict] = []
     original_size = image.GetSize()
 
-    if preprocessing.downsample > 1 and spatial:
-        logger.trace(f"Performing downsampling by factor: {preprocessing.downsample}")
-        image.SetSpacing((pixel_size, pixel_size))
-        image = sitk.Shrink(image, (preprocessing.downsample, preprocessing.downsample))
+    with MeasureTimer() as timer:
+        if preprocessing.downsample > 1 and spatial:
+            logger.trace(f"Performing downsampling by factor: {preprocessing.downsample}")
+            image.SetSpacing((pixel_size, pixel_size))
+            image = sitk.Shrink(image, (preprocessing.downsample, preprocessing.downsample))
 
-        if mask is not None:
-            mask.SetSpacing((pixel_size, pixel_size))
-            mask = sitk.Shrink(mask(preprocessing.downsample, preprocessing.downsample))
-            logger.trace("Downsampled mask")
-        pixel_size = image.GetSpacing()[0]
+            if mask is not None:
+                mask.SetSpacing((pixel_size, pixel_size))
+                mask = sitk.Shrink(mask(preprocessing.downsample, preprocessing.downsample))
+            pixel_size = image.GetSpacing()[0]
+            logger.trace(f"Downsampled image in {timer(since_last=True)} ({image.GetSize()})")
 
-    # apply affine transformation
-    if preprocessing.affine is not None and spatial:
-        logger.trace("Applying affine transformation")
-        affine_tform = preprocessing.affine
-        if isinstance(affine_tform, np.ndarray):
-            affine_tform = affine_to_itk_affine(affine_tform, original_size, pixel_size, True)
-        transforms.append(affine_tform)
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
-        image = transform_plane(image, final_tform, composite_transform)
+        # apply affine transformation
+        if preprocessing.affine is not None and spatial:
+            logger.trace("Applying affine transformation")
+            affine_tform = preprocessing.affine
+            if isinstance(affine_tform, np.ndarray):
+                affine_tform = affine_to_itk_affine(affine_tform, original_size, pixel_size, True)
+            transforms.append(affine_tform)
+            composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
+            image = transform_plane(image, final_tform, composite_transform)
 
-        if mask is not None and transform_mask:
-            mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
-            logger.trace("Applied affine transform to mask")
+            if mask is not None and transform_mask:
+                mask.SetSpacing((pixel_size, pixel_size))
+                mask = transform_plane(mask, final_tform, composite_transform)
+            logger.trace(f"Applied affine transformation in {timer(since_last=True)} ({image.GetSize()})")
 
-    # flip image
-    if preprocessing.flip and spatial:
-        logger.trace(f"Flipping image {preprocessing.flip.value}")
-        flip_tform = generate_affine_flip_transform(image, pixel_size, preprocessing.flip.value)
-        transforms.append(flip_tform)
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [flip_tform]})
-        image = transform_plane(image, final_tform, composite_transform)
+        # flip image
+        if preprocessing.flip and spatial:
+            logger.trace(f"Flipping image {preprocessing.flip.value}")
+            flip_tform = generate_affine_flip_transform(image, pixel_size, preprocessing.flip.value)
+            transforms.append(flip_tform)
+            composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [flip_tform]})
+            image = transform_plane(image, final_tform, composite_transform)
 
-        if mask is not None and transform_mask:
-            mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
-            logger.trace("Flipped mask")
+            if mask is not None and transform_mask:
+                mask.SetSpacing((pixel_size, pixel_size))
+                mask = transform_plane(mask, final_tform, composite_transform)
+            logger.trace(f"Applied flip transformation in {timer(since_last=True)} ({image.GetSize()})")
 
-    # rotate counter-clockwise
-    if float(preprocessing.rotate_counter_clockwise) != 0.0 and spatial:
-        logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
-        rot_tform = generate_rigid_rotation_transform(image, pixel_size, preprocessing.rotate_counter_clockwise)
-        transforms.append(rot_tform)
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [rot_tform]})
-        image = transform_plane(image, final_tform, composite_transform)
+        # rotate counter-clockwise
+        if float(preprocessing.rotate_counter_clockwise) != 0.0 and spatial:
+            logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
+            rot_tform = generate_rigid_rotation_transform(image, pixel_size, preprocessing.rotate_counter_clockwise)
+            transforms.append(rot_tform)
+            composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [rot_tform]})
+            image = transform_plane(image, final_tform, composite_transform)
 
-        if mask is not None and transform_mask:
-            mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
-            logger.trace("Rotated mask")
+            if mask is not None and transform_mask:
+                mask.SetSpacing((pixel_size, pixel_size))
+                mask = transform_plane(mask, final_tform, composite_transform)
+            logger.trace(f"Applied rotation transformation in {timer(since_last=True)} ({image.GetSize()})")
 
-    # translate x/y image
-    if (preprocessing.translate_x or preprocessing.translate_y) and spatial:
-        logger.trace(f"Transforming image by translation: {preprocessing.translate_x}, {preprocessing.translate_y}")
-        translation_transform = generate_rigid_translation_transform_alt(
-            image, pixel_size, preprocessing.translate_x, preprocessing.translate_y
-        )
-        transforms.append(translation_transform)
-        composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
-        image = transform_plane(image, final_tform, composite_transform)
-
-        if mask is not None and transform_mask:
-            mask.SetSpacing((pixel_size, pixel_size))
-            mask = transform_plane(mask, final_tform, composite_transform)
-            logger.trace("Translated mask")
-
-    # crop to bbox
-    # if mask and preprocessing.use_crop:
-    #     logger.trace("Computing mask bounding box")
-    #     if preprocessing.crop_bbox is None:
-    #         mask_bbox = compute_mask_to_bbox(mask)
-    #         preprocessing.crop_bbox = mask_bbox
-    #         logger.trace(f"Computed mask bounding box: {mask_bbox}")
-
-    original_size_transform = None
-    if preprocessing.use_crop and (preprocessing.crop_bbox or preprocessing.crop_polygon):
-        if preprocessing.crop_bbox:
-            logger.trace(f"Cropping to mask - {preprocessing.crop_bbox}")
-            translation_transform = generate_rigid_translation_transform(
-                image,
-                pixel_size,
-                preprocessing.crop_bbox.x[0],
-                preprocessing.crop_bbox.y[0],
-                preprocessing.crop_bbox.width[0],
-                preprocessing.crop_bbox.height[0],
+        # translate x/y image
+        if (preprocessing.translate_x or preprocessing.translate_y) and spatial:
+            logger.trace(f"Transforming image by translation: {preprocessing.translate_x}, {preprocessing.translate_y}")
+            translation_transform = generate_rigid_translation_transform_alt(
+                image, pixel_size, preprocessing.translate_x, preprocessing.translate_y
             )
             transforms.append(translation_transform)
             composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
             image = transform_plane(image, final_tform, composite_transform)
-            original_size_transform = generate_rigid_original_transform(original_size, deepcopy(translation_transform))
 
-            if mask is not None:
-                mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
+            if mask is not None and transform_mask:
+                mask.SetSpacing((pixel_size, pixel_size))
                 mask = transform_plane(mask, final_tform, composite_transform)
-        elif preprocessing.crop_polygon:
-            logger.trace(f"Cropping to mask - {preprocessing.crop_polygon}")
-            logger.warning("Polygon cropping not implemented yet")
+            logger.trace(f"Applied translation transformation in {timer(since_last=True)} ({image.GetSize()})")
+
+        # crop to bbox
+        # if mask and preprocessing.use_crop:
+        #     logger.trace("Computing mask bounding box")
+        #     if preprocessing.crop_bbox is None:
+        #         mask_bbox = compute_mask_to_bbox(mask)
+        #         preprocessing.crop_bbox = mask_bbox
+        #         logger.trace(f"Computed mask bounding box: {mask_bbox}")
+
+        original_size_transform = None
+        if preprocessing.use_crop and (preprocessing.crop_bbox or preprocessing.crop_polygon):
+            if preprocessing.crop_bbox:
+                logger.trace(f"Cropping to mask - {preprocessing.crop_bbox}")
+                translation_transform = generate_rigid_translation_transform(
+                    image,
+                    pixel_size,
+                    preprocessing.crop_bbox.x[0],
+                    preprocessing.crop_bbox.y[0],
+                    preprocessing.crop_bbox.width[0],
+                    preprocessing.crop_bbox.height[0],
+                )
+                transforms.append(translation_transform)
+                composite_transform, _, final_tform = prepare_wsireg_transform_data(
+                    {"initial": [translation_transform]}
+                )
+                image = transform_plane(image, final_tform, composite_transform)
+                original_size_transform = generate_rigid_original_transform(
+                    original_size, deepcopy(translation_transform)
+                )
+
+                if mask is not None:
+                    mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
+                    mask = transform_plane(mask, final_tform, composite_transform)
+                logger.trace(f"Applied cropping in {timer(since_last=True)} ({image.GetSize()})")
+            elif preprocessing.crop_polygon:
+                logger.trace(f"Cropping to mask - {preprocessing.crop_polygon}")
+                logger.warning("Polygon cropping not implemented yet")
     return image, mask, transforms, original_size_transform  # type: ignore[return-value]
 
 

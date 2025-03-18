@@ -238,7 +238,7 @@ class ElastixReg(Workflow):
                     errors.append(f"❌ Target modality '{target}' does not exist.")
                 if source == target:
                     errors.append("❌ Source and target modalities cannot be the same.")
-        if log:
+        if log and errors:
             for error in errors:
                 logger.error(error)
         return len(errors) == 0, errors

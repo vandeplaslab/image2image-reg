@@ -39,7 +39,13 @@ class ImageWrapper:
 
         # TODO: this won't work with arrays
         try:
-            self.reader: BaseReader = get_simple_reader(modality.path, init_pyramid=False, quick=quick)
+            reader_kws = modality.reader_kws or {}
+            self.reader: BaseReader = get_simple_reader(
+                modality.path,
+                init_pyramid=False,
+                quick=quick,
+                scene_index=reader_kws.get("scene_index", None),
+            )
         except Exception as e:
             if raise_on_error:
                 raise e
