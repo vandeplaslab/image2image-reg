@@ -124,9 +124,9 @@ class BoundingBox(MaskMixin):
         if self.y[index] + self.height[index] > image_shape[0]:
             self.height[index] = image_shape[0] - self.y[index]
             logger.trace(f"Bounding box height exceeds image height. Setting height to {self.height[index]}")
-        mask[self.y[index] : self.y[index] + self.height[index], self.x[index] : self.x[index] + self.width[index]] = (
-            value
-        )
+        mask[
+            self.y[index] : self.y[index] + self.height[index], self.x[index] : self.x[index] + self.width[index]
+        ] = value
         return mask
 
     def as_str(self) -> str:
