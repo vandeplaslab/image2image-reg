@@ -110,7 +110,7 @@ class TransformMixin:
         """Return repr."""
         return (
             f"{self.__class__.__name__}<name={self.name}; n={self.n_transforms}; is_linear={self.is_linear}; "
-            f"spacing={self.output_spacing}>"
+            f"spacing={self.output_spacing}; size={self.output_size}>"
         )
 
     @property

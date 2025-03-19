@@ -82,6 +82,10 @@ class Polygon(MaskMixin):
         mask = cv2.fillPoly(mask, pts=[self.xy.astype(np.int32)], color=np.iinfo(dtype).max)
         return mask
 
+    def as_str(self) -> str:
+        """Stringify bounding box."""
+        return f"Polygon({len(self.xy)})"
+
 
 class BoundingBox(MaskMixin):
     """Bounding box named tuple."""
@@ -120,10 +124,16 @@ class BoundingBox(MaskMixin):
         if self.y[index] + self.height[index] > image_shape[0]:
             self.height[index] = image_shape[0] - self.y[index]
             logger.trace(f"Bounding box height exceeds image height. Setting height to {self.height[index]}")
-        mask[
-            self.y[index] : self.y[index] + self.height[index], self.x[index] : self.x[index] + self.width[index]
-        ] = value
+        mask[self.y[index] : self.y[index] + self.height[index], self.x[index] : self.x[index] + self.width[index]] = (
+            value
+        )
         return mask
+
+    def as_str(self) -> str:
+        """Stringify bounding box."""
+        if len(self.x) == 1:
+            return f"Bbox({self.x[0]}, {self.y[0]}, {self.width[0]}, {self.height[0]})"
+        return f"Bbox({self.x}, {self.y}, {self.width}, {self.height})"
 
 
 def _transform_to_bbox(v: tuple[int, int, int, int] | list[int]) -> BoundingBox:
@@ -133,7 +143,8 @@ def _transform_to_bbox(v: tuple[int, int, int, int] | list[int]) -> BoundingBox:
     if isinstance(v, dict):
         return BoundingBox(**v)
     elif isinstance(v, (list, tuple)):
-        v = list(v)
+        if isinstance(v, tuple):
+            v = list(v)
         assert len(v) > 0, "Bounding box must have at least 1 value"
         if isinstance(v[0], (int, float)):
             return BoundingBox(*v)

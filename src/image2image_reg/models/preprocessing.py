@@ -193,10 +193,19 @@ class Preprocessing(BaseModel):
             text += f"x{self.downsample} downsample"
             tooltip += f"Downsample: x{self.downsample}\n"
         if self.is_masked():
-            text += "masked\n"
+            text += "masked"
+            if self.mask_bbox:
+                text += f" ({self.mask_bbox.as_str()})"
+            if self.mask_polygon:
+                text += f" ({self.mask_polygon.as_str()})"
+            text += "\n"
             tooltip += "Using mask during registration\n"
         if self.is_cropped():
             text += "cropped"
+            if self.crop_bbox:
+                text += f" ({self.crop_bbox.as_str()})"
+            if self.crop_polygon:
+                text += f" ({self.crop_polygon.as_str()})"
             tooltip += "Cropping image\n"
         if tooltip.endswith("\n"):
             tooltip = tooltip[:-1]
