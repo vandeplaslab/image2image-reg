@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import typing as ty
+from contextlib import suppress
 from pathlib import Path
 
 import click
@@ -23,6 +24,7 @@ from image2image_reg.cli._common import (
     attach_shapes_,
     attach_to_,
     clip_,
+    files_,
     fmt_,
     get_preprocessing,
     image_,
@@ -31,6 +33,7 @@ from image2image_reg.cli._common import (
     n_parallel_,
     original_size_,
     output_dir_,
+    output_dir_current_,
     overwrite_,
     parallel_mode_,
     pixel_size_opt_,
@@ -48,6 +51,14 @@ from image2image_reg.cli._common import (
 )
 from image2image_reg.enums import PreprocessingOptions, PreprocessingOptionsWithNone, WriterMode
 from image2image_reg.parameters.registration import AVAILABLE_REGISTRATIONS
+
+final_ = click.option(
+    "--final/--no_final",
+    help="Export final transformations (include all pre-processing and post-processing transformations).",
+    is_flag=True,
+    default=True,
+    show_default=True,
+)
 
 
 def is_valis(project_dir: Path) -> bool:
@@ -838,6 +849,7 @@ def preview_runner(paths: ty.Sequence[str], pyramid: int, overwrite: bool = Fals
 @overwrite_
 @parallel_mode_
 @n_parallel_
+@final_
 @clip_
 @rename_
 @as_uint8_
@@ -868,6 +880,7 @@ def export_cmd(
     as_uint8: bool | None,
     rename: bool,
     clip: str,
+    final: bool,
     n_parallel: int,
     parallel_mode: str,
     overwrite: bool,
@@ -888,6 +901,7 @@ def export_cmd(
         as_uint8=as_uint8,
         rename=rename,
         clip=clip,
+        final=final,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
         overwrite=overwrite,
@@ -909,6 +923,7 @@ def export_runner(
     as_uint8: bool | None = None,
     rename: bool = False,
     clip: str = "ignore",
+    final: bool = False,
     n_parallel: int = 1,
     parallel_mode: str = "outer",
     overwrite: bool = False,
@@ -962,6 +977,7 @@ def export_runner(
                             as_uint8,
                             rename,
                             clip,
+                            final,
                             1,
                             overwrite,
                         )
@@ -988,6 +1004,7 @@ def export_runner(
                     as_uint8,
                     rename=rename,
                     clip=clip,
+                    final=final,
                     n_parallel=n_parallel,
                     overwrite=overwrite,
                 )
@@ -1016,6 +1033,7 @@ def _export(
     as_uint8: bool | None,
     rename: bool = False,
     clip: str = "ignore",
+    final: bool = False,
     n_parallel: int = 1,
     overwrite: bool = False,
 ) -> tuple[PathLike, bool]:
@@ -1043,10 +1061,105 @@ def _export(
             n_parallel=n_parallel,
             overwrite=overwrite,
         )
+        if final:
+            obj.export_transforms(
+                write_registered=write_registered,
+                write_not_registered=write_not_registered,
+                write_attached=write_attached_images,
+            )
         return path, True
     except ValueError:
         logger.exception(f"Failed to export {path}.")
         return path, False
+
+
+@write_attached_
+@write_not_registered_
+@write_registered_
+@original_size_
+@project_path_multi_
+@elastix.command("final", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+def final_cmd(
+    project_dir: ty.Sequence[str],
+    original_size: bool,
+    write_registered: bool = True,
+    write_not_registered: bool = True,
+    write_attached: bool = True,
+) -> None:
+    """Export final transformations."""
+    final_runner(project_dir, original_size, write_registered, write_not_registered, write_attached)
+
+
+def final_runner(
+    paths: ty.Sequence[str],
+    original_size: bool,
+    write_registered: bool = True,
+    write_not_registered: bool = True,
+    write_attached: bool = True,
+) -> None:
+    """Register images."""
+    from image2image_reg.workflows import ElastixReg
+
+    print_parameters(
+        Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Original size", "-o/--original_size/-O/--no_original_size", original_size),
+        Parameter("Write registered", "--write_registered/--no_write_registered", write_registered),
+        Parameter("Write not-registered", "--write_not_registered/--no_write_not_registered", write_not_registered),
+        Parameter("Write attached", "--write_attached/--no_write_attached", write_attached),
+    )
+
+    for path in paths:
+        obj = ElastixReg.from_path(path)
+        obj.export_transforms(
+            write_registered=write_registered,
+            write_not_registered=write_not_registered,
+            write_attached=write_attached,
+        )
+
+
+@pixel_size_opt_
+@as_uint8_
+@output_dir_current_
+@click.option(
+    "-t",
+    "--transform_file",
+    help="Path to the final transformation file (usually ends with <file>.elastix.json",
+    type=click.Path(exists=True, resolve_path=True, file_okay=True, dir_okay=False),
+    show_default=True,
+    required=True,
+)
+@files_
+@elastix.command("transform", aliases=["apply"], help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+def transform(
+    files: ty.Sequence[str],
+    transform_file: str,
+    output_dir: str,
+    as_uint8: bool | None,
+    pixel_size: float | None,
+) -> None:
+    """Transform image, mask, points or GeoJSON data using Elastix transformation."""
+    transform_runner(files, transform_file, output_dir, as_uint8, pixel_size)
+
+
+def transform_runner(
+    files: ty.Sequence[str],
+    transform_file: str,
+    output_dir: str,
+    as_uint8: bool | None = None,
+    pixel_size: float | None = None,
+) -> None:
+    """Apply transformation."""
+    from image2image_reg.workflows.transform import transform_elastix
+
+    print_parameters(
+        Parameter("Files to transform", "-f/--file", files),
+        Parameter("Transformation file", "-t/--transform_file", transform_file),
+        Parameter("Output directory", "-o/--output_dir", output_dir),
+        Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
+        Parameter("Pixel size", "-s/--pixel_size", pixel_size),
+    )
+
+    transform_elastix(files, transform_file, output_dir, as_uint8=as_uint8, pixel_size=pixel_size)
 
 
 @click.option(
@@ -1067,6 +1180,14 @@ def _export(
 )
 @click.option(
     "-t/-T",
+    "--final/--no_final",
+    help="Clear final transformations.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
+    "-t/-T",
     "--transformations/--no_transformations",
     help="Clear transformations.",
     is_flag=True,
@@ -1078,10 +1199,16 @@ def _export(
 @project_path_multi_
 @elastix.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
 def clear_cmd(
-    project_dir: ty.Sequence[str], cache: bool, image: bool, transformations: bool, progress: bool, all_: bool
+    project_dir: ty.Sequence[str],
+    cache: bool,
+    image: bool,
+    transformations: bool,
+    final: bool,
+    progress: bool,
+    all_: bool,
 ) -> None:
     """Clear project data (cache/images/transformations/etc...)."""
-    clear_runner(project_dir, cache, image, transformations, progress, all_)
+    clear_runner(project_dir, cache, image, transformations, final, progress, all_)
 
 
 def clear_runner(
@@ -1089,6 +1216,7 @@ def clear_runner(
     cache: bool = False,
     image: bool = False,
     transformations: bool = False,
+    final: bool = False,
     progress: bool = False,
     all_: bool = False,
 ) -> None:
@@ -1103,13 +1231,14 @@ def clear_runner(
         Parameter("Don't clear cache", "--cache", cache),
         Parameter("Don't clear images", "--image", image),
         Parameter("Don't clear transformations", "--transformations", transformations),
+        Parameter("Don't clear final transformations", "--final", final),
         Parameter("Don't clear progress", "--progress", progress),
     )
 
     with MeasureTimer() as timer:
         for path in paths:
             pro = ElastixReg.from_path(path)
-            pro.clear(cache=cache, image=image, transformations=transformations, progress=progress)
+            pro.clear(cache=cache, image=image, transformations=transformations, final=final, progress=progress)
             logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
     logger.info(f"Finished clearing all projects in {timer()}.")
 
@@ -1153,8 +1282,6 @@ def update_runner(
     for path in paths:
         klass = ElastixReg if not valis else ValisReg
         klass.update_paths(path, source_dirs, recursive=recursive)
-        try:
+        with suppress(ValueError):
             obj = klass.from_path(path)
             obj.validate(allow_not_registered=True, require_paths=True)
-        except ValueError:
-            pass

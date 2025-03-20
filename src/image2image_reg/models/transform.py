@@ -6,6 +6,7 @@ from warnings import warn
 
 import numpy as np
 import SimpleITK as sitk
+from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
 from loguru import logger
 from tqdm import tqdm
@@ -270,8 +271,6 @@ class Transform(TransformMixin):
         Direction of the targeted image during registration (not relevant for 2D applications)
     output_origin: list of float
         Origin of the targeted image during registration
-    resampler_interpolator: str
-        elastix interpolator setting for resampling the image
     is_linear: bool
         Whether the given transform is linear or non-linear (non-rigid)
     inverse_transform: sitk.Transform or None
@@ -292,7 +291,7 @@ class Transform(TransformMixin):
         self.output_direction = [float(p) for p in self.elastix_transform["Direction"]]
         self.resample_interpolator = self.elastix_transform["ResampleInterpolator"][0]
         self.is_linear = self.itk_transform.IsLinear()
-        self.name = self.itk_transform.GetName()
+        self.name = f"{self.itk_transform.GetName()} ({hash_parameters(n_in_hash=4, **elastix_transform)})"
 
         if self.is_linear:
             self.inverse_transform = self.itk_transform.GetInverse()
@@ -310,3 +309,7 @@ class Transform(TransformMixin):
     def final_transform(self) -> sitk.Transform:  # type: ignore[override]
         """Return final transform."""
         return self.itk_transform
+
+    def to_dict(self) -> dict:
+        """Convert transformation to dictionary."""
+        return self.elastix_transform

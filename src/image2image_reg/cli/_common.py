@@ -217,6 +217,15 @@ output_dir_ = click.option(
     show_default=True,
     required=True,
 )
+output_dir_current_ = click.option(
+    "-o",
+    "--output_dir",
+    help="Output directory where the project should be saved to.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    default=".",
+    show_default=True,
+    required=True,
+)
 pixel_size_opt_ = click.option(
     "-s",
     "--pixel_size",

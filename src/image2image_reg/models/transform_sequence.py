@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import typing as ty
 from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
-from koyo.json import read_json_data
+from koyo.json import read_json, write_json
 from koyo.typing import PathLike
 
 from image2image_reg.models.transform import Transform, TransformMixin
@@ -70,7 +71,7 @@ class TransformSequence(TransformMixin):
 
         """
         if isinstance(transforms, (str, Path)):
-            tform_list, tform_idx = _read_wsireg_transform(transforms)
+            tform_list, tform_idx = _read_elastix_transform(transforms)
             self.transform_sequence_index = tform_idx
             reg_transforms = [Transform(t) for t in tform_list]
             self.transforms = self.transforms + reg_transforms
@@ -126,21 +127,34 @@ class TransformSequence(TransformMixin):
         self._build_composite_transform(self.transforms, self.transform_sequence_index)
         self._build_resampler()
 
-    def _build_composite_transform(self, reg_transforms: list[Transform], reg_transform_seq_idx: list[int]) -> None:
-        """Build composite transform from a list of transforms."""
+    def transform_iterator(
+        self, transforms: list[Transform] | None = None, transform_sequence_index: list[int] | None = None
+    ) -> ty.Generator[tuple[list[int], Transform], None, None]:
+        """Transform iterator for all transforms in sequence."""
+        if transforms is None:
+            transforms = self.transforms
+        if transform_sequence_index is None:
+            transform_sequence_index = self.transform_sequence_index
         composite_index: list[int] = []
-        for unique_idx in np.unique(reg_transform_seq_idx):
-            in_seq_tform_idx = np.where(reg_transform_seq_idx == unique_idx)[0]
+        for unique_idx in np.unique(transform_sequence_index):
+            in_seq_tform_idx = np.where(transform_sequence_index == unique_idx)[0]
             if len(in_seq_tform_idx) > 1:
                 composite_index = composite_index + list(in_seq_tform_idx[::-1])
             else:
                 composite_index = composite_index + list(in_seq_tform_idx)
 
-        composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
         for transform_index in composite_index:
-            composite_transform.AddTransform(  # type: ignore[no-untyped-call]
-                reg_transforms[transform_index].itk_transform,
-            )
+            yield composite_index, transforms[transform_index]
+
+    def _build_composite_transform(self, transforms: list[Transform], transform_sequence_index: list[int]) -> None:
+        """Build composite transform from a list of transforms."""
+        assert len(transforms) == len(transform_sequence_index), "Transforms and sequence index must be the same length"
+        assert len(transforms) != 0, "No transforms to build composite transform"
+
+        composite_index = []
+        composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
+        for composite_index, transform in self.transform_iterator(transforms, transform_sequence_index):
+            composite_transform.AddTransform(transform.itk_transform)  # type: ignore[no-untyped-call]
         self.composite_transform = composite_transform
         self.transform_itk_order = [self.transforms[i] for i in composite_index]
 
@@ -174,10 +188,13 @@ class TransformSequence(TransformMixin):
             Skip the initial transform. This is necessary when e.g. reloading transform data from disk
         """
         # TODO: check what happens if there is initial transformation - e.g. user supplied affine matrix
-        transforms, transform_sequence_index = _read_wsireg_transform(path, first, skip_initial)
-        # if first:
-        #     transforms = [transforms[0]]
-        #     transform_sequence_index = [0]
+        transforms, transform_sequence_index = _read_elastix_transform(path, first, skip_initial)
+        return cls(transforms, transform_sequence_index)
+
+    @classmethod
+    def from_final(cls, path: PathLike) -> TransformSequence:
+        """Read final elastix transform."""
+        transforms, transform_sequence_index = _read_final_elastix_transform(path)
         return cls(transforms, transform_sequence_index)
 
     @classmethod
@@ -194,6 +211,23 @@ class TransformSequence(TransformMixin):
         transforms, transform_sequence_index = _read_i2r_transform(path, image_path)
         return cls(transforms, transform_sequence_index)
 
+    def to_dict(self) -> list[dict]:
+        """Export transformation sequence to dictionary."""
+        out = []
+        for _, transform in self.transform_iterator():
+            out.append(transform.to_dict())
+        return out
+
+    def to_json(self, path: PathLike) -> Path:
+        """Export transformation sequence to json file."""
+        path = Path(path)
+        if len(path.suffixes) == 1:
+            path = path.with_suffix(".elastix.json")
+
+        out = self.to_dict()
+        write_json(path, out)
+        return path
+
 
 def _read_i2r_transform(path: PathLike, image_path: PathLike) -> tuple[list[dict[str, list[str]]], list[int]]:
     """Read data from i2r transform dict."""
@@ -201,7 +235,7 @@ def _read_i2r_transform(path: PathLike, image_path: PathLike) -> tuple[list[dict
 
     from image2image_reg.utils.transformation import affine_to_itk_affine
 
-    transforms_data: dict[str, list[str]] = read_json_data(path)
+    transforms_data: dict[str, list[str]] = read_json(path)
     if "matrix_yx_um_inv" not in transforms_data:
         raise ValueError("Cannot retrieve affine transformation.")
     affine = np.asarray(transforms_data["matrix_yx_um_inv"])
@@ -210,45 +244,60 @@ def _read_i2r_transform(path: PathLike, image_path: PathLike) -> tuple[list[dict
     return transform_list, [0]
 
 
-def _read_wsireg_transform(
+def _read_elastix_transform(
     parameters_or_path: str | (Path | dict[str, list[str]]),
     first: bool = False,
     skip_initial: bool = False,
 ) -> tuple[list[dict[str, list[str]]], list[int]]:
     """Convert wsireg transform dict or from file to List of Transforms."""
-    transforms = parameters_or_path
+    transform_data = parameters_or_path
     if isinstance(parameters_or_path, (str, Path)):
-        transforms: dict[str, list[str]] = read_json_data(parameters_or_path)
+        transform_data: dict[str, list[str]] = read_json(parameters_or_path)
 
     allowed_n = 1 if first else -1
     index = 0
-    transform_list = []
+    transforms = []
     transform_sequence_index = []
-    for key, value in transforms.items():
+    for key, value in transform_data.items():
         if "initial" in key and skip_initial:
             continue
         if "initial" not in key and first:
             allowed_n -= 1
         if key == "initial":
             if isinstance(value, dict):
-                transform_list.append(value)
+                transforms.append(value)
                 transform_sequence_index.append(index)
                 index += 1
             elif isinstance(value, list):
                 for init_tform in value:
-                    transform_list.append(init_tform)
+                    transforms.append(init_tform)
                     transform_sequence_index.append(index)
                     index += 1
         else:
             if isinstance(value, dict):
-                transform_list.append(value)
+                transforms.append(value)
                 transform_sequence_index.append(index)
                 index += 1
             elif isinstance(value, list):
                 for tform in value:
-                    transform_list.append(tform)
+                    transforms.append(tform)
                     transform_sequence_index.append(index)
                 index += 1
         if allowed_n == 0 and first:
             break
-    return transform_list, transform_sequence_index
+    return transforms, transform_sequence_index
+
+
+def _read_final_elastix_transform(path: PathLike) -> tuple[list[dict[str, list[str]]], list[int]]:
+    """Read final elastix transform."""
+    path = Path(path)
+    if path.suffixes == [".json"]:
+        return _read_elastix_transform(path)
+    elif path.suffixes == [".elastix", ".json"]:
+        transforms, transform_sequence_index = [], []
+        transform_data = read_json(path)
+        for index, tform in enumerate(transform_data):
+            transforms.append(tform)
+            transform_sequence_index.append(index)
+        return transforms, transform_sequence_index
+    raise ValueError("Cannot read final elastix transform.")

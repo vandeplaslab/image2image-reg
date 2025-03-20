@@ -1,4 +1,5 @@
 """Conversion utilities."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -9,7 +10,6 @@ import SimpleITK as sitk
 def euler_elx_to_itk2d(tform: dict, is_translation: bool = False) -> sitk.Euler2DTransform:
     """Convert Elastix Euler transform to ITK Euler transform."""
     euler2d = sitk.Euler2DTransform()
-
     if is_translation:
         elx_parameters = [0]
         elx_parameters_trans = [float(p) for p in tform["TransformParameters"]]
@@ -18,9 +18,7 @@ def euler_elx_to_itk2d(tform: dict, is_translation: bool = False) -> sitk.Euler2
         center = [float(p) for p in tform["CenterOfRotationPoint"]]
         euler2d.SetFixedParameters(center)
         elx_parameters = [float(p) for p in tform["TransformParameters"]]
-
     euler2d.SetParameters(elx_parameters)
-
     return euler2d
 
 
@@ -32,7 +30,6 @@ def similarity_elx_to_itk2d(tform: dict) -> sitk.Similarity2DTransform:
     similarity2d.SetFixedParameters(center)
     elx_parameters = [float(p) for p in tform["TransformParameters"]]
     similarity2d.SetParameters(elx_parameters)
-
     return similarity2d
 
 
@@ -45,7 +42,6 @@ def affine_elx_to_itk2d(tform: dict) -> sitk.AffineTransform:
     affine2d.SetFixedParameters(center)
     elx_parameters = [float(p) for p in tform["TransformParameters"]]
     affine2d.SetParameters(elx_parameters)
-
     return affine2d
 
 
@@ -93,5 +89,4 @@ def get_elastix_transforms(transformations):
 
     for k, v in elastix_transforms.items():
         elastix_transforms.update({k: [t.elastix_transform for t in v]})
-
     return elastix_transforms
