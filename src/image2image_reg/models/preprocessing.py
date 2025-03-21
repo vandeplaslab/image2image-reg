@@ -254,6 +254,30 @@ class Preprocessing(BaseModel):
                     data.pop(key)
         return data
 
+    def update_from_another(self, preprocessing: "Preprocessing") -> "Preprocessing":
+        """Update from another preprocessing."""
+        for key, value in preprocessing.dict().items():
+            if value is not None:
+                setattr(self, key, value)
+        return self
+
+    def select_channel(self, channel_id: ty.Optional[int] = None, channel_name: ty.Optional[str] = None) -> None:
+        """Select channel."""
+        if channel_name is not None:
+            if channel_name in self.channel_names:
+                channel_id = self.channel_indices.index(channel_name)
+        if channel_id is not None:
+            self.channel_indices = [channel_id]
+
+    def select_channels(self, channel_names: list[str]) -> None:
+        """Select channels."""
+        channel_indices = []
+        for channel_name in channel_names:
+            if channel_name in self.channel_names:
+                channel_indices.append(self.channel_names.index(channel_name))
+        if channel_indices:
+            self.channel_indices = channel_indices
+
     @classmethod
     def basic(
         cls,
