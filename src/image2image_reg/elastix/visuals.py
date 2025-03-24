@@ -187,6 +187,7 @@ def draw_workflow(
         node_size=node_size,
         alpha=node_alpha,
         ax=ax,
+        margins=(0.2, 0.2),
     )
 
     for attach_to, attached_name in workflow.attachment_images.items():

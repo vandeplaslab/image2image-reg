@@ -25,36 +25,47 @@ def filename_with_suffix(filename: Path, extra: str, suffix: str) -> Path:
 class ImageWrapper:
     """Wrapper around the image class to add additional functionality."""
 
+    _reader: BaseReader | None = None
+
     def __init__(
         self,
         modality: Modality,
         preprocessing: Preprocessing | None = None,
         preview: bool = False,
         quick: bool = False,
+        quiet: bool = False,
         raise_on_error: bool = True,
     ):
         self.modality = modality
         self.preprocessing = preprocessing
         self.preview = preview
-
-        # TODO: this won't work with arrays
-        try:
-            reader_kws = modality.reader_kws or {}
-            self.reader: BaseReader = get_simple_reader(
-                modality.path,
-                init_pyramid=False,
-                quick=quick,
-                scene_index=reader_kws.get("scene_index", None),
-            )
-        except Exception as e:
-            if raise_on_error:
-                raise e
-            self.reader = None
+        self.quick = quick
+        self.quiet = quiet
+        self.raise_on_error = raise_on_error
 
         self.image: sitk.Image | None = None
         self._mask: sitk.Image | None = None
         self.initial_transforms: list[dict] = []
         self.original_size_transform: dict | None = None
+
+    @property
+    def reader(self) -> BaseReader | None:
+        """Lazy reader."""
+        if self._reader is None:
+            try:
+                reader_kws = self.modality.reader_kws or {}
+                self._reader: BaseReader = get_simple_reader(
+                    self.modality.path,
+                    init_pyramid=False,
+                    quick=self.quick,
+                    quiet=self.quiet,
+                    scene_index=reader_kws.get("scene_index", None),
+                )
+            except Exception as e:
+                if self.raise_on_error:
+                    raise e
+                self._reader = None
+        return self._reader
 
     @property
     def mask(self) -> sitk.Image | None:

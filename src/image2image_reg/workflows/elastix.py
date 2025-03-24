@@ -115,7 +115,7 @@ class ElastixReg(Workflow):
         return all(reg_edge["registered"] for reg_edge in self.registration_nodes)
 
     @classmethod
-    def from_path(cls, path: PathLike, raise_on_error: bool = True) -> ElastixReg:
+    def from_path(cls, path: PathLike, raise_on_error: bool = True, quick: bool = False) -> ElastixReg:
         """Initialize based on the project path."""
         path = Path(path)
         if not path.exists():
@@ -143,7 +143,7 @@ class ElastixReg(Workflow):
 
             obj = cls(project_dir=path, **config)
             if config_path.exists():
-                obj.load_from_i2reg(raise_on_error=raise_on_error)
+                obj.load_from_i2reg(raise_on_error=raise_on_error, quick=quick)
             elif list(obj.project_dir.glob("*.yaml")):
                 obj.load_from_wsireg()
         logger.trace(f"Restored from config in {timer()}")
@@ -237,6 +237,17 @@ class ElastixReg(Workflow):
             modality = self.get_modality(name=name)
             if modality is not None and not self._is_being_registered(modality, check_target=True):
                 errors.append(f"❌ Modality '{name}' has been defined but isn't being registered.")
+
+        # get all sources and through modalities
+        # for _i, (source, targets) in enumerate(self.registration_paths.items()):
+        #     name = targets[0]
+        #     modality = self.get_modality(name=name)
+        #     if modality is not None and not self._is_being_registered(modality, check_target=False):
+        #         msg = f"❌ Target modality '{name}' has been defined but isn't being registered."
+        #         if msg not in errors:
+        #             errors.append(msg)
+
+        # check whether all registration paths exist
         for source, targets in self.registration_paths.items():
             if source not in self.modalities:
                 errors.append(f"❌ Source modality '{source}' does not exist.")
@@ -316,7 +327,7 @@ class ElastixReg(Workflow):
             logger.success("✅ Project configuration is valid.")
         return is_valid, errors
 
-    def load_from_i2reg(self, raise_on_error: bool = True) -> None:
+    def load_from_i2reg(self, raise_on_error: bool = True, quick: bool = False) -> None:
         """Load data from image2image-reg project file."""
         config: ElastixRegConfig = read_json_data(self.project_dir / self.CONFIG_NAME)
         name = config.get("name")
@@ -352,7 +363,7 @@ class ElastixReg(Workflow):
             logger.trace(f"Loaded registration paths in {timer(since_last=True)}")
 
             # check whether the registered version of the config exists
-            if (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
+            if not quick and (self.project_dir / self.REGISTERED_CONFIG_NAME).exists():
                 registered_config: ElastixRegConfig = read_json_data(self.project_dir / self.REGISTERED_CONFIG_NAME)
                 logger.trace(f"Loading registered configuration from {self.REGISTERED_CONFIG_NAME}.")
                 # load transformation data from file
@@ -390,19 +401,18 @@ class ElastixReg(Workflow):
         if transform_tag and not (self.transformations_dir / transform_tag).exists():
             logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
             transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
-            print(list(self.transformations_dir.glob("*")))
             if transform_tag and not (self.transformations_dir / transform_tag).exists():
                 logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
                 return None
 
         target_modality = self.modalities[target]
         target_wrapper = ImageWrapper(
-            target_modality, edge["target_preprocessing"], quick=True, raise_on_error=raise_on_error
+            target_modality, edge["target_preprocessing"], quick=True, quiet=True, raise_on_error=raise_on_error
         )
 
         source_modality = self.modalities[source]
         source_wrapper = ImageWrapper(
-            source_modality, edge["source_preprocessing"], quick=True, raise_on_error=raise_on_error
+            source_modality, edge["source_preprocessing"], quick=True, quiet=True, raise_on_error=raise_on_error
         )
         source_wrapper.initial_transforms = source_wrapper.load_initial_transform(source_modality, self.cache_dir)
 
@@ -649,7 +659,7 @@ class ElastixReg(Workflow):
         """Pre-process images."""
         from image2image_reg.wrapper import ImageWrapper
 
-        wrapper = ImageWrapper(modality, preprocessing)
+        wrapper = ImageWrapper(modality, preprocessing, quick=True)
         cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not overwrite else False
         if not cached:
             logger.trace(f"'{modality.name}' is not cached - pre-processing...")
