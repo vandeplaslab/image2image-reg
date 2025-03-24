@@ -149,7 +149,7 @@ class ElastixReg(Workflow):
         logger.trace(f"Restored from config in {timer()}")
         return obj
 
-    def load_preprocessed_cache(self):
+    def load_preprocessed_cache(self) -> None:
         """Load cache of sizes and shapes."""
         from image2image_reg.wrapper import ImageWrapper
 
@@ -230,22 +230,43 @@ class ElastixReg(Workflow):
         for i, (name, merge_modalities) in enumerate(self.merge_modalities.items()):
             func(f" {elbow if i == n else tee}{name} ({merge_modalities})")
 
+    def _is_reference(self, modality: Modality) -> bool:
+        """Check whether modality is reference, which doesn't have to be registered."""
+        return (
+            all(targets[-1] == modality.name for targets in self.registration_paths.values())
+            if self.registration_paths
+            else False
+        )
+
+    def _is_being_registered(self, modality: Modality, check_target: bool = False) -> bool:
+        """Check whether the modality will be registered or is simply an attachment."""
+        if modality.name in self.attachment_images:
+            return False
+        if check_target:
+            for edge in self.registration_nodes:
+                if modality.name == edge["modalities"]["target"]:
+                    return True
+        if modality.name not in self.registration_paths:
+            return False
+        return True
+
     def validate_paths(self, log: bool = True) -> tuple[bool, list[str]]:
         """Validate paths."""
         errors = []
         for name in self.get_image_modalities(with_attachment=False):
             modality = self.get_modality(name=name)
-            if modality is not None and not self._is_being_registered(modality, check_target=True):
+            if (
+                modality is not None
+                and not self._is_being_registered(modality, check_target=True)
+                and not self._is_reference(modality)
+            ):
                 errors.append(f"❌ Modality '{name}' has been defined but isn't being registered.")
 
-        # get all sources and through modalities
-        # for _i, (source, targets) in enumerate(self.registration_paths.items()):
-        #     name = targets[0]
-        #     modality = self.get_modality(name=name)
-        #     if modality is not None and not self._is_being_registered(modality, check_target=False):
-        #         msg = f"❌ Target modality '{name}' has been defined but isn't being registered."
-        #         if msg not in errors:
-        #             errors.append(msg)
+        for targets in self.registration_paths.values():
+            if len(targets) == 2:
+                modality = self.get_modality(name=targets[0])
+                if modality is not None and not self._is_being_registered(modality, check_target=False):
+                    errors.append(f"❌ Through modality '{targets[0]}' has been defined but isn't being registered.")
 
         # check whether all registration paths exist
         for source, targets in self.registration_paths.items():
@@ -555,6 +576,8 @@ class ElastixReg(Workflow):
         if index is not None:
             self.registration_nodes.pop(index)
             logger.trace(f"Removed registration path from '{source}' to '{target}' through '{through}'.")
+        if source in self.registration_paths:
+            self.registration_paths.pop(source)
         self._create_transformation_paths(self.registration_paths)
 
     def reset_registration_paths(self) -> None:
@@ -778,18 +801,6 @@ class ElastixReg(Workflow):
                     full_tform_seq.append(registered_edge_transform["registration"])
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
-
-    def _is_being_registered(self, modality: Modality, check_target: bool = False):
-        """Check whether the modality will be registered or is simply an attachment."""
-        if modality.name in self.attachment_images:
-            return False
-        if check_target:
-            for edge in self.registration_nodes:
-                if modality.name == edge["modalities"]["target"]:
-                    return True
-        if modality.name not in self.registration_paths:
-            return False
-        return True
 
     def preprocess(self, n_parallel: int = 1, overwrite: bool = False, quick: bool = False) -> None:
         """Pre-process all images."""
