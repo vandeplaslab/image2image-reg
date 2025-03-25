@@ -113,7 +113,7 @@ def convert_and_cast(image: sitk.Image, preprocessing: Preprocessing | None = No
         if preprocessing is not None and preprocessing.as_uint8 and image.GetPixelID() != sitk.sitkUInt8:
             image = sitk.RescaleIntensity(image)
             image = sitk.Cast(image, sitk.sitkUInt8)
-        logger.trace(f"Converted image to uint8 in {timer()} ({image.GetSize()})")
+            logger.trace(f"Converted image to uint8 in {timer()} ({image.GetSize()})")
     return image
 
 
