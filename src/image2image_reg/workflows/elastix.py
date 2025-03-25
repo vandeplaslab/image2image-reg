@@ -156,7 +156,7 @@ class ElastixReg(Workflow):
         for modality_name in self.get_image_modalities(with_attachment=False):
             modality = self.modalities[modality_name]
             if modality.name not in self.preprocessed_cache["image_spacing"]:
-                wrapper = ImageWrapper(modality)
+                wrapper = ImageWrapper(modality, quick=True, quiet=True)
                 self.preprocessed_cache["image_spacing"][modality.name] = wrapper.reader.scale
                 self.preprocessed_cache["image_sizes"][modality.name] = wrapper.reader.image_shape[::-1]
 
@@ -389,9 +389,7 @@ class ElastixReg(Workflow):
                 logger.trace(f"Loading registered configuration from {self.REGISTERED_CONFIG_NAME}.")
                 # load transformation data from file
                 transformations = {}
-                for registered_edge in tqdm(
-                    registered_config["registration_graph_edges"], desc="Loading transformations..."
-                ):
+                for registered_edge in registered_config["registration_graph_edges"]:
                     source = registered_edge["modalities"]["source"]
                     target = self.registration_paths[source][-1]
                     transforms_seq = self._load_registered_transform(
@@ -1130,7 +1128,7 @@ class ElastixReg(Workflow):
         rename: bool = False,
         n_parallel: int = 1,
         overwrite: bool = False,
-    ) -> list | None:
+    ) -> list[Path] | None:
         """Export images after applying transformation."""
         self.set_logger()
         if not self._check_if_all_registered():
@@ -1147,7 +1145,6 @@ class ElastixReg(Workflow):
 
         paths = []
         reg_modality_list, not_reg_modality_list, merge_modalities = self._get_modalities_to_transform()
-
         if remove_merged:
             for merge_modality in merge_modalities:
                 with suppress(ValueError):
@@ -2041,53 +2038,16 @@ class ElastixReg(Workflow):
         iwsreg.save()
         return iwsreg
 
-        # def _create_initial_overlap_image(self):
-        #     """Create image showing how images overlap before registration"""
-        #     from itertools import combinations
-        #
-        #     from image2image_reg.utils.visuals import color_multichannel, get_n_colors, jzazbz_cmap
-        #
-        #     min_r = np.inf
-        #     max_r = 0
-        #     min_c = np.inf
-        #     max_c = 0
-        #     composite_img_list = [None] * len(self.modalities)
-        #     for src_modality, tgt_modality in combinations(self.modalities.values(), 2):
-        #
-        #         img = img_obj.image
-        #         padded_img = transform.warp(img, img_obj.T, preserve_range=True, output_shape=img_obj.padded_shape_rc)
-        #
-        #         composite_img_list[i] = padded_img
-        #
-        #         img_corners_rc = warp_tools.get_corners_of_image(img.shape[0:2])
-        #         warped_corners_xy = warp_tools.warp_xy(img_corners_rc[:, ::-1], img_obj.T)
-        #         min_r = min(warped_corners_xy[:, 1].min(), min_r)
-        #         max_r = max(warped_corners_xy[:, 1].max(), max_r)
-        #         min_c = min(warped_corners_xy[:, 0].min(), min_c)
-        #         max_c = max(warped_corners_xy[:, 0].max(), max_c)
-        #
-        #     composite_img = np.dstack(composite_img_list)
-        #     cmap = jzazbz_cmap()
-        #     channel_colors = get_n_colors(cmap, composite_img.shape[2])
-        #     overlap_img = color_multichannel(
-        #         composite_img, channel_colors, rescale_channels=True, normalize_by="channel", cspace="CAM16UCS"
-        #     )
-        #
-        #     min_r = int(min_r)
-        #     max_r = int(np.ceil(max_r))
-        #     min_c = int(min_c)
-        #     max_c = int(np.ceil(max_c))
-        #     overlap_img = overlap_img[min_r:max_r, min_c:max_c]
-        #     overlap_img = (255 * overlap_img).astype(np.uint8)
-        #
-        #     return overlap_img
-
 
 def _get_with_suffix(p: Path, fmt: str) -> Path:
     if fmt.startswith("."):
         fmt = fmt[1:]
+    name = p.stem
+    for ext in [".ome", ".tiff", ".czi", ".txt", ".geojson", ".tsv", ".csv"]:
+        name = name.replace(ext, "")
+
     if fmt in ["ome-tiff", "ome-tiff-by-plane", "ome-tiff-by-tile"]:
-        return p.parent / (p.name + ".ome.tiff")
+        return p.parent / (name + ".ome.tiff")
     elif fmt in ["csv", "tsv", "txt", "geojson"]:
-        return p.parent / (p.name + "." + fmt)
+        return p.parent / (name + "." + fmt)
     raise ValueError(f"Writer {fmt} is not supported.")

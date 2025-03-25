@@ -36,7 +36,6 @@ class TransformSequence(TransformMixin):
         self.transform_itk_order: list[Transform] = []
         self._composite_transform = None
         self._n_transforms = 0
-        self._built = False
 
         self.add_transforms(transforms, transform_sequence_index=transform_sequence_index)
 
@@ -95,8 +94,6 @@ class TransformSequence(TransformMixin):
     @property
     def composite_transform(self) -> sitk.CompositeTransform | None:
         """Composite ITK transform from transformation sequence."""
-        if not self._built:
-            self._build_transform_data()
         return self._composite_transform
 
     @composite_transform.setter
@@ -143,12 +140,11 @@ class TransformSequence(TransformMixin):
         self.output_direction = self.transforms[-1].output_direction
         self.output_origin = self.transforms[-1].output_origin
         self.resample_interpolator = self.transforms[-1].resample_interpolator
-        self._built = False
+        self._build_transform_data()
 
     def _build_transform_data(self) -> None:
         self._build_composite_transform(self.transforms, self.transform_sequence_index)
         self._build_resampler()
-        self._built = True
 
     def _build_composite_transform(self, transforms: list[Transform], transform_sequence_index: list[int]) -> None:
         """Build composite transform from a list of transforms."""
