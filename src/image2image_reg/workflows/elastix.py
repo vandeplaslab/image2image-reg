@@ -800,6 +800,37 @@ class ElastixReg(Workflow):
                 transforms[modality]["full-transform-seq"] = full_tform_seq
         return transforms
 
+    def _remove_modality(self, modality: Modality) -> None:
+        """Remove modality from project.
+
+        This function should handle registration paths.
+        """
+        if self._is_being_registered(modality):
+            logger.warning("Removed modality that is being used in registration paths.")
+        name = modality.name
+
+        # remove nodes
+        to_remove_nodes = []
+        for index, node in enumerate(self.registration_nodes):
+            if name == node["modalities"]["source"]:
+                to_remove_nodes.append(index)
+            elif name == node["modalities"]["target"]:
+                to_remove_nodes.append(index)
+        if to_remove_nodes:
+            for index in reversed(to_remove_nodes):
+                node = self.registration_nodes.pop(index)
+                logger.warning(f"Removed registration node ({node}).")
+        # remove paths
+        to_remove_paths = []
+        for source, targets in self.registration_paths.items():
+            if source == name:
+                to_remove_paths.append(source)
+            if name in targets:
+                to_remove_nodes.append(source)
+        for source in to_remove_paths:
+            self.registration_paths.pop(source)
+            logger.warning(f"Removed registration path from {source}.")
+
     def preprocess(self, n_parallel: int = 1, overwrite: bool = False, quick: bool = False) -> None:
         """Pre-process all images."""
         # TODO: add multi-core support
@@ -838,7 +869,9 @@ class ElastixReg(Workflow):
             self.preprocess(n_parallel=n_parallel)
 
         # compute transformation information
-        for edge in tqdm(reversed(self.registration_nodes), desc="Registering nodes..."):
+        for edge in tqdm(
+            reversed(self.registration_nodes), desc="Registering nodes...", total=len(self.registration_nodes)
+        ):
             if edge["registered"]:
                 logger.trace(
                     f"Skipping registration for {edge['modalities']['source']} to {edge['modalities']['target']}."

@@ -107,7 +107,7 @@ class Workflow:
         """Co-register images."""
         raise NotImplementedError("Must implement method")
 
-    def write(self, **kwargs: ty.Any) -> list | None:
+    def write(self, **kwargs: ty.Any) -> list[Path] | None:
         """Export images after applying transformation."""
         raise NotImplementedError("Must implement method")
 
@@ -435,10 +435,13 @@ class Workflow:
                     break
         # remove registration paths
         if modality:
-            pass
+            self._remove_modality(modality)
         if not modality:
             logger.warning("Could not find modality to remove.")
         return modality
+
+    def _remove_modality(self, modality: Modality) -> None:
+        """Remove modality, handled by sub-class."""
 
     def auto_add_attachment_images(self, attach_to_modality: str, name: str, path: PathLike) -> None:
         """Add modality."""
