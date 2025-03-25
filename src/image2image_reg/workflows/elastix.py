@@ -389,7 +389,9 @@ class ElastixReg(Workflow):
                 logger.trace(f"Loading registered configuration from {self.REGISTERED_CONFIG_NAME}.")
                 # load transformation data from file
                 transformations = {}
-                for registered_edge in registered_config["registration_graph_edges"]:
+                for registered_edge in tqdm(
+                    registered_config["registration_graph_edges"], desc="Loading transformations..."
+                ):
                     source = registered_edge["modalities"]["source"]
                     target = self.registration_paths[source][-1]
                     transforms_seq = self._load_registered_transform(
@@ -417,46 +419,44 @@ class ElastixReg(Workflow):
             logger.warning("Could not find appropriate registration node.")
             return None
 
-        source = edge["modalities"]["source"]
-        transform_tag = f"{source}_to_{target}_transformations.json"
-        if transform_tag and not (self.transformations_dir / transform_tag).exists():
-            logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
-            transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
+        with MeasureTimer() as timer:
+            source = edge["modalities"]["source"]
+            transform_tag = f"{source}_to_{target}_transformations.json"
             if transform_tag and not (self.transformations_dir / transform_tag).exists():
                 logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
-                return None
+                transform_tag = f"{self.name}-{source}_to_{target}_transformations.json"
+                if transform_tag and not (self.transformations_dir / transform_tag).exists():
+                    logger.warning(f"Could not find cached registration data. ('{transform_tag}' file does not exist)")
+                    return None
 
-        target_modality = self.modalities[target]
-        target_wrapper = ImageWrapper(
-            target_modality, edge["target_preprocessing"], quick=True, quiet=True, raise_on_error=raise_on_error
-        )
+            target_modality = self.modalities[target]
+            target_wrapper = ImageWrapper(
+                target_modality, edge["target_preprocessing"], quick=True, quiet=True, raise_on_error=raise_on_error
+            )
+            self.original_size_transforms[target_wrapper.name] = target_wrapper.original_size_transform
 
-        source_modality = self.modalities[source]
-        source_wrapper = ImageWrapper(
-            source_modality, edge["source_preprocessing"], quick=True, quiet=True, raise_on_error=raise_on_error
-        )
-        source_wrapper.initial_transforms = source_wrapper.load_initial_transform(source_modality, self.cache_dir)
+            source_modality = self.modalities[source]
+            source_wrapper = ImageWrapper(
+                source_modality, edge["source_preprocessing"], quick=True, quiet=True, raise_on_error=raise_on_error
+            )
+            source_wrapper.initial_transforms = source_wrapper.load_initial_transform(source_modality, self.cache_dir)
 
-        initial_transforms_seq = None
-        if source_wrapper.initial_transforms:
-            initial_transforms_ = [Transform(t) for t in source_wrapper.initial_transforms]
-            initial_transforms_index = [idx for idx, _ in enumerate(initial_transforms_)]
-            initial_transforms_seq = TransformSequence(initial_transforms_, initial_transforms_index)
+            initial_transforms_seq = None
+            if source_wrapper.initial_transforms:
+                initial_transforms_ = [Transform(t) for t in source_wrapper.initial_transforms]
+                initial_transforms_index = [idx for idx, _ in enumerate(initial_transforms_)]
+                initial_transforms_seq = TransformSequence(initial_transforms_, initial_transforms_index)
 
-        transforms_partial_seq = TransformSequence.from_path(
-            self.transformations_dir / transform_tag, first=True, skip_initial=True
-        )
-        transforms_full_seq = TransformSequence.from_path(self.transformations_dir / transform_tag, first=False)
-        # if initial_transforms_seq:
-        #     transforms_full_seq.insert(initial_transforms_seq)
-        self.original_size_transforms[target_wrapper.name] = target_wrapper.original_size_transform
+            transforms_partial_seq, transforms_full_seq = TransformSequence.read_partial_and_full(
+                self.transformations_dir / transform_tag
+            )
 
-        # setup parameters
-        edge_["transforms"] = {"registration": transforms_partial_seq, "initial": initial_transforms_seq}
-        edge_["registered"] = True
-        edge_["transform_tag"] = f"{source}_to_{target}_transformations.json"
-        self.registration_nodes[index] = edge_
-        logger.trace(f"Restored previous transformation data for {source} - {target}")
+            # setup parameters
+            edge_["transforms"] = {"registration": transforms_partial_seq, "initial": initial_transforms_seq}
+            edge_["registered"] = True
+            edge_["transform_tag"] = f"{source}_to_{target}_transformations.json"
+            self.registration_nodes[index] = edge_
+        logger.trace(f"Restored previous transformation data for {source} - {target} in {timer()}")
         return {
             f"initial-{source}": initial_transforms_seq,
             f"000-to-{target}": transforms_partial_seq,

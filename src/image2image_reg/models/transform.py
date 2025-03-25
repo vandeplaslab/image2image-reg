@@ -6,7 +6,7 @@ from warnings import warn
 
 import numpy as np
 import SimpleITK as sitk
-from koyo.secret import hash_parameters
+from koyo.secret import get_short_hash
 from koyo.timer import MeasureTimer
 from loguru import logger
 from tqdm import tqdm
@@ -19,7 +19,7 @@ class TransformMixin:
 
     resampler: sitk.ResampleImageFilter | None = None
 
-    name: str = "unknown"
+    name: str = "Unknown"
     is_linear: bool = True
     output_origin: tuple[float, float] | None = None
     output_size: tuple[int, int] | None = None
@@ -29,6 +29,17 @@ class TransformMixin:
     final_transform: sitk.Transform | None = None
     inverse_transform: sitk.Transform | None = None
     transforms: list[Transform]
+
+    _itk_transform = None
+    _is_linear = None
+    _inverse_transform = None
+
+    def __repr__(self) -> str:
+        """Return repr."""
+        return (
+            f"{self.__class__.__name__}<name={self.name}; n={self.n_transforms}; "
+            f"spacing={self.output_spacing}; size={self.output_size}>"
+        )
 
     def __call__(self, image: sitk.Image) -> sitk.Image:
         """Transform."""
@@ -89,30 +100,9 @@ class TransformMixin:
             )
         ):
             transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
-
-        # for transform in self.transforms:
-        #     for i, point in enumerate(
-        #         tqdm(
-        #             transformed_points,
-        #             desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
-        #             f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})-{transform}",
-        #             leave=False,
-        #             disable=silent,
-        #             mininterval=1,
-        #         )
-        #     ):
-        #         transformed_points[i] = transform.inverse_final_transform.TransformPoint(point)
-
         if as_px:
             transformed_points = transformed_points * inv_target_pixel_size
         return transformed_points
-
-    def __repr__(self) -> str:
-        """Return repr."""
-        return (
-            f"{self.__class__.__name__}<name={self.name}; n={self.n_transforms}; is_linear={self.is_linear}; "
-            f"spacing={self.output_spacing}; size={self.output_size}>"
-        )
 
     @property
     def n_transforms(self) -> int:
@@ -282,7 +272,7 @@ class Transform(TransformMixin):
 
     def __init__(self, elastix_transform: dict):
         self.elastix_transform: dict[str, list[str]] = elastix_transform
-        self.itk_transform: sitk.Transform = convert_to_itk(self.elastix_transform)
+        self._parameter_hash = get_short_hash(n_in_hash=4)
         self.transforms = [self]
 
         self.output_spacing = [float(p) for p in self.elastix_transform["Spacing"]]
@@ -290,25 +280,52 @@ class Transform(TransformMixin):
         self.output_origin = [float(p) for p in self.elastix_transform["Origin"]]
         self.output_direction = [float(p) for p in self.elastix_transform["Direction"]]
         self.resample_interpolator = self.elastix_transform["ResampleInterpolator"][0]
-        self.is_linear = self.itk_transform.IsLinear()
-        self.name = f"{self.itk_transform.GetName()} ({hash_parameters(n_in_hash=4, **elastix_transform)})"
+        self.name = f"{self.elastix_transform['Transform'][0]} ({self._parameter_hash})"
 
-        if self.is_linear:
-            self.inverse_transform = self.itk_transform.GetInverse()
-            transform_name = self.itk_transform.GetName()
-            if transform_name == "Euler2DTransform":
-                self.inverse_transform = sitk.Euler2DTransform(self.inverse_transform)
-            elif transform_name == "AffineTransform":
-                self.inverse_transform = sitk.AffineTransform(self.inverse_transform)
-            elif transform_name == "Similarity2DTransform":
-                self.inverse_transform = sitk.Similarity2DTransform(self.inverse_transform)
-        else:
-            self.inverse_transform = None
+    @property
+    def itk_transform(self) -> sitk.Transform:
+        """SimpleITK Transform/."""
+        if self._itk_transform is None:
+            self._itk_transform: sitk.Transform = convert_to_itk(self.elastix_transform)  # type: ignore[no-redef]
+            self._is_linear = self.itk_transform.IsLinear()
+            self.name = f"{self.itk_transform.GetName()} ({self._parameter_hash})"
+        return self._itk_transform
 
     @property
     def final_transform(self) -> sitk.Transform:  # type: ignore[override]
         """Return final transform."""
         return self.itk_transform
+
+    @property
+    def is_linear(self) -> bool:
+        """Check if transform is linear."""
+        if self._is_linear is None:
+            self._is_linear = self.itk_transform.IsLinear()
+        return self._is_linear
+
+    @is_linear.setter
+    def is_linear(self, value: bool) -> None:
+        self._is_linear = value
+
+    @property
+    def inverse_transform(self) -> sitk.Transform | None:
+        """Get inverse transform."""
+        if self.is_linear:
+            self._inverse_transform = self.itk_transform.GetInverse()
+            transform_name = self.itk_transform.GetName()
+            if transform_name == "Euler2DTransform":
+                self._inverse_transform = sitk.Euler2DTransform(self._inverse_transform)
+            elif transform_name == "AffineTransform":
+                self._inverse_transform = sitk.AffineTransform(self._inverse_transform)
+            elif transform_name == "Similarity2DTransform":
+                self._inverse_transform = sitk.Similarity2DTransform(self._inverse_transform)
+        else:
+            self._inverse_transform = None
+        return self._inverse_transform
+
+    @inverse_transform.setter
+    def inverse_transform(self, value: sitk.Transform | None) -> None:
+        self._inverse_transform = value
 
     def to_dict(self) -> dict:
         """Convert transformation to dictionary."""

@@ -33,21 +33,18 @@ class TransformSequence(TransformMixin):
         self._transform_sequence_index: list[int] = []
         self.transforms: list[Transform] = []
         self.resampler: sitk.ResampleImageFilter | None = None
-        self.composed_linear_matrix_map: dict[str, np.ndarray] | None = None
         self.transform_itk_order: list[Transform] = []
+        self._composite_transform = None
+        self._n_transforms = 0
+        self._built = False
 
-        if transforms:
-            self.add_transforms(transforms, transform_sequence_index=transform_sequence_index)
-        else:
-            self._composite_transform = None
-            self._n_transforms = 0
+        self.add_transforms(transforms, transform_sequence_index=transform_sequence_index)
 
     def __repr__(self) -> str:
         """Return repr."""
         seq = " > ".join([t.name for t in self.transforms])
-        return (
-            f"{self.__class__.__name__}(name={self.name}; n={self.n_transforms}; is_linear={self.is_linear}; seq={seq})"
-        )
+        rep = f"{self.__class__.__name__}(name={self.name}; n={self.n_transforms}; seq={seq})"
+        return rep
 
     @property
     def final_transform(self) -> sitk.Transform:  # type: ignore[override]
@@ -70,6 +67,9 @@ class TransformSequence(TransformMixin):
             of elastix transforms would to make the composite ITK transform
 
         """
+        if not transforms:
+            return
+
         if isinstance(transforms, (str, Path)):
             tform_list, tform_idx = _read_elastix_transform(transforms)
             self.transform_sequence_index = tform_idx
@@ -78,22 +78,25 @@ class TransformSequence(TransformMixin):
         elif isinstance(transforms, list):
             if isinstance(transforms[0], dict):
                 reg_transforms = [Transform(t) for t in transforms]
-                self.transforms = self.transforms + reg_transforms
             elif isinstance(transforms[0], Transform):
-                self.transforms = self.transforms + transforms
+                reg_transforms = transforms
             else:
                 raise ValueError("Transforms must be a list of Transform objects or a list of dicts")
+            if self.transforms:
+                self.transforms = [*self.transforms, *reg_transforms]
+            else:
+                self.transforms = reg_transforms
             self.transform_sequence_index = transform_sequence_index
-        elif isinstance(transforms, (list, Transform)):
-            if isinstance(transforms, Transform):
-                transforms = [transforms]
-            self.transforms = self.transforms + transforms
+        elif isinstance(transforms, Transform):
+            self.transforms = [*self.transforms, transforms]
             self.transform_sequence_index = transform_sequence_index
         self._update_transform_properties()
 
     @property
     def composite_transform(self) -> sitk.CompositeTransform | None:
         """Composite ITK transform from transformation sequence."""
+        if not self._built:
+            self._build_transform_data()
         return self._composite_transform
 
     @composite_transform.setter
@@ -115,18 +118,6 @@ class TransformSequence(TransformMixin):
         transform_seq = [x + reindex_val for x in transform_seq]
         self._transform_sequence_index = self._transform_sequence_index + transform_seq
 
-    def _update_transform_properties(self) -> None:
-        self.output_size = self.transforms[-1].output_size
-        self.output_spacing = self.transforms[-1].output_spacing
-        self.output_direction = self.transforms[-1].output_direction
-        self.output_origin = self.transforms[-1].output_origin
-        self.resample_interpolator = self.transforms[-1].resample_interpolator
-        self._build_transform_data()
-
-    def _build_transform_data(self) -> None:
-        self._build_composite_transform(self.transforms, self.transform_sequence_index)
-        self._build_resampler()
-
     def transform_iterator(
         self, transforms: list[Transform] | None = None, transform_sequence_index: list[int] | None = None
     ) -> ty.Generator[tuple[list[int], Transform], None, None]:
@@ -145,6 +136,19 @@ class TransformSequence(TransformMixin):
 
         for transform_index in composite_index:
             yield composite_index, transforms[transform_index]
+
+    def _update_transform_properties(self) -> None:
+        self.output_size = self.transforms[-1].output_size
+        self.output_spacing = self.transforms[-1].output_spacing
+        self.output_direction = self.transforms[-1].output_direction
+        self.output_origin = self.transforms[-1].output_origin
+        self.resample_interpolator = self.transforms[-1].resample_interpolator
+        self._built = False
+
+    def _build_transform_data(self) -> None:
+        self._build_composite_transform(self.transforms, self.transform_sequence_index)
+        self._build_resampler()
+        self._built = True
 
     def _build_composite_transform(self, transforms: list[Transform], transform_sequence_index: list[int]) -> None:
         """Build composite transform from a list of transforms."""
@@ -190,6 +194,24 @@ class TransformSequence(TransformMixin):
         # TODO: check what happens if there is initial transformation - e.g. user supplied affine matrix
         transforms, transform_sequence_index = _read_elastix_transform(path, first, skip_initial)
         return cls(transforms, transform_sequence_index)
+
+    @classmethod
+    def read_partial_and_full(cls, path: PathLike, delay: bool = False) -> tuple[TransformSequence, TransformSequence]:
+        """Load a transform sequence from a path.
+
+        Parameters
+        ----------
+        path : PathLike
+            Path to transform sequence file.
+        delay : bool
+            Delay initialization of the transform sequence.
+        """
+        data = read_json(path)
+        transforms, transform_sequence_index = _read_elastix_transform(data, first=False, skip_initial=False)
+        transforms_full_seq = cls(transforms, transform_sequence_index)
+        transforms, transform_sequence_index = _read_elastix_transform(path, first=True, skip_initial=True)
+        transforms_partial_seq = cls(transforms, transform_sequence_index)
+        return transforms_partial_seq, transforms_full_seq
 
     @classmethod
     def from_final(cls, path: PathLike) -> TransformSequence:

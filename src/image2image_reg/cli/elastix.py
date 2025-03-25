@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 import typing as ty
 from contextlib import suppress
 from pathlib import Path
@@ -1107,6 +1106,10 @@ def final_runner(
         Parameter("Write not-registered", "--write_not_registered/--no_write_not_registered", write_not_registered),
         Parameter("Write attached", "--write_attached/--no_write_attached", write_attached),
     )
+
+    if not any([write_registered, write_not_registered, write_attached]):
+        warning_msg("No output specified. Nothing to do.")
+        return
 
     for path in paths:
         obj = ElastixReg.from_path(path)

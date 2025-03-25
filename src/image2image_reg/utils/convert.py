@@ -63,9 +63,7 @@ def bspline_elx_to_itk2d(tform: dict) -> sitk.BSplineTransform:
     return bspline2d
 
 
-def convert_to_itk(
-    tform: dict,
-) -> sitk.Euler2DTransform | sitk.Similarity2DTransform | sitk.AffineTransform | sitk.BSplineTransform:
+def convert_to_itk(tform: dict) -> sitk.Transform:
     """Convert Elastix transform to ITK transform."""
     itk_tform: sitk.Euler2DTransform | sitk.Similarity2DTransform | sitk.AffineTransform | sitk.BSplineTransform
     if tform["Transform"][0] == "AffineTransform":
