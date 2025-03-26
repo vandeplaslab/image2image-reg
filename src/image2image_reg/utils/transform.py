@@ -137,16 +137,24 @@ def _convert_geojson_to_df(
             x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
             # x, y, index, inner, outer, type
             data.append([x, y, n, 0, 0, "pt"])
-            n_to_prop[n] = feature.get("properties", {})
+            n_to_prop[n] = {
+                "props": feature.get("properties", {}),
+                "id": feature.get("id", None),
+            }
             n += 1
+
         # convert multi-points
         elif geometry["type"] == "MultiPoint":
             for x, y in geometry["coordinates"]:
                 x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
                 # x, y, index, inner, outer, type
                 data.append([x, y, n, 0, 0, "mpt"])
-            n_to_prop[n] = feature.get("properties", {})
+            n_to_prop[n] = {
+                "props": feature.get("properties", {}),
+                "id": feature.get("id", None),
+            }
             n += 1
+
         # convert polygons
         elif geometry["type"] == "Polygon":
             for outer, ring in enumerate(geometry["coordinates"]):
@@ -154,8 +162,12 @@ def _convert_geojson_to_df(
                     x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
                     # x, y, index, inner, outer, type
                     data.append([x, y, n, outer, 0, "pg"])
-                n_to_prop[n] = feature.get("properties", {})
+                n_to_prop[n] = {
+                    "props": feature.get("properties", {}),
+                    "id": feature.get("id", None),
+                }
                 n += 1
+
         # convert multi-polygons
         elif geometry["type"] == "MultiPolygon":
             for outer, polygon in enumerate(geometry["coordinates"]):
@@ -164,7 +176,10 @@ def _convert_geojson_to_df(
                         x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
                         # x, y, index, inner, outer, type
                         data.append([x, y, n, outer, inner, "mp"])
-                    n_to_prop[n] = feature.get("properties", {})
+                    n_to_prop[n] = {
+                        "props": feature.get("properties", {}),
+                        "id": feature.get("id", None),
+                    }
     df = pd.DataFrame(data, columns=["x", "y", "unique_index", "outer", "inner", "type"])
     return df, n_to_prop
 
@@ -185,7 +200,9 @@ def _convert_df_to_geojson(
     failed = False
     geojson_data, geojson_data_fixed = [], []
     for unique_index, dff in tqdm(df.groupby("unique_index"), desc="Converting to GeoJSON", leave=False):
-        prop = n_to_prop.get(unique_index, {})
+        props = n_to_prop.get(unique_index, {})
+        prop = props.get("props", {})
+        id_ = props.get("id", None)
         geometry = {}
         # point
         if dff["type"].iloc[0] == "pt":
@@ -233,11 +250,17 @@ def _convert_df_to_geojson(
                 for shape in geometry["coordinates"]:
                     polygon = make_valid(Polygon(shape))
                     geometry = mapping(polygon)
-                    geojson_data_fixed.append({"type": "Feature", "geometry": geometry, "properties": prop})
+                    geojson_ = {"type": "Feature", "geometry": geometry, "properties": prop}
+                    if id_ is not None:
+                        geojson_["id"] = id_
+                    geojson_data_fixed.append(geojson_)
             except Exception:
                 failed = True
                 logger.warning("Failed to automatically fix shape to GeoJSON.")
-        geojson_data.append({"type": "Feature", "geometry": geometry, "properties": prop})
+        geojson_ = {"type": "Feature", "geometry": geometry, "properties": prop}
+        if id_ is not None:
+            geojson_["id"] = id_
+        geojson_data.append(geojson_)
     return geojson_data if failed else geojson_data_fixed
 
 
