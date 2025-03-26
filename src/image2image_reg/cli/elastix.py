@@ -287,6 +287,7 @@ def add_modality_runner(
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
     obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj.set_logger()
     for name, path, mask, preprocessing, affine, method in zip(names, paths, masks, preprocessings, affines, methods):
         obj.auto_add_modality(
             name,
@@ -396,6 +397,7 @@ def add_path_runner(
         Parameter("Target pre-processing", "-S/--target_preprocessing", target_preprocessing),
     )
     obj = ElastixReg.from_path(project_dir)
+    obj.set_logger()
     obj.add_registration_path(
         source,
         target,
@@ -440,6 +442,7 @@ def add_attachment_runner(
         Parameter("Image", "-i/--image", paths),
     )
     obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj.set_logger()
     for name, path in zip(names, paths):
         obj.auto_add_attachment_images(attach_to, name, path)
     obj.save()
@@ -475,6 +478,7 @@ def add_points_runner(
         Parameter("Pixel size", "-s/--pixel_size", pixel_size),
     )
     obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj.set_logger()
     obj.add_attachment_points(attach_to, name, paths, pixel_size)
     obj.save()
 
@@ -509,6 +513,7 @@ def add_shape_runner(
         Parameter("Pixel size", "-s/--pixel_size", pixel_size),
     )
     obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
+    obj.set_logger()
     obj.add_attachment_geojson(attach_to, name, paths)
     obj.save()
 
@@ -1113,6 +1118,7 @@ def final_runner(
 
     for path in paths:
         obj = ElastixReg.from_path(path)
+        obj.set_logger()
         obj.export_transforms(
             write_registered=write_registered,
             write_not_registered=write_not_registered,
@@ -1244,8 +1250,9 @@ def clear_runner(
 
     with MeasureTimer() as timer:
         for path in paths:
-            pro = ElastixReg.from_path(path)
-            pro.clear(cache=cache, image=image, transformations=transformations, final=final, progress=progress)
+            obj = ElastixReg.from_path(path)
+            obj.set_logger()
+            obj.clear(cache=cache, image=image, transformations=transformations, final=final, progress=progress)
             logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
     logger.info(f"Finished clearing all projects in {timer()}.")
 
@@ -1291,4 +1298,5 @@ def update_runner(
         klass.update_paths(path, source_dirs, recursive=recursive)
         with suppress(ValueError):
             obj = klass.from_path(path)
+            obj.set_logger()
             obj.validate(allow_not_registered=True, require_paths=True)

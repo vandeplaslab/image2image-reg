@@ -6,12 +6,17 @@ from warnings import warn
 
 import numpy as np
 import SimpleITK as sitk
-from koyo.secret import get_short_hash
+from koyo.secret import get_short_hash, hash_parameters
 from koyo.timer import MeasureTimer
 from loguru import logger
 from tqdm import tqdm
 
 from image2image_reg.utils.convert import convert_to_itk
+
+
+def _hash_parameters(elastix_transform: dict) -> str:
+    """Hash elastix parameters."""
+    return hash_parameters(n_in_hash=4, **elastix_transform)
 
 
 class TransformMixin:
@@ -99,7 +104,9 @@ class TransformMixin:
                 mininterval=1,
             )
         ):
-            transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
+            for transform in self.transforms:
+                transformed_points[i] = transform.inverse_final_transform.TransformPoint(point)
+            # transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
         if as_px:
             transformed_points = transformed_points * inv_target_pixel_size
         return transformed_points
@@ -144,7 +151,7 @@ class TransformMixin:
         resampler.SetTransform(self.final_transform)  # type: ignore[no-untyped-call]
         self.resampler = resampler
 
-    def compute_inverse_nonlinear(self) -> None:
+    def compute_inverse_nonlinear(self) -> sitk.DisplacementFieldTransform:
         """Compute the inverse of a BSpline transform using ITK."""
         with MeasureTimer() as timer:
             tform_to_disp_field = sitk.TransformToDisplacementFieldFilter()  # type: ignore[no-untyped-call]
@@ -155,9 +162,9 @@ class TransformMixin:
 
             displacement_field = tform_to_disp_field.Execute(self.final_transform)  # type: ignore[no-untyped-call]
             displacement_field = sitk.InvertDisplacementField(displacement_field)  # type: ignore[no-untyped-call]
-            displacement_field = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
-            self.inverse_transform = displacement_field
+            self.inverse_transform = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
         logger.trace(f"Computed inverse transform of {self} in {timer()}")
+        return displacement_field
 
     def set_output_size(self, new_size: tuple[int, int]) -> None:
         """Set output size."""

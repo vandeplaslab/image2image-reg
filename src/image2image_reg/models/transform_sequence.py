@@ -232,7 +232,7 @@ class TransformSequence(TransformMixin):
     def to_dict(self) -> list[dict]:
         """Export transformation sequence to dictionary."""
         out = []
-        for _, transform in self.transform_iterator():
+        for transform in self.transforms:
             out.append(transform.to_dict())
         return out
 
