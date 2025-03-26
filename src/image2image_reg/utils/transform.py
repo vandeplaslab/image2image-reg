@@ -203,6 +203,7 @@ def _convert_df_to_geojson(
         props = n_to_prop.get(unique_index, {})
         prop = props.get("props", {})
         id_ = props.get("id", None)
+        kws = {"id": id_} if id_ is not None else {}
         geometry = {}
         # point
         if dff["type"].iloc[0] == "pt":
@@ -250,17 +251,11 @@ def _convert_df_to_geojson(
                 for shape in geometry["coordinates"]:
                     polygon = make_valid(Polygon(shape))
                     geometry = mapping(polygon)
-                    geojson_ = {"type": "Feature", "geometry": geometry, "properties": prop}
-                    if id_ is not None:
-                        geojson_["id"] = id_
-                    geojson_data_fixed.append(geojson_)
+                    geojson_data_fixed.append({"type": "Feature", **kws, "geometry": geometry, "properties": prop})
             except Exception:
                 failed = True
                 logger.warning("Failed to automatically fix shape to GeoJSON.")
-        geojson_ = {"type": "Feature", "geometry": geometry, "properties": prop}
-        if id_ is not None:
-            geojson_["id"] = id_
-        geojson_data.append(geojson_)
+        geojson_data.append({"type": "Feature", **kws, "geometry": geometry, "properties": prop})
     return geojson_data if failed else geojson_data_fixed
 
 

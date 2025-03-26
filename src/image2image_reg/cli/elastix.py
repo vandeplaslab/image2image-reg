@@ -1120,6 +1120,7 @@ def final_runner(
         )
 
 
+@clip_
 @pixel_size_opt_
 @as_uint8_
 @output_dir_current_
@@ -1139,9 +1140,10 @@ def transform(
     output_dir: str,
     as_uint8: bool | None,
     pixel_size: float | None,
+    clip: str,
 ) -> None:
     """Transform image, mask, points or GeoJSON data using Elastix transformation."""
-    transform_runner(files, transform_file, output_dir, as_uint8, pixel_size)
+    transform_runner(files, transform_file, output_dir, as_uint8, pixel_size, clip)
 
 
 def transform_runner(
@@ -1150,6 +1152,7 @@ def transform_runner(
     output_dir: str,
     as_uint8: bool | None = None,
     pixel_size: float | None = None,
+    clip: str = "ignore",
 ) -> None:
     """Apply transformation."""
     from image2image_reg.workflows.transform import transform_elastix
@@ -1160,9 +1163,10 @@ def transform_runner(
         Parameter("Output directory", "-o/--output_dir", output_dir),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
         Parameter("Pixel size", "-s/--pixel_size", pixel_size),
+        Parameter("Clip", "--clip", clip),
     )
 
-    transform_elastix(files, transform_file, output_dir, as_uint8=as_uint8, pixel_size=pixel_size)
+    transform_elastix(files, transform_file, output_dir, as_uint8=as_uint8, pixel_size=pixel_size, clip=clip)
 
 
 @click.option(
