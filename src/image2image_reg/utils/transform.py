@@ -139,6 +139,14 @@ def _convert_geojson_to_df(
             data.append([x, y, n, 0, 0, "pt"])
             n_to_prop[n] = feature.get("properties", {})
             n += 1
+        # convert multi-points
+        elif geometry["type"] == "MultiPoint":
+            for x, y in geometry["coordinates"]:
+                x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)
+                # x, y, index, inner, outer, type
+                data.append([x, y, n, 0, 0, "mpt"])
+            n_to_prop[n] = feature.get("properties", {})
+            n += 1
         # convert polygons
         elif geometry["type"] == "Polygon":
             for outer, ring in enumerate(geometry["coordinates"]):
@@ -183,18 +191,27 @@ def _convert_df_to_geojson(
         if dff["type"].iloc[0] == "pt":
             x_, y_ = _transform_transformed_from_px_to_um(dff.x, dff.y, as_px, target_pixel_size)
             geometry["type"] = "Point"
-            geometry["coordinates"] = [x_[0], y_[0]]
+            geometry["coordinates"] = [round(x_[0], 2), round(y_[0], 2)]
+
+        # multi-point
+        elif dff["type"].iloc[0] == "mpt":
+            geometry["type"] = "MultiPoint"
+            geometry["coordinates"] = []
+            x_, y_ = _transform_transformed_from_px_to_um(dff.x, dff.y, as_px, target_pixel_size)
+            for x, y in zip(x_, y_):
+                geometry["coordinates"].append([round(x, 2), round(y, 2)])
 
         # polygon
         elif dff["type"].iloc[0] == "pg":
             geometry["type"] = "Polygon"
             geometry["coordinates"] = []
-            for _i, row in dff.iterrows():
+
+            for row in dff.itertuples():
                 x_, y_ = _transform_transformed_from_px_to_um(row.x, row.y, as_px, target_pixel_size)
                 # prepare the geometry
                 if row.outer == 0 and len(geometry["coordinates"]) == 0:
                     geometry["coordinates"].append([])
-                geometry["coordinates"][row.outer].append([x_, y_])
+                geometry["coordinates"][row.outer].append([round(x_, 2), round(y_, 2)])
 
         # multi-polygon
         elif dff["type"].iloc[0] == "mp":
@@ -202,11 +219,11 @@ def _convert_df_to_geojson(
             geometry["coordinates"] = []
             while len(geometry["coordinates"]) < dff.outer.max() + 1:
                 geometry["coordinates"].append([])
-            for _i, row in dff.iterrows():
+            for row in dff.itertuples():
                 x_, y_ = _transform_transformed_from_px_to_um(row.x, row.y, as_px, target_pixel_size)
                 while len(geometry["coordinates"][row.outer]) <= row.inner:
                     geometry["coordinates"][row.outer].append([])
-                geometry["coordinates"][row.outer][row.inner].append([x_, y_])
+                geometry["coordinates"][row.outer][row.inner].append([round(x_, 2), round(y_, 2)])
 
         # skip broken geometries
         if not geometry or not geometry.get("coordinates"):
