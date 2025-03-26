@@ -33,6 +33,7 @@ class TransformMixin:
     _itk_transform = None
     _is_linear = None
     _inverse_transform = None
+    inverse: bool = False
 
     def __repr__(self) -> str:
         """Return repr."""
@@ -48,6 +49,11 @@ class TransformMixin:
             if self.resampler is None:
                 raise ValueError("Resampler not built, call `build_resampler` first")
         return self.resampler.Execute(image)  # type: ignore[no-any-return, no-untyped-call]
+
+    def set_inverse(self, inverse: bool) -> None:
+        """Apply inverse transformation."""
+        self.inverse = inverse
+        self._build_resampler(inverse=inverse)
 
     def transform_points(
         self,
@@ -89,6 +95,7 @@ class TransformMixin:
             points = points * source_pixel_size
 
         transformed_points = np.asarray(points, dtype=np.float64)
+        transformer = self.inverse_final_transform if not self.inverse else self.final_transform
         for i, point in enumerate(
             tqdm(
                 transformed_points,
@@ -99,7 +106,7 @@ class TransformMixin:
                 mininterval=1,
             )
         ):
-            transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
+            transformed_points[i] = transformer.TransformPoint(point)  # type: ignore[union-attr]
         if as_px:
             transformed_points = transformed_points * inv_target_pixel_size
         return transformed_points
@@ -133,15 +140,17 @@ class TransformMixin:
         if any(v is None for v in [self.output_origin, self.output_size, self.output_spacing, self.output_direction]):
             raise ValueError("Output parameters not set, call `set_output_params` first")
 
+        interpolator = ELX_TO_ITK_INTERPOLATORS[self.resample_interpolator]
+
         resampler = sitk.ResampleImageFilter()  # type: ignore[no-untyped-call]
         resampler.SetOutputOrigin(self.output_origin)  # type: ignore[no-untyped-call]
         resampler.SetOutputDirection(self.output_direction)  # type: ignore[no-untyped-call]
         resampler.SetSize(self.output_size)  # type: ignore[no-untyped-call]
         resampler.SetOutputSpacing(self.output_spacing)  # type: ignore[no-untyped-call]
-
-        interpolator = ELX_TO_ITK_INTERPOLATORS[self.resample_interpolator]
         resampler.SetInterpolator(interpolator)  # type: ignore[no-untyped-call]
-        resampler.SetTransform(self.final_transform)  # type: ignore[no-untyped-call]
+        resampler.SetTransform(  # type: ignore[no-untyped-call]
+            self.final_transform if not inverse else self.inverse_final_transform,
+        )
         self.resampler = resampler
 
     def compute_inverse_nonlinear(self) -> None:

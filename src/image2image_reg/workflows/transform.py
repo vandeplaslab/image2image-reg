@@ -17,6 +17,7 @@ def transform_elastix(
     tile_size: int = 512,
     clip: str = "ignore",
     pixel_size: float | None = None,
+    inverse: bool = False,
 ) -> list[Path]:
     """Transform files."""
     from image2image_io.readers import get_simple_reader
@@ -27,6 +28,7 @@ def transform_elastix(
 
     # load transformation
     transform_seq = TransformSequence.from_final(transform_file)
+    transform_seq.set_inverse(inverse)
 
     # transform files
     output_dir = Path(output_dir)
