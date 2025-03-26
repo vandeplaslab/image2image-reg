@@ -190,7 +190,7 @@ class Preprocessing(BaseModel):
         if not text.endswith("\n"):
             text += "\n"
         if self.downsample > 1 and not valis:
-            text += f"x{self.downsample} downsample"
+            text += f"x{self.downsample} downsample\n"
             tooltip += f"Downsample: x{self.downsample}\n"
         if self.is_masked():
             text += "masked"

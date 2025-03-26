@@ -740,8 +740,12 @@ def generate_rigid_translation_transform_alt(
     # translation_x_phy, translation_y_phy = translation_x, translation_y
     # c_x, c_y = (image.GetSize()[0] - 1) / 2, (image.GetSize()[1] - 1) / 2
 
-    w = int(math.ceil(max(w - translation_x, bound_w)) * 1)
-    h = int(math.ceil(max(h - translation_y, bound_h)) * 1)
+    # print("X", w, translation_x, bound_w)
+    # print("Y", h, translation_y, bound_h)
+    w = int(math.ceil(w - translation_x) * 1)
+    h = int(math.ceil(h - translation_y) * 1)
+    # w = int(math.ceil(max(w - translation_x, bound_w)) * 1)
+    # h = int(math.ceil(max(h - translation_y, bound_h)) * 1)
 
     tform["Spacing"] = [str(spacing), str(spacing)]
     tform["Size"] = [str(w), str(h)]

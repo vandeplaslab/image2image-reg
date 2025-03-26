@@ -238,6 +238,8 @@ def get_shape(img: np.ndarray) -> np.ndarray:
 
 def prepare_images_for_overlap(images: list[np.ndarray]) -> list[np.ndarray]:
     """Prepare images for overlap."""
+    from koyo.image import clip_hotspots
+
     grey_images = []
     for img in images:
         _, channel_axis, shape = get_shape_of_image(img)
@@ -255,7 +257,8 @@ def prepare_images_for_overlap(images: list[np.ndarray]) -> list[np.ndarray]:
 
     # normalize the images
     for i in range(len(grey_images)):
-        grey_images[i] = exposure.rescale_intensity(grey_images[i], out_range=(0, 1)) * 255
+        grey_image = clip_hotspots(grey_images[i])
+        grey_images[i] = exposure.rescale_intensity(grey_image, out_range=(0, 1)) * 255
     return grey_images
 
 
@@ -298,7 +301,6 @@ def create_overlap_img(images: list[np.ndarray], cmap: np.ndarray | None = None)
 
     blended_img = lab2rgb(blended_img)
     overlap_img = np.asarray(blended_img)
-    # overlap_img = exposure.equalize_adapthist(overlap_img)
     overlap_img = exposure.rescale_intensity(overlap_img, out_range=(0, 255)).astype(np.uint8)
     return overlap_img, grey_images
 

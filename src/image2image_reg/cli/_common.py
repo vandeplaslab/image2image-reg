@@ -17,7 +17,7 @@ if ty.TYPE_CHECKING:
 # declare common options
 ALLOW_EXTRA_ARGS = {"help_option_names": ["-h", "--help"], "ignore_unknown_options": True, "allow_extra_args": True}
 overwrite_ = click.option(
-    "-W",
+    "-O",
     "--overwrite",
     help="Overwrite existing data.",
     is_flag=True,
