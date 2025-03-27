@@ -57,10 +57,11 @@ class TransformSequence(TransformMixin):
         if not self._inverse_transform:
             if self.final_transform is None:
                 raise ValueError("Final transform does not exist yet.")
-            if self.is_linear:
-                self._inverse_transform = self.final_transform.GetInverse()  # type: ignore[no-untyped-call]
-            else:
-                self._inverse_transform = self.compute_inverse_nonlinear()
+            self._inverse_transform = self._build_inverse_composite_transform()
+            # if self.is_linear:
+            #     self._inverse_transform = self.final_transform.GetInverse()  # type: ignore[no-untyped-call]
+            # else:
+            #     self._inverse_transform = self.compute_inverse_nonlinear()
         return self._inverse_transform
 
     def add_transforms(
