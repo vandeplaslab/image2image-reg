@@ -50,6 +50,18 @@ class TransformSequence(TransformMixin):
         """Final ITK transform."""
         return self.composite_transform
 
+    @property
+    def inverse_transform(self) -> sitk.Transform:
+        """Compute inverse transform."""
+        if not self._inverse_transform:
+            if self.final_transform is None:
+                raise ValueError("Final transform does not exist yet.")
+            if not self.is_linear:
+                self._inverse_transform = self.compute_inverse_nonlinear()
+            else:
+                self._inverse_transform = self.final_transform.GetInverse()  # type: ignore[no-untyped-call]
+        return self._inverse_transform
+
     def add_transforms(
         self,
         transforms: str | Path | list[dict[str, list[str]]] | Transform | list[Transform] | None,

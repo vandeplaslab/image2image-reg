@@ -31,13 +31,13 @@ class TransformMixin:
     output_spacing: tuple[float, float] | None = None
     output_direction: tuple[float, float] | None = None
     resample_interpolator: str = "FinalNearestNeighborInterpolator"
-    final_transform: sitk.Transform | None = None
-    inverse_transform: sitk.Transform | None = None
     transforms: list[Transform]
+    final_transform: sitk.Transform | None = None
+    _inverse_transform: sitk.Transform | None = None
 
+    itk_transform: sitk.Transform
     _itk_transform = None
     _is_linear = None
-    _inverse_transform = None
     inverse: bool = False
 
     def __repr__(self) -> str:
@@ -96,31 +96,30 @@ class TransformMixin:
         target_pixel_size = self.output_spacing[0]
         inv_target_pixel_size = 1 / target_pixel_size
         # convert from px to um by multiplying by the pixel size
-        if is_px:
-            points = points * source_pixel_size
-
         transformed_points = np.asarray(points, dtype=np.float64)
-        # transformer = self.inverse_final_transform if not self.inverse else self.final_transform
-        for i in tqdm(
-            range(len(transformed_points)),
-            desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
-            f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
-            leave=False,
-            disable=silent,
-            mininterval=1,
-        ):
-            transformed_points[i] = self.inverse_final_transform.TransformPoint(transformed_points[i])
-        # for i, point in enumerate(
-        #     tqdm(
-        #         transformed_points,
+        if is_px:
+            transformed_points = transformed_points * source_pixel_size
+
+        # for i in tqdm(
+        #         range(len(transformed_points)),
         #         desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
-        #         f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
+        #              f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
         #         leave=False,
         #         disable=silent,
         #         mininterval=1,
-        #     )
         # ):
-        #     transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
+        #     transformed_points[i] = transformer.TransformPoint(transformed_points[i])
+        for i, point in enumerate(
+            tqdm(
+                transformed_points,
+                desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
+                f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
+                leave=False,
+                disable=silent,
+                mininterval=1,
+            )
+        ):
+            transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
         # transformed_points[i] = transformer.TransformPoint(point)  # type: ignore[union-attr]
         if as_px:
             transformed_points = transformed_points * inv_target_pixel_size
@@ -139,14 +138,12 @@ class TransformMixin:
     @property
     def inverse_final_transform(self) -> sitk.Transform:
         """Return inverse final transform."""
-        if not self.inverse_transform:
-            if self.final_transform is None:
-                raise ValueError("Final transform does not exist yet.")
-            if not self.is_linear:
-                self.compute_inverse_nonlinear()
-            else:
-                self.inverse_transform = self.final_transform.GetInverse()  # type: ignore[no-untyped-call]
         return self.inverse_transform
+
+    @property
+    def inverse_transform(self) -> sitk.Transform:
+        """Return inverse transform."""
+        raise NotImplementedError("Must implement method")
 
     def _build_resampler(self, inverse: bool = False) -> None:
         """Build resampler."""
@@ -179,7 +176,7 @@ class TransformMixin:
 
             displacement_field = tform_to_disp_field.Execute(self.final_transform)  # type: ignore[no-untyped-call]
             displacement_field = sitk.InvertDisplacementField(displacement_field)  # type: ignore[no-untyped-call]
-            self.inverse_transform = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
+            displacement_field = sitk.DisplacementFieldTransform(displacement_field)  # type: ignore[no-untyped-call]
         logger.trace(f"Computed inverse transform of {self} in {timer()}")
         return displacement_field
 
@@ -316,11 +313,6 @@ class Transform(TransformMixin):
         return self._itk_transform
 
     @property
-    def final_transform(self) -> sitk.Transform:  # type: ignore[override]
-        """Return final transform."""
-        return self.itk_transform
-
-    @property
     def is_linear(self) -> bool:
         """Check if transform is linear."""
         if self._is_linear is None:
@@ -332,24 +324,30 @@ class Transform(TransformMixin):
         self._is_linear = value
 
     @property
+    def final_transform(self) -> sitk.Transform:  # type: ignore[override]
+        """Return final transform."""
+        return self.itk_transform
+
+    def compute_inverse_linear(self) -> sitk.Transform:
+        """Compute the inverse of a linear transform using ITK."""
+        inverse_transform = self.itk_transform.GetInverse()
+        transform_name = self.itk_transform.GetName()
+        if transform_name == "Euler2DTransform":
+            self._inverse_transform = sitk.Euler2DTransform(inverse_transform)
+        elif transform_name == "AffineTransform":
+            self._inverse_transform = sitk.AffineTransform(inverse_transform)
+        elif transform_name == "Similarity2DTransform":
+            self._inverse_transform = sitk.Similarity2DTransform(inverse_transform)
+        return inverse_transform
+
+    @property
     def inverse_transform(self) -> sitk.Transform | None:
         """Get inverse transform."""
         if self.is_linear:
-            self._inverse_transform = self.itk_transform.GetInverse()
-            transform_name = self.itk_transform.GetName()
-            if transform_name == "Euler2DTransform":
-                self._inverse_transform = sitk.Euler2DTransform(self._inverse_transform)
-            elif transform_name == "AffineTransform":
-                self._inverse_transform = sitk.AffineTransform(self._inverse_transform)
-            elif transform_name == "Similarity2DTransform":
-                self._inverse_transform = sitk.Similarity2DTransform(self._inverse_transform)
+            self._inverse_transform = self.compute_inverse_linear()
         else:
-            self._inverse_transform = None
+            self._inverse_transform = self.compute_inverse_nonlinear()
         return self._inverse_transform
-
-    @inverse_transform.setter
-    def inverse_transform(self, value: sitk.Transform | None) -> None:
-        self._inverse_transform = value
 
     def to_dict(self) -> dict:
         """Convert transformation to dictionary."""
