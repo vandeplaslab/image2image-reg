@@ -16,7 +16,14 @@ from image2image_reg.utils.convert import convert_to_itk
 
 def _hash_parameters(elastix_transform: dict) -> str:
     """Hash elastix parameters."""
-    return hash_parameters(n_in_hash=4, **elastix_transform)
+    if elastix_transform["Transform"][0] in [
+        "EulerTransform",
+        "SimilarityTransform",
+        "AffineTransform",
+        "TranslationTransform",
+    ]:
+        return hash_parameters(n_in_hash=4, **elastix_transform)
+    return get_short_hash(n_in_hash=4)
 
 
 class TransformMixin:
@@ -42,10 +49,7 @@ class TransformMixin:
 
     def __repr__(self) -> str:
         """Return repr."""
-        return (
-            f"{self.__class__.__name__}<name={self.name}; n={self.n_transforms}; "
-            f"spacing={self.output_spacing}; size={self.output_size}>"
-        )
+        return f"{self.__class__.__name__}<name={self.name}; spacing={self.output_spacing}; size={self.output_size}>"
 
     def __call__(self, image: sitk.Image) -> sitk.Image:
         """Transform."""
@@ -95,6 +99,7 @@ class TransformMixin:
 
         target_pixel_size = self.output_spacing[0]
         inv_target_pixel_size = 1 / target_pixel_size
+
         # convert from px to um by multiplying by the pixel size
         transformed_points = np.asarray(points, dtype=np.float64)
         if is_px:
@@ -120,7 +125,6 @@ class TransformMixin:
             )
         ):
             transformed_points[i] = self.inverse_final_transform.TransformPoint(point)
-        # transformed_points[i] = transformer.TransformPoint(point)  # type: ignore[union-attr]
         if as_px:
             transformed_points = transformed_points * inv_target_pixel_size
         return transformed_points
@@ -293,7 +297,7 @@ class Transform(TransformMixin):
 
     def __init__(self, elastix_transform: dict):
         self.elastix_transform: dict[str, list[str]] = elastix_transform
-        self._parameter_hash = get_short_hash(n_in_hash=4)
+        self._parameter_hash = _hash_parameters(elastix_transform)
         self.transforms = [self]
 
         self.output_spacing = [float(p) for p in self.elastix_transform["Spacing"]]

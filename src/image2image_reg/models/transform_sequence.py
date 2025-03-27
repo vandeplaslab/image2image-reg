@@ -35,6 +35,7 @@ class TransformSequence(TransformMixin):
         self.resampler: sitk.ResampleImageFilter | None = None
         self.transform_itk_order: list[Transform] = []
         self._composite_transform = None
+        self._inverse_composite_transform = None
         self._n_transforms = 0
 
         self.add_transforms(transforms, transform_sequence_index=transform_sequence_index)
@@ -56,10 +57,10 @@ class TransformSequence(TransformMixin):
         if not self._inverse_transform:
             if self.final_transform is None:
                 raise ValueError("Final transform does not exist yet.")
-            if not self.is_linear:
-                self._inverse_transform = self.compute_inverse_nonlinear()
-            else:
+            if self.is_linear:
                 self._inverse_transform = self.final_transform.GetInverse()  # type: ignore[no-untyped-call]
+            else:
+                self._inverse_transform = self.compute_inverse_nonlinear()
         return self._inverse_transform
 
     def add_transforms(
@@ -169,6 +170,51 @@ class TransformSequence(TransformMixin):
             composite_transform.AddTransform(transform.itk_transform)  # type: ignore[no-untyped-call]
         self.composite_transform = composite_transform
         self.transform_itk_order = [self.transforms[i] for i in composite_index]
+
+    def _build_inverse_composite_transform(self) -> sitk.CompositeTransform:
+        """Build inverse composite transform."""
+
+        def _invert_bspline_transform(tx, output_size, output_origin, output_spacing, output_direction):
+            displacement_field_image = sitk.TransformToDisplacementField(
+                tx, sitk.sitkVectorFloat64, output_size, output_origin, output_spacing, output_direction
+            )
+            return _invert_displacement_field_image(displacement_field_image)
+
+        def _invert_displacement_field_transform(tx):
+            return _invert_displacement_field_image(sitk.DisplacementFieldTransform(tx).GetDisplacementField())
+
+        def _invert_displacement_field_image(displacement_field_image):
+            # SimpleITK supports three different filters for inverting a displacement field
+            # arbitrary selection used with default values
+            return sitk.DisplacementFieldTransform(sitk.InvertDisplacementField(displacement_field_image))
+
+        if self._inverse_composite_transform is None:
+            #     composite_transform = sitk.CompositeTransform(2)
+            #     for transform in reversed(self.transforms):
+            #         composite_transform.AddTransform(transform.inverse_transform)
+            #     self._inverse_composite_transform = composite_transform
+            # return self._inverse_composite_transform
+            inverted_transform_list = []
+            # for transform in self.transforms:
+            for transform in reversed(self.transforms):
+                tx = transform.itk_transform
+                ttype = tx.GetTransformEnum()
+                if ttype is sitk.sitkDisplacementField:
+                    inverted_transform_list.append(_invert_displacement_field_transform(tx))
+                elif ttype is sitk.sitkBSplineTransform:
+                    inverted_transform_list.append(
+                        _invert_bspline_transform(
+                            tx,
+                            transform.output_size,
+                            transform.output_origin,
+                            transform.output_spacing,
+                            transform.output_direction,
+                        )
+                    )
+                else:
+                    inverted_transform_list.append(tx.GetInverse())
+            self._inverse_composite_transform = sitk.CompositeTransform(inverted_transform_list)
+        return self._inverse_composite_transform
 
     def append(self, other: TransformSequence) -> None:
         """Concatenate transformation sequences."""
