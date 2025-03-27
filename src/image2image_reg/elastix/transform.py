@@ -114,6 +114,7 @@ def transform_points_as_image(
     transformed_x, transformed_y, failed_mask = _cleanup_transform_coordinate_image(
         image_of_index_transformed, index_of_coords
     )
+
     # indices = indices[failed_indices]
     n_failed = failed_mask.sum()
     failed_indices = indices[failed_mask]
@@ -182,7 +183,7 @@ def _transform_coordinate_image(
     import SimpleITK as sitk
 
     # set output spacing
-    # seq.set_output_spacing((scale[0] / MULTIPLIER, scale[1] / MULTIPLIER))
+    seq.set_output_spacing((0.163, 0.163))
 
     image_of_index = sitk.GetImageFromArray(image_of_index)
     image_of_index.SetSpacing((scale[0] / MULTIPLIER, scale[1] / MULTIPLIER))

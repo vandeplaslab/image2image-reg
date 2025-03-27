@@ -1456,6 +1456,7 @@ class ElastixReg(Workflow):
                                 output_path,
                                 silent=False,
                                 as_image=False,  # not transform_sequence.is_linear,
+                                # as_image=not transform_seq.is_linear,
                                 image_shape=image_shape,
                                 clip=clip,
                             )
