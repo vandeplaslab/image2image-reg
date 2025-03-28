@@ -5,8 +5,8 @@ from __future__ import annotations
 import typing as ty
 
 if ty.TYPE_CHECKING:
+    from image2image_reg.elastix.transform_sequence import TransformSequence
     from image2image_reg.models import Preprocessing
-    from image2image_reg.elastix.transform_sequence import  TransformSequence
 
 
 class TransformPair(ty.TypedDict):

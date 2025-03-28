@@ -39,7 +39,7 @@ class Modality(BaseModel):
     @field_validator("output_pixel_size", mode="before")
     @classmethod
     def _validate_output_pixel_size(cls, value) -> ty.Optional[tuple[float, float]]:
-        if isinstance(value, tuple):
+        if isinstance(value, (tuple, list)):
             if len(value) != 2:
                 raise ValueError("output_pixel_size should be a tuple of 2 floats")
             return float(value[0]), float(value[1])
@@ -49,7 +49,7 @@ class Modality(BaseModel):
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Convert to dict."""
-        data = self.dict(exclude_none=True, exclude_defaults=False)
+        data = self.model_dump(exclude_none=True, exclude_defaults=False)
         if data.get("preprocessing"):
             if isinstance(data["preprocessing"], Preprocessing):
                 data["preprocessing"] = data["preprocessing"].to_dict(as_wsireg)
@@ -63,6 +63,7 @@ class Modality(BaseModel):
                 data["export"] = data["export"].to_dict()
         if isinstance(data["path"], ArrayLike):
             data["path"] = "ArrayLike"
+
         # if export for wsireg, let's remove all extra components and rename few attributes
         if as_wsireg:
             if data.get("path"):

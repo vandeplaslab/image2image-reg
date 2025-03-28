@@ -267,12 +267,14 @@ class ImageWrapper:
         mask: sitk.Image
             Mask image with spacing/size of `reg_image`
         """
+        pixel_size = self.modality.pixel_size
         if isinstance(mask, np.ndarray):
             mask = sitk.GetImageFromArray(mask)
             logger.trace(f"Loaded mask from array for {self.modality.name}")
         elif isinstance(mask, (str, Path)):
             if Path(mask).suffix.lower() == ".geojson":
                 image_shape = self.reader.image_shape
+                # pixel_size = self.reader.resolution
                 mask_shapes = ShapesReader(mask)
                 mask = mask_shapes.to_mask_alt(image_shape[::-1], with_index=False)
                 mask = sitk.GetImageFromArray(mask)
@@ -285,7 +287,7 @@ class ImageWrapper:
             logger.trace(f"Loaded mask from image for {self.modality.name}")
         else:
             raise ValueError(f"Unknown mask type: {type(mask)}")
-        mask.SetSpacing((self.modality.pixel_size, self.modality.pixel_size))  # type: ignore[no-untyped-call]
+        mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
         return mask
 
     def make_bbox_mask(

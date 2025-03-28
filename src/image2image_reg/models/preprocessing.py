@@ -142,7 +142,7 @@ class Preprocessing(BaseModel):
     def to_valis(self) -> tuple[str, dict]:
         """Return valis."""
         if self.method == "I2RegPreprocessor":
-            return self.method, self.dict()
+            return self.method, self.model_dump()
         elif self.method == "ColorfulStandardizer":
             return "ColorfulStandardizer", {"c": 0.2, "h": 0}
         elif self.method in ["mip", "MaxIntensityProjection"]:
@@ -213,7 +213,7 @@ class Preprocessing(BaseModel):
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Return dict."""
-        data = self.dict(exclude_none=True, exclude_defaults=True)
+        data = self.model_dump(exclude_none=True, exclude_defaults=True)
         if data.get("affine"):
             data["affine"] = data["affine"].tolist()
         if data.get("crop_bbox") and hasattr(data["crop_bbox"], "to_dict"):
@@ -256,7 +256,7 @@ class Preprocessing(BaseModel):
 
     def update_from_another(self, preprocessing: "Preprocessing") -> "Preprocessing":
         """Update from another preprocessing."""
-        for key, value in preprocessing.dict().items():
+        for key, value in preprocessing.model_dump().items():
             if value is not None:
                 setattr(self, key, value)
         return self
@@ -478,9 +478,9 @@ class Preprocessing(BaseModel):
             v = v % 360
         return v
 
-    def dict(self, **kwargs: ty.Any) -> dict:
+    def model_dump(self, **kwargs: ty.Any) -> dict:
         """Convert to dict."""
-        output = super().dict(**kwargs)
+        output = super().model_dump(**kwargs)
         for k, v in output.items():
             if isinstance(v, Enum):
                 output[k] = v.value

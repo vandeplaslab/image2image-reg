@@ -188,13 +188,20 @@ class TransformMixin:
         logger.trace(f"Computed inverse transform of {self} in {timer()}")
         return displacement_field
 
-    def set_output_size(self, new_size: tuple[int, int]) -> None:
+    def set_output_size(self, output_size: tuple[int, int]) -> None:
         """Set output size."""
-        self.output_size = new_size
+        self.output_size = output_size
+        if hasattr(self, "elastix_transform"):
+            self.elastix_transform["Size"] = [str(i) for i in output_size]
+        else:
+            self.transforms[-1].elastix_transform["Size"] = [str(i) for i in output_size]
         self._build_resampler()
 
     def set_output_spacing(
-        self, spacing: tuple[float, float] | tuple[int, int], output_size: tuple[int, int] | None = None
+        self,
+        spacing: tuple[float, float] | tuple[int, int],
+        output_size: tuple[int, int] | None = None,
+        original_size: tuple[int, int] | None = None,
     ) -> None:
         """Method that allows setting the output spacing of the resampler to resampled to any pixel spacing desired.
 
@@ -206,14 +213,26 @@ class TransformMixin:
             Spacing to set the new image. Will also change the output size to match.
         output_size: tuple of int
             Size of the output image. If None, will be calculated from the output_spacing
+        original_size: tuple of int
+            Original size of the image before registration. Used to scale the output_size to the original image size
         """
         if output_size is None:
             output_size_scaling = np.asarray(self.output_spacing) / np.asarray(spacing)
-            new_size = np.ceil(np.multiply(self.output_size, output_size_scaling))
+            new_size = np.ceil(
+                np.multiply(original_size if original_size is not None else self.output_size, output_size_scaling)
+            )
             output_size: tuple[int, int] = tuple([int(i) for i in new_size])  # type: ignore[no-redef]
 
         self.output_spacing = spacing
         self.output_size = output_size
+        # update itk data
+        if hasattr(self, "elastix_transform"):
+            self.elastix_transform["Spacing"] = [str(i) for i in spacing]
+            self.elastix_transform["Size"] = [str(i) for i in output_size]
+        else:
+            self.transforms[-1].elastix_transform["Spacing"] = [str(i) for i in spacing]
+            self.transforms[-1].elastix_transform["Size"] = [str(i) for i in output_size]
+        logger.trace(f"Updated output spacing and size of {self}")
         self._build_resampler()
 
     def as_array(
@@ -392,7 +411,10 @@ class TransformSequence(TransformMixin):
     def __repr__(self) -> str:
         """Return repr."""
         seq = " > ".join([t.name for t in self.transforms])
-        rep = f"{self.__class__.__name__}(name={self.name}; n={self.n_transforms}; seq={seq})"
+        rep = (
+            f"{self.__class__.__name__}<name={self.name}; n={self.n_transforms}; spacing={self.output_spacing}; "
+            f"size={self.output_size}; seq={seq}>"
+        )
         return rep
 
     @property

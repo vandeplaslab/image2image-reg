@@ -848,7 +848,7 @@ def wsireg_transforms_to_itk_composite(parameter_data):
     return composite_tform, reg_transforms
 
 
-def prepare_wsireg_transform_data(transform_data: str | dict | None):
+def prepare_wsireg_transform_data(transform_data: str | dict | None) -> tuple:
     """Prepare WsiReg transform data."""
     if isinstance(transform_data, str):
         transform_data = json_to_pmap_dict(transform_data)
@@ -865,9 +865,9 @@ def prepare_wsireg_transform_data(transform_data: str | dict | None):
 def identity_elx_transform(
     image_size: tuple[int, int],
     image_spacing: tuple[int, int] | tuple[float, float],
-):
+) -> dict:
     """Create identity elastix transform."""
-    identity = BASE_RIGID_TRANSFORM
+    identity = deepcopy(BASE_RIGID_TRANSFORM)
     identity.update({"Size": [str(i) for i in image_size]})
     identity.update({"Spacing": [str(i) for i in image_spacing]})
     return identity

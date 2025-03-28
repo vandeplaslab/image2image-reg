@@ -13,9 +13,6 @@ from image2image_io.utils.utilities import guess_rgb
 from koyo.timer import MeasureTimer
 from loguru import logger
 
-from image2image_reg.enums import ImageType
-from image2image_reg.models import Preprocessing
-from image2image_reg.models.bbox import BoundingBox
 from image2image_reg.elastix.transform_utils import (
     affine_to_itk_affine,
     generate_affine_flip_transform,
@@ -26,6 +23,9 @@ from image2image_reg.elastix.transform_utils import (
     prepare_wsireg_transform_data,
     transform_plane,
 )
+from image2image_reg.enums import ImageType
+from image2image_reg.models import Preprocessing
+from image2image_reg.models.bbox import BoundingBox
 
 
 def get_channel_indices_from_names(channel_names: list[str], channel_names_to_select: list[str]) -> list[int]:

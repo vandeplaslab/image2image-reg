@@ -1274,6 +1274,7 @@ class ElastixReg(Workflow):
         if not self.is_registered:
             return
 
+        self.load_preprocessed_cache()
         reg_modality_list, not_reg_modality_list, merge_modalities = self._get_modalities_to_transform()
         if write_registered and reg_modality_list:
             for modality in reg_modality_list:
@@ -1636,20 +1637,15 @@ class ElastixReg(Workflow):
         rename: bool = False,
     ) -> tuple[Modality, TransformSequence, Path]:
         final_modality_key = self.registration_paths[edge_key][-1]
-        transformations = copy(self.transformations[edge_key]["full-transform-seq"])
+        transform_seq = copy(self.transformations[edge_key]["full-transform-seq"])
 
         # modality_key = None
         preprocessing_modality = self.modalities[edge_key]
         if attachment and attachment_modality:
-            # modality_key = copy(edge_key)
             edge_key = attachment_modality.name
-
         modality = self.modalities[edge_key]
-        if rename:
-            filename = make_new_name(edge_key, final_modality_key, suffix="")
-        else:
-            filename = Path(modality.path).name
-        output_path = self.image_dir / filename
+        # get filename
+        filename = make_new_name(edge_key, final_modality_key, suffix="") if rename else Path(modality.path).name
 
         # handle original size
         if self.original_size_transforms.get(final_modality_key) and to_original_size:
@@ -1658,22 +1654,22 @@ class ElastixReg(Workflow):
             if isinstance(original_size_transform, list):
                 original_size_transform = original_size_transform[0]
             orig_size_rt = TransformSequence(Transform(original_size_transform), transform_sequence_index=[0])
-            transformations.append(orig_size_rt)
+            transform_seq.append(orig_size_rt)
 
         # handle downsampling
         if preprocessing_modality.preprocessing and preprocessing_modality.preprocessing.downsample > 1:
             if preprocessing_modality.output_pixel_size:
-                transformations.set_output_spacing(preprocessing_modality.output_pixel_size)
+                transform_seq.set_output_spacing(preprocessing_modality.output_pixel_size)
             else:
-                output_spacing_target = self.modalities[final_modality_key].pixel_size
-                transformations.set_output_spacing((output_spacing_target, output_spacing_target))
+                output_spacing_target = self.preprocessed_cache["image_spacing"][final_modality_key]
+                transform_seq.set_output_spacing(output_spacing_target)
         elif preprocessing_modality.output_pixel_size:
-            transformations.set_output_spacing(preprocessing_modality.output_pixel_size)
+            transform_seq.set_output_spacing(preprocessing_modality.output_pixel_size)
 
         # handle attachment
         if attachment:  # and modality_key:
             modality = attachment_modality
-        return modality, transformations, output_path
+        return modality, transform_seq, self.image_dir / filename
 
     def _prepare_not_registered_transform(
         self,
@@ -1689,20 +1685,17 @@ class ElastixReg(Workflow):
         logger.trace(f"Preparing transforms for non-registered modality : {modality_key} ")
 
         modality = self.modalities[modality_key]
-        if rename:
-            filename = f"{modality_key}_registered"
-        else:
-            filename = Path(modality.path).name
-        output_path = self.image_dir / filename
+        filename = f"{modality_key}_registered" if rename else Path(modality.path).name
 
-        transformations = None
+        transform_seq = None
+        # handle any spatial pre-processing
         if modality.preprocessing and (
             modality.preprocessing.rotate_counter_clockwise != 0
             or modality.preprocessing.flip
             or modality.preprocessing.translate_x != 0
             or modality.preprocessing.translate_y != 0
-            or modality.is_cropped()
             or modality.preprocessing.affine is not None
+            or modality.is_cropped()
         ):
             initial_transform = ImageWrapper.load_initial_transform(modality, self.cache_dir)
             original_size_transform = None
@@ -1711,7 +1704,7 @@ class ElastixReg(Workflow):
                 self.original_size_transforms[modality_key] = original_size_transform
 
             if initial_transform:
-                transformations = TransformSequence(
+                transform_seq = TransformSequence(
                     [Transform(t) for t in initial_transform],
                     transform_sequence_index=list(range(len(initial_transform))),
                 )
@@ -1720,32 +1713,31 @@ class ElastixReg(Workflow):
                     [Transform(t) for t in original_size_transform],
                     transform_sequence_index=list(range(len(original_size_transform))),
                 )
-                if transformations:
-                    transformations.append(original_size_transform_seq)
+                if transform_seq:
+                    transform_seq.append(original_size_transform_seq)
                 else:
-                    transformations = original_size_transform_seq
+                    transform_seq = original_size_transform_seq
 
         # handle original
         if to_original_size and self.original_size_transforms.get(modality_key, None):
             o_size_tform = self.original_size_transforms[modality_key]
             if isinstance(o_size_tform, list):
                 o_size_tform = o_size_tform[0]
-
             original_size_transform_seq = TransformSequence(Transform(o_size_tform), transform_sequence_index=[0])
-            if transformations:
-                transformations.append(original_size_transform_seq)
+            if transform_seq:
+                transform_seq.append(original_size_transform_seq)
             else:
-                transformations = original_size_transform_seq
+                transform_seq = original_size_transform_seq
 
-        # handle downsampling
-        if modality.preprocessing and modality.preprocessing.downsample > 1 and transformations:
+        # handle down-sampling
+        if modality.preprocessing and modality.preprocessing.downsample > 1 and transform_seq:
             if not modality.output_pixel_size:
-                output_spacing_target = modality.pixel_size
-                transformations.set_output_spacing((output_spacing_target, output_spacing_target))
+                output_spacing_target = self.preprocessed_cache["image_spacing"][modality.name]
+                transform_seq.set_output_spacing(output_spacing_target)
             else:
-                transformations.set_output_spacing(modality.output_pixel_size)
-        elif modality.preprocessing and modality.preprocessing.downsample > 1 and not transformations:
-            transformations = TransformSequence(
+                transform_seq.set_output_spacing(modality.output_pixel_size)
+        elif modality.preprocessing and modality.preprocessing.downsample > 1 and not transform_seq:
+            transform_seq = TransformSequence(
                 [
                     Transform(
                         identity_elx_transform(
@@ -1756,21 +1748,32 @@ class ElastixReg(Workflow):
                 ],
                 transform_sequence_index=[0],
             )
+            output_pixel_size = (
+                self.preprocessed_cache["image_spacing"][modality.name]
+                if not modality.output_pixel_size
+                else modality.output_pixel_size
+            )
+            transform_seq.set_output_spacing(output_pixel_size)
+        # handle resampling
+        if not transform_seq and modality.output_pixel_size:
+            transform_seq = TransformSequence(
+                [
+                    Transform(
+                        identity_elx_transform(
+                            self.preprocessed_cache["image_sizes"][modality_key],
+                            self.preprocessed_cache["image_spacing"][modality_key],
+                        )
+                    )
+                ],
+                transform_sequence_index=[0],
+            )
+            transform_seq.set_output_spacing(modality.output_pixel_size)
 
-            if not modality.output_pixel_size:
-                output_spacing_target = modality.pixel_size
-                transformations.set_output_spacing((output_spacing_target, output_spacing_target))
-            else:
-                transformations.set_output_spacing(modality.output_pixel_size)
         # handle attachment
         if attachment and attachment_modality:
             modality = attachment_modality
-            if rename:
-                filename = f"{attachment_modality.name}_registered"
-            else:
-                filename = Path(modality.path).name
-            output_path = self.image_dir / filename
-        return modality, transformations, output_path
+            filename = f"{attachment_modality.name}_registered" if rename else Path(modality.path).name
+        return modality, transform_seq, self.image_dir / filename
 
     def _transform_write_image(
         self,
