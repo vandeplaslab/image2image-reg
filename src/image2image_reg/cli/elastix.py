@@ -55,7 +55,7 @@ final_ = click.option(
     "--final/--no_final",
     help="Export final transformations (include all pre-processing and post-processing transformations).",
     is_flag=True,
-    default=True,
+    default=False,
     show_default=True,
 )
 

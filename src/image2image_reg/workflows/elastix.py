@@ -1632,6 +1632,7 @@ class ElastixReg(Workflow):
         transformations = copy(self.transformations[edge_key]["full-transform-seq"])
 
         # modality_key = None
+        preprocessing_modality = self.modalities[edge_key]
         if attachment and attachment_modality:
             # modality_key = copy(edge_key)
             edge_key = attachment_modality.name
@@ -1653,14 +1654,14 @@ class ElastixReg(Workflow):
             transformations.append(orig_size_rt)
 
         # handle downsampling
-        if modality.preprocessing and modality.preprocessing.downsample > 1:
-            if modality.output_pixel_size:
-                transformations.set_output_spacing(modality.output_pixel_size)
+        if preprocessing_modality.preprocessing and preprocessing_modality.preprocessing.downsample > 1:
+            if preprocessing_modality.output_pixel_size:
+                transformations.set_output_spacing(preprocessing_modality.output_pixel_size)
             else:
                 output_spacing_target = self.modalities[final_modality_key].pixel_size
                 transformations.set_output_spacing((output_spacing_target, output_spacing_target))
-        elif modality.output_pixel_size:
-            transformations.set_output_spacing(modality.output_pixel_size)
+        elif preprocessing_modality.output_pixel_size:
+            transformations.set_output_spacing(preprocessing_modality.output_pixel_size)
 
         # handle attachment
         if attachment:  # and modality_key:
