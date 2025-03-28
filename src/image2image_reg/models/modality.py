@@ -6,7 +6,7 @@ import dask.array as da
 import numpy as np
 import zarr
 from koyo.typing import PathLike
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from image2image_reg.enums import ArrayLike
 from image2image_reg.models.export import Export
@@ -35,6 +35,17 @@ class Modality(BaseModel):
     pixel_size: float = 1.0
     output_pixel_size: ty.Optional[tuple[float, float]] = None
     reader_kws: ty.Optional[dict[str, ty.Any]] = Field(None)
+
+    @field_validator("output_pixel_size", mode="before")
+    @classmethod
+    def _validate_output_pixel_size(cls, value) -> ty.Optional[tuple[float, float]]:
+        if isinstance(value, tuple):
+            if len(value) != 2:
+                raise ValueError("output_pixel_size should be a tuple of 2 floats")
+            return float(value[0]), float(value[1])
+        if isinstance(value, (int, float)):
+            return float(value), float(value)
+        return None
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Convert to dict."""
