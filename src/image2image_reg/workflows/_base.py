@@ -435,6 +435,27 @@ class Workflow:
                     break
         # remove registration paths
         if modality:
+            # remove attached images
+            to_remove_attachment = []
+            for attached, attach_to in self.attachment_images.items():
+                if attach_to == modality.name:
+                    self.remove_modality(name=attached, path=path)
+                    to_remove_attachment.append(attached)
+            [self.attachment_images.pop(name) for name in to_remove_attachment]
+            # remove attached shapes
+            to_remove_shapes = []
+            for name, shapes_dict in self.attachment_shapes.items():
+                if shapes_dict["attach_to"] == modality.name:
+                    to_remove_shapes.append(name)
+            [self.attachment_shapes.pop(name) for name in to_remove_shapes]
+            # remove attached points
+            to_remove_points = []
+            for name, points_dict in self.attachment_points.items():
+                if points_dict["attach_to"] == modality.name:
+                    to_remove_points.append(name)
+            [self.attachment_points.pop(name) for name in to_remove_points]
+
+            # sub-models handle this
             self._remove_modality(modality)
         if not modality:
             logger.warning("Could not find modality to remove.")

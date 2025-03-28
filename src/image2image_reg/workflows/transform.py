@@ -24,7 +24,7 @@ def transform_elastix(
     from image2image_io.writers import OmeTiffWriter
 
     from image2image_reg.elastix.transform import transform_attached_point, transform_attached_shape
-    from image2image_reg.models.transform_sequence import TransformSequence
+    from image2image_reg.elastix.transform_sequence import TransformSequence
 
     # load transformation
     transform_seq = TransformSequence.from_final(transform_file)

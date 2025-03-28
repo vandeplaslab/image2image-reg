@@ -11,8 +11,8 @@ from koyo.utilities import random_chunks
 from loguru import logger
 from tqdm import tqdm
 
-from image2image_reg.models import TransformSequence
-from image2image_reg.utils.transform import (
+from image2image_reg.elastix.transform_sequence import TransformSequence
+from image2image_reg.utils.transform_utils import (
     MULTIPLIER,
     ClipFunc,
     _cleanup_transform_coordinate_image,

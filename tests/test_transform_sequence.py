@@ -1,5 +1,5 @@
 """Test models/transform_sequence.py."""
-from image2image_reg.models import TransformSequence
+from image2image_reg.elastix.transform_sequence import TransformSequence
 from image2image_reg.utils._test import get_test_files
 
 

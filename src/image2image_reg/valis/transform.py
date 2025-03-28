@@ -12,7 +12,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from image2image_reg.enums import ValisCrop, ValisInterpolation
-from image2image_reg.utils.transform import (
+from image2image_reg.utils.transform_utils import (
     _cleanup_transform_coordinate_image,
     _convert_df_to_geojson,
     _convert_geojson_to_df,

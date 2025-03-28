@@ -12,11 +12,11 @@ import itk
 import numpy as np
 import SimpleITK as sitk
 
+from image2image_reg.elastix.registration_utils import json_to_pmap_dict
+from image2image_reg.elastix.transform_sequence import Transform
+from image2image_reg.elastix.transformation_map import BASE_AFFINE_TRANSFORM, BASE_RIGID_TRANSFORM
 from image2image_reg.enums import ELX_TO_ITK_INTERPOLATORS
-from image2image_reg.models import Transform
-from image2image_reg.parameters.transformations import BASE_AFFINE_TRANSFORM, BASE_RIGID_TRANSFORM
 from image2image_reg.preprocessing.convert import itk_image_to_sitk_image, sitk_image_to_itk_image
-from image2image_reg.utils.registration import json_to_pmap_dict
 
 
 def resample(
@@ -638,7 +638,6 @@ def generate_rigid_translation_transform_alt3(
     SimpleITK.ParameterMap of rotation transformation (EulerTransform)
     """
     tform = deepcopy(BASE_RIGID_TRANSFORM)
-    1 / spacing
     image.SetSpacing((spacing, spacing))  # type: ignore[no-untyped-call]
     bound_w_px, bound_h_px = compute_rotation_bounds_for_image(image, angle_deg=0)
 

@@ -48,8 +48,8 @@ from image2image_reg.cli._common import (
     write_not_registered_,
     write_registered_,
 )
+from image2image_reg.elastix.registration_map import AVAILABLE_REGISTRATIONS
 from image2image_reg.enums import PreprocessingOptions, PreprocessingOptionsWithNone, WriterMode
-from image2image_reg.parameters.registration import AVAILABLE_REGISTRATIONS
 
 final_ = click.option(
     "--final/--no_final",

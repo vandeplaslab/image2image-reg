@@ -24,8 +24,10 @@ from image2image_reg._typing import (
     SourceTargetPair,
     TransformPair,
 )
+from image2image_reg.elastix.registration import Registration
+from image2image_reg.elastix.transform_sequence import Transform, TransformSequence
 from image2image_reg.enums import WriterMode
-from image2image_reg.models import Modality, Preprocessing, Registration, Transform, TransformSequence
+from image2image_reg.models import Modality, Preprocessing
 from image2image_reg.utils.utilities import make_new_name
 from image2image_reg.workflows._base import Workflow
 
@@ -727,7 +729,11 @@ class ElastixReg(Workflow):
         histogram_match: bool = False,
     ) -> tuple[TransformSequence, TransformSequence | None]:
         """Co-register images."""
-        from image2image_reg.utils.registration import _prepare_reg_models, register_2d_images, sitk_pmap_to_dict
+        from image2image_reg.elastix.registration_utils import (
+            _prepare_reg_models,
+            register_2d_images,
+            sitk_pmap_to_dict,
+        )
 
         with MeasureTimer() as timer:
             logger.trace(f"Co-registering {source_wrapper.name} to {target_wrapper.name} using {parameters}.")
@@ -756,7 +762,7 @@ class ElastixReg(Workflow):
 
     def _generate_figures(self, source: str, target: str, output_dir: Path) -> None:
         """Generate figures."""
-        from image2image_reg.utils.figures import (
+        from image2image_reg.elastix.figures import (
             read_elastix_iteration_dir,
             read_elastix_transform_dir,
             write_iteration_plots,
@@ -826,7 +832,7 @@ class ElastixReg(Workflow):
             if source == name:
                 to_remove_paths.append(source)
             if name in targets:
-                to_remove_nodes.append(source)
+                to_remove_paths.append(source)
         for source in to_remove_paths:
             self.registration_paths.pop(source)
             logger.warning(f"Removed registration path from {source}.")
@@ -1675,7 +1681,7 @@ class ElastixReg(Workflow):
         to_original_size: bool = True,
         rename: bool = False,
     ) -> tuple[Modality, TransformSequence | None, Path]:
-        from image2image_reg.utils.transformation import identity_elx_transform
+        from image2image_reg.elastix.transform_utils import identity_elx_transform
         from image2image_reg.wrapper import ImageWrapper
 
         logger.trace(f"Preparing transforms for non-registered modality : {modality_key} ")

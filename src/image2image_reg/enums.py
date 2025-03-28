@@ -8,7 +8,7 @@ import numpy as np
 import SimpleITK as sitk
 import zarr
 
-from image2image_reg.parameters.registration import AVAILABLE_REGISTRATIONS
+from image2image_reg.elastix.registration_map import AVAILABLE_REGISTRATIONS
 
 
 class ImageType(str, Enum):
