@@ -16,7 +16,7 @@ from loguru import logger
 from image2image_reg.enums import ImageType
 from image2image_reg.models import Preprocessing
 from image2image_reg.models.bbox import BoundingBox
-from image2image_reg.utils.transformation import (
+from image2image_reg.elastix.transform_utils import (
     affine_to_itk_affine,
     generate_affine_flip_transform,
     generate_rigid_original_transform,

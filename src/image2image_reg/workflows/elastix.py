@@ -24,8 +24,10 @@ from image2image_reg._typing import (
     SourceTargetPair,
     TransformPair,
 )
+from image2image_reg.elastix.registration import Registration
+from image2image_reg.elastix.transform_sequence import Transform, TransformSequence
 from image2image_reg.enums import WriterMode
-from image2image_reg.models import Modality, Preprocessing, Registration, Transform, TransformSequence
+from image2image_reg.models import Modality, Preprocessing
 from image2image_reg.utils.utilities import make_new_name
 from image2image_reg.workflows._base import Workflow
 
@@ -727,7 +729,11 @@ class ElastixReg(Workflow):
         histogram_match: bool = False,
     ) -> tuple[TransformSequence, TransformSequence | None]:
         """Co-register images."""
-        from image2image_reg.utils.registration import _prepare_reg_models, register_2d_images, sitk_pmap_to_dict
+        from image2image_reg.elastix.registration_utils import (
+            _prepare_reg_models,
+            register_2d_images,
+            sitk_pmap_to_dict,
+        )
 
         with MeasureTimer() as timer:
             logger.trace(f"Co-registering {source_wrapper.name} to {target_wrapper.name} using {parameters}.")
@@ -756,7 +762,7 @@ class ElastixReg(Workflow):
 
     def _generate_figures(self, source: str, target: str, output_dir: Path) -> None:
         """Generate figures."""
-        from image2image_reg.utils.figures import (
+        from image2image_reg.elastix.figures import (
             read_elastix_iteration_dir,
             read_elastix_transform_dir,
             write_iteration_plots,
@@ -826,7 +832,7 @@ class ElastixReg(Workflow):
             if source == name:
                 to_remove_paths.append(source)
             if name in targets:
-                to_remove_nodes.append(source)
+                to_remove_paths.append(source)
         for source in to_remove_paths:
             self.registration_paths.pop(source)
             logger.warning(f"Removed registration path from {source}.")
@@ -1044,7 +1050,7 @@ class ElastixReg(Workflow):
 
     def _generate_overlap_image(self, pyramid: int = -1, overwrite: bool = False) -> None:
         """Generate overlap of images."""
-        from koyo.visuals import save_rgb
+        from koyo.visuals import save_gray, save_rgb
 
         from image2image_reg.utils.visuals import create_overlap_img
 
@@ -1052,13 +1058,23 @@ class ElastixReg(Workflow):
             logger.warning("Project has not been registered. Cannot generate overlap images.")
             return
 
-        images_from_all = []
-        logger.trace(f"Generating overlap images at pyramid level of {pyramid}")
         # let's iterate through all registration paths
+        logger.trace(f"Generating overlap images at pyramid level of {pyramid}")
+        images_from_all = []
+        name_to_gray = {}
         for source, _target_pair in self.registration_paths.items():
-            images, names = self._generate_overlap_image_for_modality(source, pyramid, overwrite)
-            if images:
-                images_from_all.extend(images)
+            images, greys, names = self._generate_overlap_image_for_modality(source, pyramid, overwrite)
+            images_from_all.extend(images)
+            for name, grey in zip(names, greys):
+                name_to_gray[name] = grey
+
+        # export gray-scale images
+        for name, grey in name_to_gray.items():
+            path = self.overlap_dir / f"grey_{name}.png"
+            if path.exists():
+                continue
+            save_gray(path, grey, multiplier=1)
+            logger.trace(f"Saved greyscale image to '{path}'.")
 
         # also export all images but don't bother if it's a single image
         if len(images_from_all) <= 2:
@@ -1073,21 +1089,20 @@ class ElastixReg(Workflow):
 
     def _generate_overlap_image_for_modality(
         self, source: str, pyramid: int = -1, overwrite: bool = False
-    ) -> tuple[list, list]:
+    ) -> tuple[list, list, list]:
         from image2image_io.utils.utilities import get_shape_of_image
-        from koyo.visuals import save_gray, save_rgb
+        from koyo.visuals import save_rgb
 
         from image2image_reg.elastix.transform import transform_images_for_pyramid
         from image2image_reg.utils.visuals import create_overlap_img
 
+        images, greys, names = [], [], []  # type: ignore[var-annotated]
         target_pair = self.registration_paths[source]
-
-        images, names = [], []
         target, through = (target_pair[-1], target_pair[0]) if len(target_pair) == 2 else (target_pair[0], None)
         path = self.overlap_dir / f"overlap_{source}_to_{target}.png"
         if path.exists() and not overwrite:
             logger.warning(f"Overlap image already exists at '{path}'. Skipping.")
-            return images, names
+            return images, greys, names
 
         with MeasureTimer() as timer:
             target_modality = self.modalities[target]
@@ -1106,6 +1121,17 @@ class ElastixReg(Workflow):
             names.append(target_modality.name)
             logger.trace(f"Previewing overview with {shape} ({pyramid})")
 
+            if through:
+                through_modality = self.modalities[through]
+                through_wrapper = self.get_wrapper(name=through_modality.name)
+                assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
+                _, transformation, _ = self._prepare_transform(through_modality.name)
+                assert transformation is not None, f"Transformation is None for {through_modality.name}"
+                transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+                images.append(transform_images_for_pyramid(through_wrapper, transformation, pyramid))
+                names.append(through_modality.name)
+                logger.trace(f"Transformed {through} in {timer(since_last=True)}")
+
             source_modality = self.modalities[source]
             source_wrapper = self.get_wrapper(name=source_modality.name)
             assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
@@ -1116,32 +1142,13 @@ class ElastixReg(Workflow):
             names.append(source_modality.name)
             logger.trace(f"Transformed {source} in {timer(since_last=True)}")
 
-            if through:
-                through_modality = self.modalities[through]
-                through_wrapper = self.get_wrapper(name=through_modality.name)
-                assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
-                _, transformation, _ = self._prepare_transform(through_modality.name)
-                assert transformation is not None, f"Transformation is None for {through_modality.name}"
-                transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
-                images.insert(1, transform_images_for_pyramid(through_wrapper, transformation, pyramid))
-                names.append(through_modality.name)
-                logger.trace(f"Transformed {through} in {timer(since_last=True)}")
-
             # create overlap images
             overlap, greys = create_overlap_img(images)
 
             # export gray-scale images
             save_rgb(path, overlap)
             logger.trace(f"Saved overlap image to '{path}'.")
-
-            # export gray-scale images
-            for name, grey in zip(names, greys):
-                path = self.overlap_dir / f"grey_{name}.png"
-                if path.exists():
-                    continue
-                save_gray(path, grey, multiplier=1)
-                logger.trace(f"Saved greyscale image to '{path}'.")
-        return images, names
+        return images, greys, names
 
     def write(
         self,
@@ -1676,7 +1683,7 @@ class ElastixReg(Workflow):
         to_original_size: bool = True,
         rename: bool = False,
     ) -> tuple[Modality, TransformSequence | None, Path]:
-        from image2image_reg.utils.transformation import identity_elx_transform
+        from image2image_reg.elastix.transform_utils import identity_elx_transform
         from image2image_reg.wrapper import ImageWrapper
 
         logger.trace(f"Preparing transforms for non-registered modality : {modality_key} ")

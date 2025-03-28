@@ -11,7 +11,7 @@ from koyo.json import read_json_data, write_json_data
 from koyo.timer import MeasureTimer
 from loguru import logger
 
-from image2image_reg.models import Registration
+from image2image_reg.elastix.registration import Registration
 from image2image_reg.preprocessing.convert import itk_image_to_sitk_image
 
 if ty.TYPE_CHECKING:

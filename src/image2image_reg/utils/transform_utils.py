@@ -12,7 +12,7 @@ from loguru import logger
 from tqdm import tqdm
 
 if ty.TYPE_CHECKING:
-    from image2image_reg.models import TransformSequence
+    from image2image_reg.elastix.transform_sequence import TransformSequence
 
 MULTIPLIER = 1
 
