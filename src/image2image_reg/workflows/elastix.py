@@ -1346,24 +1346,24 @@ class ElastixReg(Workflow):
     ) -> list[Path]:
         paths = []
         to_write = []
-        for modality in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
-            image_modality, _, output_path = self._prepare_transform(
-                modality, to_original_size=to_original_size, rename=rename
+        for name in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
+            modality, transform_seq, output_path = self._prepare_transform(
+                name, to_original_size=to_original_size, rename=rename
             )
 
             if _get_with_suffix(output_path, fmt).exists() and not overwrite:
-                logger.trace(f"Skipping {modality} as it already exists. ({output_path})")
+                logger.trace(f"Skipping {name} as it already exists. ({output_path})")
                 continue
-            logger.trace(f"Exporting {modality} to {output_path}... (registered)")
+            logger.trace(f"Exporting {name} to {output_path}... (registered)")
             to_write.append(
                 (
-                    image_modality.name,
-                    None,
+                    modality.name,
+                    transform_seq,
                     output_path,
                     fmt,
                     tile_size,
                     as_uint8,
-                    lambda: (False, None, to_original_size),
+                    # lambda: (False, None, to_original_size),
                 )
             )
         if to_write:
@@ -1391,18 +1391,27 @@ class ElastixReg(Workflow):
         # preprocess and save unregistered nodes
         paths = []
         to_write = []
-        for modality in tqdm(modalities, desc="Exporting not-registered images..."):
+        for name in tqdm(modalities, desc="Exporting not-registered images..."):
             try:
-                image_modality, transformation, output_path = self._prepare_transform(
-                    modality, to_original_size=to_original_size, rename=rename
+                modality, transform_seq, output_path = self._prepare_transform(
+                    name, to_original_size=to_original_size, rename=rename
                 )
                 if _get_with_suffix(output_path, fmt).exists() and not overwrite:
-                    logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
+                    logger.trace(f"Skipping {name} as it already exists ({output_path}).")
                     continue
-                logger.trace(f"Exporting {modality} to {output_path}... (registered)")
-                to_write.append((image_modality, transformation, output_path, fmt, tile_size, as_uint8))
+                logger.trace(f"Exporting {name} to {output_path}... (registered)")
+                to_write.append(
+                    (
+                        modality,
+                        transform_seq,
+                        output_path,
+                        fmt,
+                        tile_size,
+                        as_uint8,
+                    )
+                )
             except KeyError:
-                logger.exception(f"Could not find transformation data for {modality}.")
+                logger.exception(f"Could not find transformation data for {name}.")
         if to_write:
             if n_parallel > 1:
                 with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:

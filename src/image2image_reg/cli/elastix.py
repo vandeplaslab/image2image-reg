@@ -1127,6 +1127,16 @@ def final_runner(
 
 
 @click.option(
+    "-S",
+    "--suffix",
+    help="Suffix appended to the filename.",
+    type=click.STRING,
+    show_default=True,
+    default="_transformed",
+    multiple=False,
+    required=True,
+)
+@click.option(
     "-i/-I",
     "--inverse/--no_inverse",
     help="Apply inverse transformation to the modality.",
@@ -1156,9 +1166,10 @@ def transform(
     pixel_size: float | None,
     clip: str,
     inverse: bool,
+    suffix: str,
 ) -> None:
     """Transform image, mask, points or GeoJSON data using Elastix transformation."""
-    transform_runner(files, transform_file, output_dir, as_uint8, pixel_size, clip, inverse)
+    transform_runner(files, transform_file, output_dir, as_uint8, pixel_size, clip, inverse, suffix)
 
 
 def transform_runner(
@@ -1169,6 +1180,7 @@ def transform_runner(
     pixel_size: float | None = None,
     clip: str = "ignore",
     inverse: bool = False,
+    suffix: str = "_transformed",
 ) -> None:
     """Apply transformation."""
     from image2image_reg.workflows.transform import transform_elastix
@@ -1181,10 +1193,18 @@ def transform_runner(
         Parameter("Pixel size", "-s/--pixel_size", pixel_size),
         Parameter("Clip", "--clip", clip),
         Parameter("Inverse", "-i/--inverse/-I/--no_inverse", inverse),
+        Parameter("Suffix", "-S/--suffix", suffix),
     )
 
     transform_elastix(
-        files, transform_file, output_dir, as_uint8=as_uint8, pixel_size=pixel_size, clip=clip, inverse=inverse
+        files,
+        transform_file,
+        output_dir,
+        as_uint8=as_uint8,
+        pixel_size=pixel_size,
+        clip=clip,
+        inverse=inverse,
+        suffix=suffix,
     )
 
 

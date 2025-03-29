@@ -27,7 +27,7 @@ def _hash_parameters(elastix_transform: dict) -> str:
         "TranslationTransform",
     ]:
         return hash_parameters(n_in_hash=4, **elastix_transform)
-    return get_short_hash(n_in_hash=4)
+    return hash_parameters(n_in_hash=4, exclude_keys=("TransformParameters",), **elastix_transform)
 
 
 class TransformMixin:
@@ -53,7 +53,8 @@ class TransformMixin:
 
     def __repr__(self) -> str:
         """Return repr."""
-        return f"{self.__class__.__name__}<name={self.name}; spacing={self.output_spacing}; size={self.output_size}>"
+        spx, spy = self.output_spacing
+        return f"{self.__class__.__name__}<name={self.name}; spacing=({spx:.4f}, {spy:.4f}); size={self.output_size}>"
 
     def __call__(self, image: sitk.Image) -> sitk.Image:
         """Transform."""
@@ -516,7 +517,7 @@ class TransformSequence(TransformMixin):
             else:
                 composite_index = composite_index + list(in_seq_tform_idx)
 
-        for transform_index in composite_index:
+        for transform_index in sorted(composite_index):
             yield composite_index, transforms[transform_index]
 
     def _update_transform_properties(self) -> None:
@@ -539,6 +540,7 @@ class TransformSequence(TransformMixin):
         composite_index = []
         composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
         for composite_index, transform in self.transform_iterator(transforms, transform_sequence_index):
+            print(composite_index, transform)
             composite_transform.AddTransform(transform.itk_transform)  # type: ignore[no-untyped-call]
         self.composite_transform = composite_transform
         self.transform_itk_order = [self.transforms[i] for i in composite_index]
