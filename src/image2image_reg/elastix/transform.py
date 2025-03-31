@@ -383,9 +383,10 @@ def transform_attached_point(
     if not group_by and clip == "remove":
         clip = "part-remove"
     clip_func = _get_clip_func(transform_sequence, clip, as_px=is_in_px)
-    if group_by and not as_image:
+    need_to_split = len(df[group_by].unique()) != len(df) if group_by else False
+    if (group_by and need_to_split) and not as_image:
         df_transformed = []
-        counter = 0
+        n_removed = 0
         for _group, df_group in tqdm(df.groupby(group_by), desc="Transforming groups", leave=False, mininterval=1):
             df_group_transformed = transform_points_df(
                 transform_sequence,
@@ -404,9 +405,9 @@ def transform_attached_point(
             if len(df_group_transformed) > 0:
                 df_transformed.append(df_group_transformed)
             else:
-                counter += 1
-        if counter > 0:
-            logger.warning(f"Removed {counter:,} groups with no points - {len(df_transformed)} were kept.")
+                n_removed += 1
+        if n_removed > 0:
+            logger.warning(f"Removed {n_removed:,} groups with no points - {len(df_transformed)} were kept.")
         if df_transformed:
             df_transformed = pd.concat(df_transformed)
             df_transformed = remove_invalid_points(df_transformed, group_by)

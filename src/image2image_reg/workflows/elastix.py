@@ -1108,12 +1108,12 @@ class ElastixReg(Workflow):
             target_modality = self.modalities[target]
             target_wrapper = self.get_wrapper(name=target_modality.name)
             assert target_wrapper, f"Could not find wrapper for {target_modality.name}"
-            _, transformation, _ = self._prepare_transform(target_modality.name)
-            if transformation:
+            _, transform_seq, _ = self._prepare_transform(target_modality.name)
+            if transform_seq:
                 shape = target_wrapper.reader.pyramid[pyramid].shape
                 _, _, shape = get_shape_of_image(shape)
-                transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
-            target_image = transform_images_for_pyramid(target_wrapper, transformation, pyramid)
+                transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+            target_image = transform_images_for_pyramid(target_wrapper, transform_seq, pyramid)
             logger.trace(f"Transformed {target} in {timer(since_last=True)}")
             _, _, shape = get_shape_of_image(target_image)
             # TODO: resample to maximum shape e.g. 1000px
@@ -1125,20 +1125,20 @@ class ElastixReg(Workflow):
                 through_modality = self.modalities[through]
                 through_wrapper = self.get_wrapper(name=through_modality.name)
                 assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
-                _, transformation, _ = self._prepare_transform(through_modality.name)
-                assert transformation is not None, f"Transformation is None for {through_modality.name}"
-                transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
-                images.append(transform_images_for_pyramid(through_wrapper, transformation, pyramid))
+                _, transform_seq, _ = self._prepare_transform(through_modality.name)
+                assert transform_seq is not None, f"Transformation is None for {through_modality.name}"
+                transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+                images.append(transform_images_for_pyramid(through_wrapper, transform_seq, pyramid))
                 names.append(through_modality.name)
                 logger.trace(f"Transformed {through} in {timer(since_last=True)}")
 
             source_modality = self.modalities[source]
             source_wrapper = self.get_wrapper(name=source_modality.name)
             assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
-            _, transformation, _ = self._prepare_transform(source_modality.name)
-            assert transformation is not None, f"Transformation is None for {source_modality.name}"
-            transformation.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
-            images.append(transform_images_for_pyramid(source_wrapper, transformation, pyramid))
+            _, transform_seq, _ = self._prepare_transform(source_modality.name)
+            assert transform_seq is not None, f"Transformation is None for {source_modality.name}"
+            transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+            images.append(transform_images_for_pyramid(source_wrapper, transform_seq, pyramid))
             names.append(source_modality.name)
             logger.trace(f"Transformed {source} in {timer(since_last=True)}")
 
@@ -1435,7 +1435,7 @@ class ElastixReg(Workflow):
 
         # export attachment modalities
         with MeasureTimer() as timer:
-            for name, attached_dict in tqdm(self.attachment_shapes.items(), desc="Exporting attachment shapes..."):
+            for _, attached_dict in tqdm(self.attachment_shapes.items(), desc="Exporting attachment shapes..."):
                 attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
                 shape_pixel_size = attached_dict["pixel_size"]
@@ -1454,10 +1454,7 @@ class ElastixReg(Workflow):
                     logger.trace(f"Exporting {file} to {attached_to} with {transform_seq}...")
                     name = Path(file).stem
                     suffix = Path(file).suffix
-                    if rename:
-                        filename = make_new_name(name, attached_to, suffix=suffix)
-                    else:
-                        filename = f"{name}{suffix}"
+                    filename = make_new_name(name, attached_to, suffix=suffix) if rename else f"{name}{suffix}"
                     output_path = self.image_dir / filename
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")
@@ -1499,7 +1496,7 @@ class ElastixReg(Workflow):
         attached_to_modality_image_shape = {}
         # export attachment modalities
         with MeasureTimer() as timer:
-            for name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment points..."):
+            for _, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment points..."):
                 attached_to = attached_dict["attach_to"]
                 # get pixel size - if the pixel size is not 1.0, then data is in physical, otherwise index coordinates
                 shape_pixel_size = attached_dict["pixel_size"]
@@ -1517,10 +1514,7 @@ class ElastixReg(Workflow):
                     logger.trace(f"Exporting {file} to {attached_to}...")
                     name = Path(file).stem
                     suffix = Path(file).suffix
-                    if rename:
-                        filename = make_new_name(name, attached_to, suffix=suffix)
-                    else:
-                        filename = f"{name}{suffix}"
+                    filename = make_new_name(name, attached_to, suffix=suffix) if rename else f"{name}{suffix}"
                     output_path = self.image_dir / filename
                     if output_path.exists() and not overwrite:
                         logger.trace(f"Skipping {attached_to} as it already exists ({output_path}).")

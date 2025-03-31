@@ -540,7 +540,6 @@ class TransformSequence(TransformMixin):
         composite_index = []
         composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
         for composite_index, transform in self.transform_iterator(transforms, transform_sequence_index):
-            print(composite_index, transform)
             composite_transform.AddTransform(transform.itk_transform)  # type: ignore[no-untyped-call]
         self.composite_transform = composite_transform
         self.transform_itk_order = [self.transforms[i] for i in composite_index]
