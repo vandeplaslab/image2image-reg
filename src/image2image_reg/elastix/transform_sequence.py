@@ -146,6 +146,11 @@ class TransformMixin:
         return self.inverse_transform
 
     @property
+    def reverse_inverse_final_transform(self) -> sitk.Transform:
+        """Return inverse final transform."""
+        return self.inverse_transform
+
+    @property
     def inverse_transform(self) -> sitk.Transform:
         """Return inverse transform."""
         raise NotImplementedError("Must implement method")
