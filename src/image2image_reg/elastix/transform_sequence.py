@@ -346,10 +346,10 @@ class Transform(TransformMixin):
     @property
     def inverse_transform(self) -> sitk.Transform:
         """Get inverse transform."""
-        if self.is_linear:
-            self._inverse_transform = self.compute_inverse_linear()
-        else:
-            self._inverse_transform = self.compute_inverse_nonlinear()
+        if self._inverse_transform is None:
+            self._inverse_transform = (
+                self.compute_inverse_linear() if self.is_linear else self.compute_inverse_nonlinear()
+            )
         return self._inverse_transform
 
     def compute_inverse_linear(self) -> sitk.Transform:
@@ -431,18 +431,16 @@ class TransformSequence(TransformMixin):
     @property
     def reverse_final_transform(self) -> sitk.Transform:  # type: ignore[override]
         """Final ITK transform."""
-        return self._build_reverse_composite_transform()  # type: ignore[return-value]
+        if self._reverse_composite_transform is None:
+            self._build_reverse_composite_transform()  # type: ignore[return-value]
+        return self._reverse_composite_transform
 
     @property
     def composite_transform(self) -> sitk.CompositeTransform | None:
         """Composite ITK transform from transformation sequence."""
+        if self._composite_transform is None:
+            self._build_composite_transform()
         return self._composite_transform
-
-    @composite_transform.setter
-    def composite_transform(self, composite_transform: sitk.CompositeTransform | None) -> None:
-        self._composite_transform = composite_transform
-        if composite_transform:
-            self.is_linear = composite_transform.IsLinear()
 
     @property
     def inverse_transform(self) -> sitk.Transform:
@@ -456,7 +454,9 @@ class TransformSequence(TransformMixin):
     @property
     def reverse_inverse_final_transform(self) -> sitk.Transform:
         """Return reverse inverse final transform."""
-        return self._build_reverse_inverse_composite_transform()
+        if self._reverse_inverse_composite_transform is None:
+            self._build_reverse_inverse_composite_transform()
+        return self._reverse_inverse_composite_transform
 
     def append(self, other: TransformSequence) -> None:
         """Concatenate transformation sequences."""
@@ -556,16 +556,17 @@ class TransformSequence(TransformMixin):
     def _build_composite_transform(self) -> None:
         """Build composite transform from a list of transforms."""
         composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
-        for _, transform in self.transform_iterator():
-            composite_transform.AddTransform(transform.itk_transform)  # type: ignore[no-untyped-call]
-        self.composite_transform = composite_transform
+        for transform in self.transform_iterator():
+            composite_transform.AddTransform(transform.itk_transform)  # type: ignore[has-type,no-untyped-call]
+        self._composite_transform = composite_transform
+        self.is_linear = composite_transform.IsLinear()  # type: ignore[no-untyped-call]
 
     def _build_reverse_composite_transform(self) -> None:
         """Build composite transform from a list of transforms."""
         composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
         for transform in reversed(self.transforms):
             composite_transform.AddTransform(transform.itk_transform)  # type: ignore[no-untyped-call]
-        self.composite_transform = composite_transform
+        self._reverse_composite_transform = composite_transform
 
     def _build_inverse_composite_transform(self) -> sitk.CompositeTransform:
         """Build inverse composite transform."""
