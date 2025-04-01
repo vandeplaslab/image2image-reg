@@ -30,6 +30,42 @@ def _hash_parameters(elastix_transform: dict) -> str:
     return hash_parameters(n_in_hash=4, exclude_keys=("TransformParameters",), **elastix_transform)
 
 
+def transform_points(
+    transform: sitk.Transform | sitk.CompositeTransform,
+    points: np.ndarray,
+    target_pixel_size: float = 1.0,
+    is_px: bool = True,
+    as_px: bool = True,
+    source_pixel_size: float = 1,
+    silent: bool = False,
+    copy: bool = False,
+):
+    """Transform points."""
+    inv_target_pixel_size = 1 / target_pixel_size
+
+    # convert from px to um by multiplying by the pixel size
+    transformed_points = np.asarray(points, dtype=np.float64)
+    if copy:
+        transformed_points = transformed_points.copy()
+    if is_px:
+        transformed_points = transformed_points * source_pixel_size
+
+    for i, point in enumerate(
+        tqdm(
+            transformed_points,
+            desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
+            f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
+            leave=False,
+            disable=silent,
+            mininterval=1,
+        )
+    ):
+        transformed_points[i] = transform.TransformPoint(point)  # type: ignore[no-untyped-call]
+    if as_px:
+        transformed_points = transformed_points * inv_target_pixel_size
+    return transformed_points
+
+
 class TransformMixin:
     """Mixin class for transforms."""
 
@@ -107,28 +143,17 @@ class TransformMixin:
             raise ValueError("Output spacing not set, call `set_output_spacing` first")
 
         target_pixel_size = self.output_spacing[0]
-        inv_target_pixel_size = 1 / target_pixel_size
-
-        # convert from px to um by multiplying by the pixel size
-        transformed_points = np.asarray(points, dtype=np.float64)
-        if is_px:
-            transformed_points = transformed_points * source_pixel_size
-
         transform = self.reverse_final_transform if inverse else self.inverse_final_transform
-        for i, point in enumerate(
-            tqdm(
-                transformed_points,
-                desc=f"Transforming points (is={is_px}; as={as_px}; s={source_pixel_size:.3f};"
-                f" t={target_pixel_size:.3f}; t-inv={inv_target_pixel_size:.3f})",
-                leave=False,
-                disable=silent,
-                mininterval=1,
-            )
-        ):
-            transformed_points[i] = transform.TransformPoint(point)  # type: ignore[no-untyped-call]
-        if as_px:
-            transformed_points = transformed_points * inv_target_pixel_size
-        return transformed_points
+
+        return transform_points(
+            transform,
+            points,
+            target_pixel_size,
+            is_px=is_px,
+            as_px=as_px,
+            source_pixel_size=source_pixel_size,
+            silent=silent,
+        )
 
     @property
     def n_transforms(self) -> int:
@@ -139,6 +164,11 @@ class TransformMixin:
     def resolution(self) -> float:
         """Return resolution."""
         return self.output_spacing[0]  # type: ignore[index]
+
+    @property
+    def reverse_final_transform(self) -> sitk.Transform:
+        """Return inverse final transform."""
+        return self.final_transform
 
     @property
     def inverse_final_transform(self) -> sitk.Transform:
@@ -338,12 +368,6 @@ class Transform(TransformMixin):
         return self.itk_transform
 
     @property
-    def reverse_final_transform(self) -> sitk.Transform:
-        """Return reverse final transform."""
-        logger.warning("Cannot reverse a single transform")
-        return self.itk_transform
-
-    @property
     def inverse_transform(self) -> sitk.Transform:
         """Get inverse transform."""
         if self._inverse_transform is None:
@@ -432,7 +456,7 @@ class TransformSequence(TransformMixin):
     def reverse_final_transform(self) -> sitk.Transform:  # type: ignore[override]
         """Final ITK transform."""
         if self._reverse_composite_transform is None:
-            self._build_reverse_composite_transform()  # type: ignore[return-value]
+            self._reverse_composite_transform = self._build_reverse_composite_transform()  # type: ignore[return-value]
         return self._reverse_composite_transform
 
     @property
@@ -455,7 +479,7 @@ class TransformSequence(TransformMixin):
     def reverse_inverse_final_transform(self) -> sitk.Transform:
         """Return reverse inverse final transform."""
         if self._reverse_inverse_composite_transform is None:
-            self._build_reverse_inverse_composite_transform()
+            self._reverse_inverse_composite_transform = self._build_reverse_inverse_composite_transform()
         return self._reverse_inverse_composite_transform
 
     def append(self, other: TransformSequence) -> None:
@@ -526,7 +550,10 @@ class TransformSequence(TransformMixin):
         self._transform_sequence_index = self._transform_sequence_index + transform_seq
 
     def transform_iterator(
-        self, transforms: list[Transform] | None = None, transform_sequence_index: list[int] | None = None
+        self,
+        transforms: list[Transform] | None = None,
+        transform_sequence_index: list[int] | None = None,
+        reverse: bool = False,
     ) -> ty.Generator[Transform, None, None]:
         """Transform iterator for all transforms in sequence."""
         if transforms is None:
@@ -541,7 +568,7 @@ class TransformSequence(TransformMixin):
             else:
                 composite_index = composite_index + list(in_seq_tform_idx)
 
-        for transform_index in sorted(composite_index):
+        for transform_index in sorted(composite_index, reverse=reverse):
             yield transforms[transform_index]
 
     def _update_transform_properties(self) -> None:
@@ -553,44 +580,45 @@ class TransformSequence(TransformMixin):
         self._build_composite_transform()
         self._build_resampler()
 
-    def _build_composite_transform(self) -> None:
+    def _build_composite_transform(self) -> sitk.CompositeTransform:
         """Build composite transform from a list of transforms."""
         composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
         for transform in self.transform_iterator():
             composite_transform.AddTransform(transform.itk_transform)  # type: ignore[has-type,no-untyped-call]
+
         self._composite_transform = composite_transform
         self.is_linear = composite_transform.IsLinear()  # type: ignore[no-untyped-call]
+        return self._composite_transform
 
-    def _build_reverse_composite_transform(self) -> None:
+    def _build_reverse_composite_transform(self) -> sitk.CompositeTransform:
         """Build composite transform from a list of transforms."""
         composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
-        for transform in reversed(self.transforms):
+        for transform in self.transform_iterator(reverse=True):
             composite_transform.AddTransform(transform.itk_transform)  # type: ignore[no-untyped-call]
-        self._reverse_composite_transform = composite_transform
+        return composite_transform
 
     def _build_inverse_composite_transform(self) -> sitk.CompositeTransform:
-        """Build inverse composite transform."""
-        if self._inverse_composite_transform is None:
-            composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
+        """Build inverse composite transform.
 
-            # this might be counter-intuitive, but we need to reverse the order of the transforms if we are going
-            # from moving to fixed and we are applying the inverse transformation
-            for transform in reversed(self.transforms):
-                composite_transform.AddTransform(transform.inverse_transform)  # type: ignore[no-untyped-call]
-            self._inverse_composite_transform = composite_transform
-        return self._inverse_composite_transform
+        Maps from moving to fixed space.
+        """
+        composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
+
+        # this might be counter-intuitive, but we need to reverse the order of the transforms if we are going
+        # from moving to fixed and we are applying the inverse transformation
+        for transform in self.transform_iterator(reverse=True):
+            composite_transform.AddTransform(transform.inverse_transform)  # type: ignore[no-untyped-call]
+        return composite_transform
 
     def _build_reverse_inverse_composite_transform(self) -> sitk.CompositeTransform:
-        """Build inverse composite transform."""
-        if self._reverse_inverse_composite_transform is None:
-            composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
+        """Build inverse composite transform.
 
-            # this might be counter-intuitive, but we need to reverse the order of the transforms if we are going
-            # from moving to fixed and we are applying the inverse transformation
-            for transform in self.transforms:
-                composite_transform.AddTransform(transform.inverse_transform)  # type: ignore[no-untyped-call]
-            self._reverse_inverse_composite_transform = composite_transform
-        return self._reverse_inverse_composite_transform
+        Maps from fixed to moving space.
+        """
+        composite_transform = sitk.CompositeTransform(2)  # type: ignore[no-untyped-call]
+        for transform in self.transform_iterator():
+            composite_transform.AddTransform(transform.inverse_transform)  # type: ignore[no-untyped-call]
+        return composite_transform
 
     @classmethod
     def from_path(cls, path: PathLike, first: bool = False, skip_initial: bool = False) -> TransformSequence:
