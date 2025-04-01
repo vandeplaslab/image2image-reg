@@ -125,7 +125,7 @@ class TransformMixin:
                 mininterval=1,
             )
         ):
-            transformed_points[i] = transform.TransformPoint(point)
+            transformed_points[i] = transform.TransformPoint(point)  # type: ignore[no-untyped-call]
         if as_px:
             transformed_points = transformed_points * inv_target_pixel_size
         return transformed_points
