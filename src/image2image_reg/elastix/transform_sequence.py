@@ -114,7 +114,7 @@ class TransformMixin:
         if is_px:
             transformed_points = transformed_points * source_pixel_size
 
-        transform = self.reverse_inverse_final_transform if inverse else self.inverse_final_transform
+        transform = self.reverse_final_transform if inverse else self.inverse_final_transform
         for i, point in enumerate(
             tqdm(
                 transformed_points,
@@ -407,7 +407,7 @@ class TransformSequence(TransformMixin):
         self.transforms: list[Transform] = []
         self.resampler: sitk.ResampleImageFilter | None = None
         self._composite_transform: sitk.CompositeTransform | None = None
-        self._reverse_composite_transform: sitk.CompositeTransform | None
+        self._reverse_composite_transform: sitk.CompositeTransform | None = None
         self._inverse_composite_transform: sitk.CompositeTransform | None = None
         self._reverse_inverse_composite_transform: sitk.CompositeTransform | None = None
         self._n_transforms = 0
