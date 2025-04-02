@@ -189,6 +189,7 @@ def draw_workflow(
         ax=ax,
         margins=(0.2, 0.2),
     )
+    ax.set_clip_on(False)
 
     for attach_to, attached_name in workflow.attachment_images.items():
         ax.annotate(
@@ -207,6 +208,7 @@ def draw_workflow(
                 "mutation_scale": 10,
                 "linewidth": 1.5,
             },
+            annotation_clip=False,
         )
 
     for shape_set_name, shape_info in workflow.attachment_shapes.items():
@@ -226,6 +228,7 @@ def draw_workflow(
                 "mutation_scale": 10,
                 "linewidth": 1.5,
             },
+            annotation_clip=False,
         )
 
     for shape_set_name, shape_info in workflow.attachment_points.items():
@@ -245,6 +248,7 @@ def draw_workflow(
                 "mutation_scale": 10,
                 "linewidth": 1.5,
             },
+            annotation_clip=False,
         )
 
     for source, targets in workflow.registration_paths.items():
@@ -268,6 +272,7 @@ def draw_workflow(
                 "connectionstyle": cstyle,
                 "linewidth": 1.5,
             },
+            annotation_clip=False,
         )
         path_targets = nx.algorithms.shortest_path(g, source, targets[-1])[1:]
 
@@ -294,6 +299,7 @@ def draw_workflow(
                         "linewidth": 1,
                         "linestyle": "dotted",
                     },
+                    annotation_clip=False,
                 )
 
     if len(pos.keys()) > 2:

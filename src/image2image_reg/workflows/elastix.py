@@ -264,12 +264,6 @@ class ElastixReg(Workflow):
             ):
                 errors.append(f"❌ Modality '{name}' has been defined but isn't being registered.")
 
-        for targets in self.registration_paths.values():
-            if len(targets) == 2:
-                modality = self.get_modality(name=targets[0])
-                if modality is not None and not self._is_being_registered(modality, check_target=False):
-                    errors.append(f"❌ Through modality '{targets[0]}' has been defined but isn't being registered.")
-
         # check whether all registration paths exist
         for source, targets in self.registration_paths.items():
             if source not in self.modalities:
@@ -279,9 +273,20 @@ class ElastixReg(Workflow):
                     errors.append(f"❌ Target modality '{target}' does not exist.")
                 if source == target:
                     errors.append("❌ Source and target modalities cannot be the same.")
+
+        # check through modalities
+        for targets in self.registration_paths.values():
+            if len(targets) == 2:
+                modality = self.get_modality(name=targets[0])
+                if modality is not None and not self._is_being_registered(modality, check_target=False):
+                    errors.append(f"❌ Through modality '{targets[0]}' has been defined but isn't being registered.")
+
+        # log errors
         if log and errors:
             for error in errors:
                 logger.error(error)
+        elif log and not errors:
+            logger.success("✅ Project paths are valid.")
         return len(errors) == 0, errors
 
     def validate(self, allow_not_registered: bool = True, require_paths: bool = False) -> tuple[bool, list[str]]:
@@ -298,6 +303,7 @@ class ElastixReg(Workflow):
                 logger.error(errors[-1])
             else:
                 logger.success(f"✅ Modality '{modality.name}' exist.")
+
         # check whether all modalities exist
         for edge in self.registration_nodes:
             modalities = edge["modalities"]
@@ -316,6 +322,7 @@ class ElastixReg(Workflow):
             if not self.registration_nodes:
                 errors.append("❌ No registration paths have been added.")
                 logger.error(errors[-1])
+
         # check whether all registration paths exist
         for source, targets in self.registration_paths.items():
             if source not in self.modalities:
@@ -328,6 +335,7 @@ class ElastixReg(Workflow):
                 if source == target:
                     errors.append("❌ Source and target modalities cannot be the same.")
                     logger.error(errors[-1])
+
         # check whether all modalities have been registered
         if not allow_not_registered:
             for edge in self.registration_nodes:
@@ -342,6 +350,16 @@ class ElastixReg(Workflow):
                         f"✅ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
                         f"has been registered."
                     )
+
+            # check through modalities
+            for targets in self.registration_paths.values():
+                if len(targets) == 2:
+                    modality = self.get_modality(name=targets[0])
+                    if modality is not None and not self._is_being_registered(modality, check_target=False):
+                        errors.append(
+                            f"❌ Through modality '{targets[0]}' has been defined but isn't being registered."
+                        )
+
         is_valid = not errors
         if not is_valid:
             errors.append("❌ Project configuration is invalid.")
