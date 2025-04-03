@@ -1,4 +1,5 @@
 """Whole slide image registration using elastix."""
+
 from importlib.metadata import PackageNotFoundError, version
 
 from loguru import logger
