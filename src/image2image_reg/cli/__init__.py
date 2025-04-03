@@ -109,7 +109,7 @@ cli.add_command(convert, help_group="Utility")
 cli.add_command(merge, help_group="Utility")
 
 
-def main():
+def main() -> None:
     """Execute the "i2reg" command line program."""
     freeze_support()
     if sys.platform == "darwin":
