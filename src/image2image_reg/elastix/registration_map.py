@@ -855,7 +855,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "FinalGridSpacingInPhysicalUnits": ["200"],
         "FixedImageDimension": ["2"],
         "FixedImagePyramid": ["FixedRecursiveImagePyramid"],
-        "FixedImagePyramidSchedule": [str(int(2**2)), str(int(2**2))],
+        "FixedImagePyramidSchedule": [str(2**2), str(2**2)],
         "FixedInternalImagePixelType": ["float"],
         "GridSpacingSchedule": [
             "8",
@@ -872,7 +872,7 @@ DEFAULT_REGISTRATION_PARAMETERS_MAP = {
         "Metric": ["AdvancedMattesMutualInformation"],
         "MovingImageDimension": ["2"],
         "MovingImagePyramid": ["MovingRecursiveImagePyramid"],
-        "MovingImagePyramidSchedule": [str(int(2**2)), str(int(2**2))],
+        "MovingImagePyramidSchedule": [str(2**2), str(2**2)],
         "MovingInternalImagePixelType": ["float"],
         "NewSamplesEveryIteration": ["true"],
         "NumberOfHistogramBins": ["32"],

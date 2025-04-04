@@ -164,7 +164,7 @@ def affine_to_itk_affine(
     # tform["CenterOfRotationPoint"] = [str(center_of_rot[0]), str(center_of_rot[1])]
 
     # adjust for pixel spacing
-    tform["Size"] = [str(int(math.ceil(bound_w))), str(int(math.ceil(bound_h)))]
+    tform["Size"] = [str(math.ceil(bound_w)), str(math.ceil(bound_h))]
 
     # extract affine parameters
     affine_ = affine[:2, :]
@@ -211,7 +211,7 @@ def affine_to_itk_affine2(
     tform["CenterOfRotationPoint"] = [str(rot_x_phy), str(rot_y_phy)]
 
     # adjust for pixel spacing
-    tform["Size"] = [str(int(math.ceil(bound_w))), str(int(math.ceil(bound_h)))]
+    tform["Size"] = [str(math.ceil(bound_w)), str(math.ceil(bound_h))]
     # tform["Origin"] = [str(origin_x), str(origin_y)]
 
     # Extract parameters from the 3x3 matrix
@@ -461,7 +461,7 @@ def generate_rigid_rotation_transform(image: sitk.Image, spacing: float, angle_d
     translation_y_phy = rot_y_phy - c_y_phy
 
     tform["Spacing"] = [str(spacing), str(spacing)]
-    tform["Size"] = [str(int(math.ceil(bound_w_px))), str(int(math.ceil(bound_h_px)))]
+    tform["Size"] = [str(math.ceil(bound_w_px)), str(math.ceil(bound_h_px))]
     tform["CenterOfRotationPoint"] = [str(rot_x_phy), str(rot_y_phy)]
     tform["TransformParameters"] = [
         str(np.radians(angle_deg)),
