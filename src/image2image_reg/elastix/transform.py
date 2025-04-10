@@ -452,7 +452,7 @@ def transform_attached_shape(
     source_pixel_size: float,
     output_path: PathLike,
     silent: bool = False,
-    as_image: bool = False,
+    mode: ty.Literal["dataframe", "image", "geojson"] = "geojson",
     image_shape: tuple[int, int] = (0, 0),
     clip: str = "ignore",
 ) -> Path:
@@ -464,7 +464,7 @@ def transform_attached_shape(
     is_in_px = source_pixel_size != 1.0
 
     _get_clip_func(transform_sequence, clip)
-    if as_image:
+    if mode == "image":
         height, width = image_shape
         if height == 0 or width == 0:
             raise ValueError("Invalid image shape.")
@@ -474,7 +474,7 @@ def transform_attached_shape(
     if isinstance(geojson_data, list):
         if "type" in geojson_data[0] and geojson_data[0]["type"] == "Feature":
             if transform_sequence is not None:
-                if as_image:
+                if mode == "image":
                     geojson_data = _transform_geojson_features_as_image(
                         geojson_data,
                         transform_sequence,
@@ -483,7 +483,7 @@ def transform_attached_shape(
                         as_px=is_in_px,
                         source_pixel_size=source_pixel_size,
                     )
-                else:
+                elif mode == "dataframe":
                     geojson_data = _transform_geojson_features_as_df(
                         geojson_data,
                         transform_sequence,
@@ -492,15 +492,16 @@ def transform_attached_shape(
                         clip=clip,
                         source_pixel_size=source_pixel_size,
                     )
-                    # geojson_data = _transform_geojson_features(
-                    #     geojson_data,
-                    #     transform_sequence,
-                    #     in_px=is_in_px,
-                    #     as_px=is_in_px,
-                    #     source_pixel_size=source_pixel_size,
-                    #     silent=silent,
-                    #     clip_func=clip_func,
-                    # )
+                elif mode == "geojson":
+                    geojson_data = _transform_geojson_features(
+                        geojson_data,
+                        transform_sequence,
+                        in_px=is_in_px,
+                        as_px=is_in_px,
+                        source_pixel_size=source_pixel_size,
+                        silent=silent,
+                        clip=clip,
+                    )
         else:
             raise ValueError("Invalid GeoJSON data.")
     write_json_data(output_path, geojson_data, compress=True, check_existing=False)
@@ -603,25 +604,44 @@ def _transform_geojson_features(
     in_px: bool,
     as_px: bool,
     source_pixel_size: float = 1.0,
-    clip_func: ClipFunc = _clip_noop,
+    clip: str = "ignore",
     silent: bool = False,
 ) -> list[dict]:
+    clip_func = _get_clip_func(transform_sequence, clip, as_px=as_px)
+
     result = []
     for feature in geojson_data:
         # for feature in tqdm(geojson_data, desc="Transforming Features", leave=False, mininterval=1):
         geometry = feature["geometry"]
+
+        # convert points
         if geometry["type"] == "Point":
             x, y = geometry["coordinates"]
             x, y = transform_points(
                 transform_sequence,
-                [round(x, 3)],
-                [round(y, 3)],
+                [x],
+                [y],
                 in_px=in_px,
                 as_px=as_px,
                 source_pixel_size=source_pixel_size,
                 clip_func=clip_func,
             )
-            geometry["coordinates"] = [x[0], y[0]]
+            geometry["coordinates"] = [round(x[0], 3), round(y[0], 3)]
+        # convert multi-points
+        elif geometry["type"] == "MultiPoint":
+            xy = np.asarray(geometry["coordinates"])
+            x, y = xy[:, 0], xy[:, 1]
+            x, y = transform_points(
+                transform_sequence,
+                x,
+                y,
+                in_px=in_px,
+                as_px=as_px,
+                source_pixel_size=source_pixel_size,
+                clip_func=clip_func,
+            )
+            geometry["coordinates"] = np.round(np.c_[x, y], 3).tolist()
+
         elif geometry["type"] == "Polygon":
             for i, ring in enumerate(
                 tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, mininterval=1, disable=True)
