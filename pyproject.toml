@@ -39,7 +39,6 @@ classifiers = [
     "Operating System :: POSIX",
     "Operating System :: Unix",
     "Operating System :: MacOS",
-    "Framework :: image2image",
 ]
 dynamic = ["version"]
 dependencies = [
