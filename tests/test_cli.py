@@ -15,7 +15,7 @@ def test_cli_entrypoint():
     assert exit_status == 0
 
 
-@pytest.mark.xfail("need to fix") @ pytest.mark.xfail("need to fix")
+@pytest.mark.xfail("need to fix")
 def test_cli_init(tmp_path):
     """Test CLI init."""
     tmp = tmp_path
