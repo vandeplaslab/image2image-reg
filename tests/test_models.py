@@ -9,7 +9,9 @@ from image2image_reg.models import BoundingBox, Export, Polygon, Preprocessing
 
 def test_polygon():
     poly = Polygon(np.array([[0, 0], [0, 10], [10, 10], [10, 0]]))
-    assert poly.xy.shape == (4, 2), "Shape should be (4, 2)"
+    assert isinstance(poly.xy, list), "xy should be a list"
+    assert len(poly.xy) == 1, "Length should be 1"
+    assert poly.xy[0].shape == (4, 2), "Shape should be (4, 2)"
 
     mask = poly.to_mask((100, 100))
     assert mask.shape == (100, 100), "Shape should be (100, 100)"

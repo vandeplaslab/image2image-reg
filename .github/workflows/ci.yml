@@ -1,9 +1,5 @@
 name: CI
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 on:
   push:
     branches:
@@ -15,6 +11,10 @@ on:
   schedule:
     - cron: "0 0 * * 0" # every week (for --pre release tests)
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-manifest:
     runs-on: ubuntu-latest
@@ -23,55 +23,44 @@ jobs:
       - run: pipx run check-manifest
 
   test:
-    name: ${{ matrix.platform }} (${{ matrix.python-version }})
-    runs-on: ${{ matrix.platform }}
+    uses: pyapp-kit/workflows/.github/workflows/test-pyrepo.yml@v2
+    secrets: inherit
+    with:
+      os: ${{ matrix.os }}
+      python-version: ${{ matrix.python-version }}
+      pip-install-pre-release: ${{ github.event_name == 'schedule' }}
+      report-failures: ${{ github.event_name == 'schedule' }}
+      extras: 'test'
+      # changing this to "artifact" prevents uploading to codecov here,
+      # instead it uploads an artifact with the coverage data
+      coverage-upload: artifact
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11']
-        platform: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]#, "3.13"]
+        include:
+          - python-version: "3.9"
+            os: ubuntu-latest
+          - python-version: "3.9"
+            os: macos-13
+          - python-version: "3.11"
+            os: macos-latest
+          - python-version: "3.12"
+            os: macos-latest
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache-dependency-path: "pyproject.toml"
-          cache: "pip"
-
-      # if running a cron job, we add the --pre flag to test against pre-releases
-      - name: Install dependencies
-        run: |
-          python -m pip install -U pip
-          python -m pip install .[test] ${{ github.event_name == 'schedule' && '--pre' || ''  }}
-
-      - name: Test
-        run: pytest --color=yes --cov --cov-report=xml --cov-report=term-missing
-
-      # If something goes wrong, we can open an issue in the repo
-      - name: Report --pre Failures
-        if: failure() && github.event_name == 'schedule'
-        uses: JasonEtco/create-an-issue@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PLATFORM: ${{ matrix.platform }}
-          PYTHON: ${{ matrix.python-version }}
-          RUN_ID: ${{ github.run_id }}
-          TITLE: '[test-bot] pip install --pre is failing'
-        with:
-          filename: .github/TEST_FAIL_TEMPLATE.md
-          update_existing: true
-
-      - name: Coverage
-        uses: codecov/codecov-action@v3
+  # now add another job to combine and upload the coverage
+  upload_coverage:
+    if: always()
+    needs: [test]
+    uses: pyapp-kit/workflows/.github/workflows/upload-coverage.yml@v2
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
 
   deploy_test:
     name: Deploy to PyPI (test)
-    needs: test
+    needs: [check-manifest, test]
     if: success() && startsWith(github.ref, 'refs/tags/') && github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
@@ -79,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
@@ -97,7 +86,7 @@ jobs:
 
   deploy:
     name: Deploy
-    needs: test
+    needs: [check-manifest, test, deploy_test]
     if: success() && startsWith(github.ref, 'refs/tags/') && github.event_name != 'schedule'
     runs-on: ubuntu-latest
 
@@ -105,7 +94,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
@@ -123,6 +112,6 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 
-      - uses: softprops/action-gh-release@v1
+      - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
