@@ -8,14 +8,14 @@ from image2image_reg.utils._test import get_test_file
 from image2image_reg.workflows import ElastixReg
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_entrypoint():
     """Test CLI entrypoint."""
     exit_status = os.system("i2reg --help")
     assert exit_status == 0
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_init(tmp_path):
     """Test CLI init."""
     tmp = tmp_path
@@ -24,7 +24,7 @@ def test_cli_init(tmp_path):
     assert exit_status == 0
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_add_images_path_attachment(tmp_path):
     """Test CLI init."""
     source = get_test_file("ellipse_moving.tiff")
@@ -56,7 +56,7 @@ def test_cli_add_images_path_attachment(tmp_path):
     assert exit_status == 0
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_add_images_override_preprocessing(tmp_path):
     """Test CLI init."""
     source = get_test_file("ellipse_moving.tiff")
@@ -81,7 +81,7 @@ def test_cli_add_images_override_preprocessing(tmp_path):
     assert exit_status == 0
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_add_images_with_affine(tmp_path):
     """Test CLI init."""
     source = get_test_file("ellipse_moving.tiff")
@@ -107,7 +107,7 @@ def test_cli_add_images_with_affine(tmp_path):
     assert exit_status == 0
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_add_images_path_mask(tmp_path):
     """Test CLI init."""
     source = get_test_file("ellipse_moving.tiff")
@@ -133,7 +133,7 @@ def test_cli_add_images_path_mask(tmp_path):
     assert exit_status == 0
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_add_images_path_mask_bbox(tmp_path):
     """Test CLI init."""
     source = get_test_file("ellipse_moving.tiff")
@@ -166,7 +166,7 @@ def test_cli_add_images_path_mask_bbox(tmp_path):
     assert modality.preprocessing.mask_bbox.height == 1000
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_merge(tmp_path):
     source = get_test_file("ellipse_moving.tiff")
     target = get_test_file("ellipse_target.tiff")
@@ -177,7 +177,7 @@ def test_cli_merge(tmp_path):
     assert exit_status == 0
 
 
-@pytest.mark.xfail("need to fix")
+@pytest.mark.xfail(reason="need to fix")
 def test_cli_merge_with_crop(tmp_path):
     source = get_test_file("ellipse_moving.tiff")
     target = get_test_file("ellipse_target.tiff")
