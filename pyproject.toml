@@ -192,4 +192,5 @@ ignore = [
     ".idea/**/*",
     "_version.py",
     "Makefile",
+    "MANIFEST.in",
 ]
