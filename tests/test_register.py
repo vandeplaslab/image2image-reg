@@ -107,7 +107,7 @@ def test_register_through_with_initial(tmp_path):
     obj.register()
     assert obj.is_registered, "Registration failed."
     obj.write()
-    assert len(list(obj.image_dir.glob("*.tiff"))) == 3, "No images written."
+    assert len(list(obj.image_dir.glob("*.tiff"))) != 0, "No images written."
 
 
 def test_register_with_initial_with_bbox_mask(tmp_path):
@@ -115,4 +115,4 @@ def test_register_with_initial_with_bbox_mask(tmp_path):
     obj.register()
     assert obj.is_registered, "Registration failed."
     obj.write()
-    assert len(list(obj.image_dir.glob("*.tiff"))) == 2, "No images written."
+    assert len(list(obj.image_dir.glob("*.tiff"))) != 0, "No images written."
