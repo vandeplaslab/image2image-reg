@@ -39,6 +39,8 @@ dependencies = [
     "mpire",
     "colour-science>=0.4.1",
     "tabulate",
+    "loguru",
+    "image2image-io",
 ]
 
 # extras
