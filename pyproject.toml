@@ -1,6 +1,6 @@
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"s
+build-backend = "hatchling.build"
 
 [tool.hatch.version]
 source = "vcs"
@@ -93,8 +93,8 @@ iwsireg = "image2image_reg.cli:main"
 line-length = 120
 target-version = "py38"
 src = ["src"]
-# https://beta.ruff.rs/docs/rules/
 
+# https://beta.ruff.rs/docs/rules/
 [tool.ruff.lint]
 extend-select = [
     "E",    # style errors
@@ -137,6 +137,12 @@ filterwarnings = ["ignore"]
 
 
 # https://coverage.readthedocs.io/en/6.4/config.html
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "**/*_version.py"
+]
+
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
@@ -146,9 +152,6 @@ exclude_lines = [
     "\\.\\.\\.",
     "raise NotImplementedError()",
 ]
-
-[tool.coverage.run]
-source = ["image2image_reg"]
 
 
 # https://mypy.readthedocs.io/en/stable/config_file.html
