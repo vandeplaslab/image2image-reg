@@ -38,7 +38,7 @@ original_size_ = click.option(
     "--original_size/--no_original_size",
     help="Write images in their original size after applying transformations.",
     is_flag=True,
-    default=False,
+    default=True,
     show_default=True,
 )
 remove_merged_ = click.option(

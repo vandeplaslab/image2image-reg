@@ -6,9 +6,9 @@ import sys
 from multiprocessing import freeze_support, set_start_method
 
 import click
-import koyo.compat
 from click_groups import GroupedGroup
 from image2image_io.cli.convert import convert
+from koyo.compat import enable_compat
 from koyo.system import IS_MAC
 from koyo.typing import PathLike
 from koyo.utilities import running_as_pyinstaller_app
@@ -21,6 +21,8 @@ from image2image_reg.cli.merge import merge
 from image2image_reg.cli.simple_valis import simple_valis
 from image2image_reg.cli.valis import valis
 
+enable_compat()
+
 
 @click.group(
     context_settings={
@@ -30,6 +32,7 @@ from image2image_reg.cli.valis import valis
     },
     cls=GroupedGroup,
 )
+@click.pass_context
 @click.version_option(__version__, prog_name="i2reg")
 @click.option(
     "--dev",
@@ -66,6 +69,7 @@ from image2image_reg.cli.valis import valis
     show_default=True,
 )
 def cli(
+    ctx: click.Context,
     verbosity: float = 1,
     no_color: bool = False,
     dev: bool = False,
@@ -81,23 +85,24 @@ def cli(
         os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
         logger.trace("Disabled OBJC fork safety on macOS.")
 
-    if dev:
-        if running_as_pyinstaller_app():
-            click.echo("Developer mode is disabled in bundled app.")
-            dev = False
-        else:
-            verbosity = 0.5
-    verbosity = min(0.2, verbosity) * 10
+    if "-h" not in sys.argv and "--help" not in sys.argv:
+        if dev:
+            if running_as_pyinstaller_app():
+                click.echo("Developer mode is disabled in bundled app.")
+                dev = False
+            else:
+                verbosity = 0.5
+        verbosity = min(0.2, verbosity) * 10
 
-    if dev:
-        install_debugger_hook()
-        verbosity = 0
-    else:
-        uninstall_debugger_hook()
-    set_logger(verbosity, no_color, log)
-    logger.trace(f"Executed command: {sys.argv}")
-    if dev:
-        logger.debug("Debugger hook installed.")
+        if dev:
+            install_debugger_hook()
+            verbosity = 0
+        else:
+            uninstall_debugger_hook()
+        set_logger(verbosity, no_color, log)
+        logger.trace(f"Executed command: {sys.argv}")
+        if dev:
+            logger.debug("Debugger hook installed.")
 
 
 cli.add_command(elastix, help_group="Registration")
