@@ -79,12 +79,6 @@ def cli(
     """Launch registration app."""
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
 
-    if IS_MAC:
-        import os
-
-        os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
-        logger.trace("Disabled OBJC fork safety on macOS.")
-
     if "-h" not in sys.argv and "--help" not in sys.argv:
         if dev:
             if running_as_pyinstaller_app():
@@ -103,6 +97,12 @@ def cli(
         logger.trace(f"Executed command: {sys.argv}")
         if dev:
             logger.debug("Debugger hook installed.")
+
+        if IS_MAC:
+            import os
+
+            os.environ["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
+            logger.trace("Disabled OBJC fork safety on macOS.")
 
 
 cli.add_command(elastix, help_group="Registration")
