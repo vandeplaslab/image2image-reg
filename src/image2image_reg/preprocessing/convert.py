@@ -42,11 +42,14 @@ def sitk_image_to_numpy(image: sitk.Image) -> np.ndarray:
     return sitk.GetArrayFromImage(image)
 
 
-def numpy_view_to_sitk_image(image: sitk.Image) -> np.ndarray:
+def numpy_view_to_sitk_image(image: sitk.Image, resolution: Float = 1.0) -> np.ndarray:
     """Convert numpy array to SITK image."""
-    return sitk.GetArrayViewFromImage(image)
+    image = sitk.GetArrayViewFromImage(image)
+    image.SetSpacing((resolution, resolution))
+    return image
 
-
-def numpy_to_sitk_image(image: np.ndarray) -> sitk.Image:
+def numpy_to_sitk_image(image: np.ndarray, resolution: Float = 1.0) -> sitk.Image:
     """Convert numpy array to SITK image."""
-    return sitk.GetImageFromArray(image)
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing((resolution, resolution))
+    return image
