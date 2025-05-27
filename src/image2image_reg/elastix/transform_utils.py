@@ -897,3 +897,111 @@ def sitk_transform_image(image: sitk.Image, final_tform: Transform, composite_tr
 def transform_plane(image: sitk.Image, final_transform: Transform, composite_transform: Transform) -> sitk.Image:
     """Transform image."""
     return sitk_transform_image(image, final_transform, composite_transform)
+
+
+def affine_to_euler2d(affine_matrix: np.ndarray, center=(0.0, 0.0)) -> sitk.Euler2DTransform:
+    """
+    Convert 3x3 affine matrix to SimpleITK Euler2DTransform.
+
+    Parameters
+    ----------
+        affine_matrix: np.ndarray of shape (3,3)
+        center: tuple, center of rotation (default: origin)
+
+    Returns
+    -------
+        SimpleITK.Euler2DTransform
+    """
+    assert affine_matrix.shape == (3, 3), "Expected 3x3 matrix"
+
+    a, b, tx = affine_matrix[0]
+    c, d, ty = affine_matrix[1]
+
+    angle = np.arctan2(c, a)  # rotation in radians
+
+    euler = sitk.Euler2DTransform()
+    euler.SetCenter(center)
+    euler.SetAngle(angle)
+    euler.SetTranslation((tx, ty))
+    return euler
+
+
+def translation_to_euler2d(translation_x: int, translation_y: int, center=(0.0, 0.0)) -> sitk.Euler2DTransform:
+    """
+    Convert 2D translation vector to SimpleITK Euler2DTransform.
+
+    Parameters
+    ----------
+        translation_x: int
+        translation_y: int
+        center: tuple, center of rotation (default: origin)
+
+    Returns
+    -------
+        SimpleITK.Euler2DTransform
+    """
+    euler = sitk.Euler2DTransform()
+    euler.SetCenter(center)
+    euler.SetAngle(0.0)  # No rotation
+    euler.SetTranslation((translation_x, translation_y))
+    return euler
+
+
+def affine_to_sitk_affine(affine_matrix: np.ndarray) -> sitk.AffineTransform:
+    """
+    Convert 3x3 2D affine matrix to SimpleITK AffineTransform(2).
+
+    Parameters
+    ----------
+        affine_matrix: np.ndarray of shape (3,3)
+
+    Returns
+    -------
+        SimpleITK.AffineTransform
+    """
+    assert affine_matrix.shape == (3, 3), "Expected a 3x3 affine matrix"
+
+    # Extract 2x2 linear part and flatten to row-major order
+    matrix = affine_matrix[:2, :2].flatten()
+
+    # Extract translation
+    translation = affine_matrix[:2, 2]
+
+    # Create and set the transform
+    transform = sitk.AffineTransform(2)
+    transform.SetMatrix(matrix.tolist())
+    transform.SetTranslation(translation.tolist())
+
+    return transform
+
+
+def resample_to_fixed(
+    moving_image: sitk.Image,
+    transform: sitk.Transform,
+    fixed_image: sitk.Image,
+    interpolator=sitk.sitkLinear,
+    default_value=0.0,
+) -> sitk.Image:
+    """
+    Resample moving image to match fixed image using given transform.
+
+    Parameters
+    ----------
+        moving_image: The image to be resampled.
+        transform: A SimpleITK transform (e.g., Euler2DTransform, AffineTransform).
+        fixed_image: The reference image whose size, spacing, origin, direction are used.
+        interpolator: Interpolation method (e.g., sitk.sitkLinear, sitk.sitkNearestNeighbor).
+        default_value: Value used for pixels outside original image.
+
+    Returns
+    -------
+        Resampled SimpleITK image.
+    """
+    return sitk.Resample(
+        moving_image,
+        fixed_image,  # Reference image defines output space
+        transform,
+        interpolator,
+        default_value,
+        moving_image.GetPixelID(),  # Preserve original pixel type
+    )
