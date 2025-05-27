@@ -8,7 +8,7 @@ from warnings import warn
 
 import numpy as np
 import SimpleITK as sitk
-from koyo.json import read_json, write_json
+from koyo.json import read_json, read_json_gzip, write_json, write_json_gzip
 from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
@@ -667,6 +667,15 @@ class TransformSequence(TransformMixin):
         return cls(transforms, transform_sequence_index)
 
     @classmethod
+    def from_list(
+        cls, transforms: list[dict[str, list[str]]], transform_sequence_index: list[int] | None = None
+    ) -> TransformSequence:
+        """Create a TransformSequence from a list of elastix transform dicts."""
+        if transform_sequence_index is None:
+            transform_sequence_index = list(range(len(transforms)))
+        return cls(transforms, transform_sequence_index)
+
+    @classmethod
     def from_i2r(cls, path: PathLike, image_path: PathLike) -> TransformSequence:
         """Load transform sequence from a i2r path.
 
@@ -695,6 +704,18 @@ class TransformSequence(TransformMixin):
 
         out = self.to_dict()
         write_json(path, out)
+        return path
+
+    def to_gzip_json(self, path: PathLike) -> Path:
+        """Export transformation sequence to json file."""
+        path = Path(path)
+        if len(path.suffixes) == 1:
+            path = path.with_suffix(".elastix.json.gz")
+        if path.suffix not in [".gz", ".gzip"]:
+            path = path.with_suffix(path.suffix + ".gz")
+
+        out = self.to_dict()
+        write_json_gzip(path, out)
         return path
 
 
@@ -762,9 +783,12 @@ def _read_final_elastix_transform(path: PathLike) -> tuple[list[dict[str, list[s
     path = Path(path)
     if path.suffixes == [".json"]:
         return _read_elastix_transform(path)
-    elif path.suffixes == [".elastix", ".json"]:
+    elif path.suffixes == [".elastix", ".json"] or path.suffixes == [".elastix", ".json", ".gz"]:
         transforms, transform_sequence_index = [], []
-        transform_data = read_json(path)
+        if path.suffix in [".gz", ".gzip"]:
+            transform_data = read_json_gzip(path)
+        else:
+            transform_data = read_json(path)
         for index, tform in enumerate(transform_data):
             transforms.append(tform)
             transform_sequence_index.append(index)
