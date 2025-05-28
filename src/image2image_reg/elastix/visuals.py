@@ -112,6 +112,7 @@ def draw_workflow(
     layout: str | NetworkTypes = "kk",
     node_size: float = 100,
     node_alpha: float = 0.75,
+    show_attachments: bool = True,
 ):
     """Draw entire workflow, including attachments."""
 
@@ -128,7 +129,7 @@ def draw_workflow(
     g = nx.DiGraph()
     g_layout = nx.DiGraph()
 
-    for idx, modality in enumerate(workflow.modalities):
+    for idx, modality in enumerate(workflow.get_image_modalities(with_attachment=show_attachments)):
         rad = (idx + 1) * 0.08 + 0.05
         color = get_next_color(idx)
 
@@ -136,20 +137,19 @@ def draw_workflow(
         g_layout.add_node(modality, color=color, cstyle=f"arc3,rad=-{rad}")
 
     legend = {}
-    for attach_to, attached_name in workflow.attachment_images.items():
-        g.add_node(attach_to, color="green")
-        g_layout.add_edge(attach_to, attached_name)
-        legend["attached image"] = {"markerfacecolor": "green", "marker": "o"}
-
-    for shape_set_name, shape_info in workflow.attachment_shapes.items():
-        g.add_node(shape_set_name, color="purple")
-        g_layout.add_edge(shape_set_name, shape_info["attach_to"])
-        legend["attached shape"] = {"markerfacecolor": "purple", "marker": "^"}
-
-    for point_set_name, point_info in workflow.attachment_points.items():
-        g.add_node(point_set_name, color="yellow")
-        g_layout.add_edge(point_set_name, point_info["attach_to"])
-        legend["attached points"] = {"markerfacecolor": "yellow", "marker": "o"}
+    if show_attachments:
+        for attach_to, attached_name in workflow.attachment_images.items():
+            g.add_node(attach_to, color="green")
+            g_layout.add_edge(attach_to, attached_name)
+            legend["attached image"] = {"markerfacecolor": "green", "marker": "o"}
+        for shape_set_name, shape_info in workflow.attachment_shapes.items():
+            g.add_node(shape_set_name, color="purple")
+            g_layout.add_edge(shape_set_name, shape_info["attach_to"])
+            legend["attached shape"] = {"markerfacecolor": "purple", "marker": "^"}
+        for point_set_name, point_info in workflow.attachment_points.items():
+            g.add_node(point_set_name, color="yellow")
+            g_layout.add_edge(point_set_name, point_info["attach_to"])
+            legend["attached points"] = {"markerfacecolor": "yellow", "marker": "o"}
 
     for source, targets in workflow.registration_paths.items():
         g.add_edge(source, targets[0])
@@ -191,65 +191,65 @@ def draw_workflow(
     )
     ax.set_clip_on(False)
 
-    for attach_to, attached_name in workflow.attachment_images.items():
-        ax.annotate(
-            "",
-            xy=pos[attach_to],
-            xycoords="data",
-            xytext=pos[attached_name],
-            textcoords="data",
-            arrowprops={
-                "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
-                "color": "white",
-                "shrinkA": 5,
-                "shrinkB": 5,
-                "patchA": None,
-                "patchB": None,
-                "mutation_scale": 10,
-                "linewidth": 1.5,
-            },
-            annotation_clip=False,
-        )
+    if show_attachments:
+        for attach_to, attached_name in workflow.attachment_images.items():
+            ax.annotate(
+                "",
+                xy=pos[attach_to],
+                xycoords="data",
+                xytext=pos[attached_name],
+                textcoords="data",
+                arrowprops={
+                    "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
+                    "color": "white",
+                    "shrinkA": 5,
+                    "shrinkB": 5,
+                    "patchA": None,
+                    "patchB": None,
+                    "mutation_scale": 10,
+                    "linewidth": 1.5,
+                },
+                annotation_clip=False,
+            )
+        for shape_set_name, shape_info in workflow.attachment_shapes.items():
+            ax.annotate(
+                "",
+                xy=pos[shape_set_name],
+                xycoords="data",
+                xytext=pos[shape_info["attach_to"]],
+                textcoords="data",
+                arrowprops={
+                    "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
+                    "color": "white",
+                    "shrinkA": 5,
+                    "shrinkB": 5,
+                    "patchA": None,
+                    "patchB": None,
+                    "mutation_scale": 10,
+                    "linewidth": 1.5,
+                },
+                annotation_clip=False,
+            )
 
-    for shape_set_name, shape_info in workflow.attachment_shapes.items():
-        ax.annotate(
-            "",
-            xy=pos[shape_set_name],
-            xycoords="data",
-            xytext=pos[shape_info["attach_to"]],
-            textcoords="data",
-            arrowprops={
-                "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
-                "color": "white",
-                "shrinkA": 5,
-                "shrinkB": 5,
-                "patchA": None,
-                "patchB": None,
-                "mutation_scale": 10,
-                "linewidth": 1.5,
-            },
-            annotation_clip=False,
-        )
-
-    for shape_set_name, shape_info in workflow.attachment_points.items():
-        ax.annotate(
-            "",
-            xy=pos[shape_set_name],
-            xycoords="data",
-            xytext=pos[shape_info["attach_to"]],
-            textcoords="data",
-            arrowprops={
-                "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
-                "color": "white",
-                "shrinkA": 5,
-                "shrinkB": 5,
-                "patchA": None,
-                "patchB": None,
-                "mutation_scale": 10,
-                "linewidth": 1.5,
-            },
-            annotation_clip=False,
-        )
+        for shape_set_name, shape_info in workflow.attachment_points.items():
+            ax.annotate(
+                "",
+                xy=pos[shape_set_name],
+                xycoords="data",
+                xytext=pos[shape_info["attach_to"]],
+                textcoords="data",
+                arrowprops={
+                    "arrowstyle": ArrowStyle.BracketA(widthA=0.5),
+                    "color": "white",
+                    "shrinkA": 5,
+                    "shrinkB": 5,
+                    "patchA": None,
+                    "patchB": None,
+                    "mutation_scale": 10,
+                    "linewidth": 1.5,
+                },
+                annotation_clip=False,
+            )
 
     for source, targets in workflow.registration_paths.items():
         src_color = g.nodes[source]["color"]
@@ -274,33 +274,32 @@ def draw_workflow(
             },
             annotation_clip=False,
         )
-        path_targets = nx.algorithms.shortest_path(g, source, targets[-1])[1:]
-
-        legend["direct modality"] = {"color": "white", "ls": "solid"}
-        if len(path_targets) > 1:
-            legend["through modality"] = {"color": "white", "ls": "dotted"}
-            for idx, cont_src in enumerate(path_targets[:-1]):
-                current, target = cont_src, path_targets[idx + 1]
-                ax.annotate(
-                    "",
-                    xy=pos[current],
-                    xycoords="data",
-                    xytext=pos[target],
-                    textcoords="data",
-                    arrowprops={
-                        "arrowstyle": "<-",
-                        "color": src_color,
-                        "shrinkA": 5,
-                        "shrinkB": 5,
-                        "patchA": None,
-                        "patchB": None,
-                        "mutation_aspect": 2,
-                        "connectionstyle": cstyle,
-                        "linewidth": 1,
-                        "linestyle": "dotted",
-                    },
-                    annotation_clip=False,
-                )
+    path_targets = nx.algorithms.shortest_path(g, source, targets[-1])[1:]
+    legend["direct modality"] = {"color": "white", "ls": "solid"}
+    if len(path_targets) > 1:
+        legend["through modality"] = {"color": "white", "ls": "dotted"}
+        for idx, cont_src in enumerate(path_targets[:-1]):
+            current, target = cont_src, path_targets[idx + 1]
+            ax.annotate(
+                "",
+                xy=pos[current],
+                xycoords="data",
+                xytext=pos[target],
+                textcoords="data",
+                arrowprops={
+                    "arrowstyle": "<-",
+                    "color": src_color,
+                    "shrinkA": 5,
+                    "shrinkB": 5,
+                    "patchA": None,
+                    "patchB": None,
+                    "mutation_aspect": 2,
+                    "connectionstyle": cstyle,
+                    "linewidth": 1,
+                    "linestyle": "dotted",
+                },
+                annotation_clip=False,
+            )
 
     if len(pos.keys()) > 2:
         pos_labels = _nudge(pos, 0, -0.075)
