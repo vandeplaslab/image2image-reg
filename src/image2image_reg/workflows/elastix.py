@@ -1279,19 +1279,27 @@ class ElastixReg(Workflow):
         write_registered: bool = True,
         write_not_registered: bool = True,
         write_attached: bool = True,
-        to_original_size: bool = False,
+        to_original_size: bool = True,
         rename: bool = False,
+        gzip: bool = False,
     ) -> None:
         """Export transform data."""
 
         def _get_filename(filename: Path) -> Path:
             """Get filename for transformation file."""
             name = filename.stem.replace(".ome", "")
-            return (self.final_transformations_dir / name).with_suffix(".elastix.json")
+            return (self.final_transformations_dir / name).with_suffix(extension)
+
+        def _export(filename):
+            if gzip:
+                transform_seq.to_gzip_json(filename)
+            else:
+                transform_seq.to_json(filename)
 
         if not self.is_registered:
             return
 
+        extension = ".elastix.json.gz" if gzip else ".elastix.json"
         self.load_preprocessed_cache()
         reg_modality_list, not_reg_modality_list, merge_modalities = self._get_modalities_to_transform()
         if write_registered and reg_modality_list:
@@ -1301,7 +1309,7 @@ class ElastixReg(Workflow):
                 )
                 filename = _get_filename(filename)
                 if transform_seq:
-                    transform_seq.to_json(filename)
+                    _export(filename)
                     logger.info(f"Exported {transform_seq} for {modality} to {filename} (registered)")
                 else:
                     logger.warning(f"No transformation file found for modality {modality} (registered)")
@@ -1313,7 +1321,7 @@ class ElastixReg(Workflow):
                 )
                 filename = _get_filename(filename)
                 if transform_seq:
-                    transform_seq.to_json(filename)
+                    _export(filename)
                     logger.info(f"Exported {transform_seq} for {modality} to {filename} (not-registered)")
                 else:
                     logger.warning(f"No transformation file found for modality {modality} (not-registered)")
@@ -1332,7 +1340,7 @@ class ElastixReg(Workflow):
                 )
                 filename = _get_filename(filename)
                 if transform_seq:
-                    transform_seq.to_json(filename)
+                    _export(filename)
                     logger.info(f"Exported {transform_seq} for {modality} to {filename} (attached)")
                 else:
                     logger.warning(f"No transformation file found for modality {modality} (attached)")
