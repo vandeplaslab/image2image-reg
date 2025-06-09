@@ -1089,9 +1089,10 @@ def final_cmd(
     write_registered: bool = True,
     write_not_registered: bool = True,
     write_attached: bool = True,
+    gzip: bool = True,
 ) -> None:
     """Export final transformations."""
-    final_runner(project_dir, original_size, write_registered, write_not_registered, write_attached)
+    final_runner(project_dir, original_size, write_registered, write_not_registered, write_attached, gzip=gzip)
 
 
 def final_runner(
@@ -1100,6 +1101,7 @@ def final_runner(
     write_registered: bool = True,
     write_not_registered: bool = True,
     write_attached: bool = True,
+        gzip: bool = True
 ) -> None:
     """Register images."""
     from image2image_reg.workflows import ElastixReg
@@ -1123,6 +1125,7 @@ def final_runner(
             write_registered=write_registered,
             write_not_registered=write_not_registered,
             write_attached=write_attached,
+            gzip=gzip
         )
 
 
