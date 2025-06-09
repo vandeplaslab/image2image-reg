@@ -67,7 +67,7 @@ def is_valis(project_dir: Path) -> bool:
 
 @click.group("elastix", cls=GroupedGroup)
 def elastix() -> None:
-    """I2Reg registration."""
+    """Elastix whole-slide image registration."""
 
 
 @click.option(
@@ -141,7 +141,7 @@ def new_runner(
 @project_path_single_
 @elastix.command("about", help_group="Project")
 def about_cmd(project_dir: ty.Sequence[str]) -> None:
-    """Print information about the registration project."""
+    """Print information about the project."""
     about_runner(project_dir)
 
 
@@ -224,7 +224,7 @@ def add_modality_cmd(
     affine: ty.Sequence[str] | None,
     overwrite: bool = False,
 ) -> None:
-    """Add images to the project."""
+    """Add image(s) to project."""
     add_modality_runner(project_dir, name, image, mask, mask_bbox, preprocessing, affine, overwrite)
 
 
@@ -371,7 +371,7 @@ def add_path_cmd(
     source_preprocessing: str | None,
     target_preprocessing: str | None,
 ) -> None:
-    """Specify the registration path between the source and target (and maybe through) modalities."""
+    """Create a path between the source, target (and maybe through) modalities."""
     add_path_runner(project_dir, source, target, through, registration, source_preprocessing, target_preprocessing)
 
 
@@ -414,7 +414,7 @@ def add_path_runner(
 @project_path_single_
 @elastix.command("attach-image", help_group="Project", aliases=["ati"])
 def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image: list[str]) -> None:
-    """Add attachment image to registered modality."""
+    """Attach image to existing image."""
     add_attachment_runner(project_dir, attach_to, name, image)
 
 
@@ -457,7 +457,7 @@ def add_attachment_runner(
 def add_points_cmd(
     project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
 ) -> None:
-    """Add attachment points (csv/tsv/txt) to registered modality."""
+    """Attach points (csv/tsv/txt) to existing image."""
     add_points_runner(project_dir, attach_to, name, file, pixel_size)
 
 
@@ -492,7 +492,7 @@ def add_points_runner(
 def add_shape_cmd(
     project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
 ) -> None:
-    """Add attachment shape (GeoJSON) to registered modality."""
+    """Attach shapes (GeoJSON) to existing image."""
     add_shape_runner(project_dir, attach_to, name, file, pixel_size)
 
 
@@ -539,7 +539,7 @@ def add_shape_runner(
 @project_path_multi_
 @elastix.command("add-merge", help_group="Project", aliases=["am"])
 def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterable[str] | None, auto: bool) -> None:
-    """Specify how (if) images should be merged."""
+    """Create image merge configuration."""
     add_merge_runner(project_dir, name, modality, auto)
 
 
@@ -569,7 +569,7 @@ def add_merge_runner(
 @project_path_multi_
 @elastix.command("preprocess", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS, aliases=["pre"])
 def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode: str, overwrite: bool) -> None:
-    """Preprocess images."""
+    """Pre-process images."""
     preprocess_runner(project_dir, n_parallel, parallel_mode, overwrite)
 
 
@@ -830,7 +830,7 @@ def _register(
 @project_path_multi_
 @elastix.command("preview", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
 def preview_cmd(project_dir: ty.Sequence[str], pyramid: int, overwrite: bool = False) -> None:
-    """Update project paths (e.g after folder move)."""
+    """Create preview of registered images."""
     preview_runner(project_dir, pyramid, overwrite)
 
 
@@ -868,7 +868,7 @@ def preview_runner(paths: ty.Sequence[str], pyramid: int, overwrite: bool = Fals
 @write_registered_
 @fmt_
 @project_path_multi_
-@elastix.command("export", help_group="Execute", aliases=["write"])
+@elastix.command("write", help_group="Execute", aliases=["export"])
 def export_cmd(
     project_dir: ty.Sequence[str],
     fmt: WriterMode,
@@ -889,7 +889,7 @@ def export_cmd(
     parallel_mode: str,
     overwrite: bool,
 ) -> None:
-    """Export images."""
+    """Export registered images."""
     export_runner(
         project_dir,
         fmt=fmt,
@@ -1157,7 +1157,7 @@ def final_runner(
     required=True,
 )
 @files_
-@elastix.command("transform", aliases=["apply"], help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+@elastix.command("apply", aliases=["transform"], help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
 def transform(
     files: ty.Sequence[str],
     transform_file: str,
@@ -1168,7 +1168,7 @@ def transform(
     inverse: bool,
     suffix: str,
 ) -> None:
-    """Transform image, mask, points or GeoJSON data using Elastix transformation."""
+    """Transform image, mask, points or GeoJSON data using transformation file."""
     transform_runner(files, transform_file, output_dir, as_uint8, pixel_size, clip, inverse, suffix)
 
 

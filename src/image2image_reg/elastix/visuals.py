@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from koyo.color import get_next_color
 from matplotlib.patches import ArrowStyle
+from natsort import natsorted
 
 from image2image_reg.enums import NetworkTypes
 
@@ -129,7 +130,7 @@ def draw_workflow(
     g = nx.DiGraph()
     g_layout = nx.DiGraph()
 
-    for idx, modality in enumerate(workflow.get_image_modalities(with_attachment=show_attachments)):
+    for idx, modality in enumerate(natsorted(workflow.get_image_modalities(with_attachment=show_attachments))):
         rad = (idx + 1) * 0.08 + 0.05
         color = get_next_color(idx)
 
