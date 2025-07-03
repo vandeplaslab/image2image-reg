@@ -43,6 +43,7 @@ dependencies = [
     "koyo>=0.3.0",
     "pydantic>=2",
     "numpy<2",
+    "itk!=5.4.4; platform_system=='MacOS'",
     "itk-elastix",
     "opencv-python",
     "SimpleITK",

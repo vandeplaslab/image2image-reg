@@ -786,14 +786,16 @@ class ElastixReg(Workflow):
             write_iteration_plots,
         )
 
-        with MeasureTimer() as timer:
+        with suppress(ValueError, IndexError, TypeError), MeasureTimer() as timer:
             key = f"{source}_to_{target}"
             transform_data = read_elastix_transform_dir(output_dir)
-            iteration_data = read_elastix_iteration_dir(output_dir)
+            self.preprocessed_cache["transformations"][key] = transform_data
+        logger.info(f"Loaded registered transforms for {key} in {timer}.")
 
+        with suppress(ValueError, IndexError, TypeError), MeasureTimer() as timer:
+            iteration_data = read_elastix_iteration_dir(output_dir)
             write_iteration_plots(iteration_data, key, output_dir)
             self.preprocessed_cache["iterations"][key] = iteration_data
-            self.preprocessed_cache["transformations"][key] = transform_data
         logger.info(f"Generated figures for {key} in {timer}.")
 
     def _collate_transformations(self) -> dict[str, dict]:
