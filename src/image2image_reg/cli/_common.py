@@ -331,11 +331,7 @@ def set_logger(verbosity: float, no_color: bool, log: PathLike | None = None) ->
     level, fmt, colorize, enqueue = get_loguru_config(level, no_color=no_color)  # type: ignore[assignment]
     set_loguru_env(fmt, level, colorize, enqueue)  # type: ignore[arg-type]
     set_loguru_log(level=level.upper(), no_color=no_color, logger=logger)  # type: ignore[attr-defined]
-    logger.enable("image2image_reg")
-    logger.enable("image2image_io")
-    logger.enable("koyo")
-    # override koyo logger
-    set_loguru_log(level=level.upper(), no_color=no_color)  # type: ignore[attr-defined]
+    [logger.enable(module) for module in ["koyo", "image2image_reg", "image2image_io"]]
     logger.debug(f"Activated logger with level '{level}'.")
     if log:
         set_loguru_log(
@@ -349,4 +345,3 @@ def set_logger(verbosity: float, no_color: bool, log: PathLike | None = None) ->
             logger=logger,
             remove=False,
         )
-        logger.trace(f"Command: {' '.join(sys.argv)}")

@@ -171,14 +171,15 @@ def register_2d_images(
 
     pixel_id = source.image.GetPixelID()  # type: ignore[union-attr]
     with MeasureTimer() as timer:
-        source.sitk_to_itk(True)
-        target.sitk_to_itk(True)
+        source.sitk_to_itk(inplace=True)
+        target.sitk_to_itk(inplace=True)
     logger.info(f"Converting images to ITK took {timer()}")
 
     output_dir = Path(output_dir)
     output_dir.mkdir(exist_ok=True, parents=True)
+    logger.info(f"Created output directory {output_dir}")
 
-    # Create registration object
+    # Create a registration object
     with MeasureTimer() as timer:
         selx = itk.ElastixRegistrationMethod.New(source.image, target.image)
         selx.SetLogToConsole(True)
@@ -207,6 +208,7 @@ def register_2d_images(
                 pmap["WriteResultImage"] = ["true"] if return_image else ["false"]
                 pmap["AutomaticTransformInitialization"] = ["false"]
                 parameter_object_registration.AddParameterMap(pmap)
+            logger.trace(f"Setup registration model {idx}")
         selx.SetParameterObject(parameter_object_registration)
     logger.info(f"Setting up registration took {timer()}")
 

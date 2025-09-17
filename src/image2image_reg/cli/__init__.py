@@ -84,19 +84,20 @@ def cli(
             if running_as_pyinstaller_app():
                 click.echo("Developer mode is disabled in bundled app.")
                 dev = False
-            else:
-                verbosity = 0.5
-        verbosity = min(0.2, verbosity) * 10
 
         if dev:
-            install_debugger_hook()
             verbosity = 0
-        else:
-            uninstall_debugger_hook()
+        if verbosity is None:
+            verbosity = 1
+        verbosity = min(0.2, verbosity) * 10
+
         set_logger(verbosity, no_color, log)
         logger.trace(f"Executed command: {sys.argv}")
         if dev:
+            install_debugger_hook()
             logger.debug("Debugger hook installed.")
+        else:
+            uninstall_debugger_hook()
 
         if IS_MAC:
             import os
