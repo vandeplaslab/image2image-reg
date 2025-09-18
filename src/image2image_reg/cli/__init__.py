@@ -78,8 +78,12 @@ def cli(
 ) -> None:
     """Launch registration app."""
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
+    from koyo.faulthandler import  install_segfault_handler
+    from pathlib import Path
 
     if "-h" not in sys.argv and "--help" not in sys.argv:
+
+        install_segfault_handler(Path.cwd())
         if dev:
             if running_as_pyinstaller_app():
                 click.echo("Developer mode is disabled in bundled app.")
