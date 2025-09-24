@@ -340,7 +340,7 @@ def transform_registered_image(
 def transform_attached_image(
     registrar: Valis,
     source_path: PathLike,
-    paths_to_register: list[PathLike],
+    paths: list[PathLike],
     output_dir: PathLike,
     interp_method: str | ValisInterpolation = "bicubic",
     crop: str | bool | ValisCrop = "reference",
@@ -383,7 +383,7 @@ def transform_attached_image(
         raise ValueError(f"Source slide {slide_src.src_f} does not exist.")
 
     files = []
-    for path in tqdm(paths_to_register, desc="Transforming attached images"):
+    for path in tqdm(paths, desc="Transforming attached images"):
         logger.trace(f"Transforming {path} to {source_path}...")
         reader = get_simple_reader(path)
         # renaming involves naming the file such as:
@@ -444,8 +444,8 @@ def transform_attached_image(
 def transform_attached_points(
     registrar: Valis,
     attach_to: PathLike,
-    output_dir: PathLike,
     paths: list[PathLike],
+    output_dir: PathLike,
     source_pixel_size: float,
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
@@ -528,13 +528,14 @@ def transform_attached_points(
 def transform_attached_shapes(
     registrar: Valis,
     attach_to: PathLike,
-    output_dir: PathLike,
     paths: list[PathLike],
+    output_dir: PathLike,
     source_pixel_size: float,
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
     as_image: bool = False,
     overwrite: bool = False,
+    suffix: str = "_previous",
 ) -> list[Path]:
     """Transform attached shapes."""
     from image2image_io.readers.shapes_reader import ShapesReader
@@ -557,7 +558,7 @@ def transform_attached_shapes(
     for path in tqdm(paths, desc="Transforming attached points"):
         # read data
         path = Path(path)
-        output_path = output_dir / path.name
+        output_path = output_dir / f"{path.stem}{suffix}{path.suffix}"
         if output_path.exists() and not overwrite:
             logger.trace(f"File {output_path} already exists. Moving on...")
             continue

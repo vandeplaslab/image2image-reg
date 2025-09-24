@@ -7,12 +7,13 @@ import typing as ty
 from pathlib import Path
 
 import click
-from koyo.click import cli_parse_paths_sort
+from koyo.click import cli_parse_paths_sort, cli_parse_paths_sort_auto_glob
 from koyo.typing import PathLike
 from loguru import logger
 
 if ty.TYPE_CHECKING:
     from image2image_reg.models import Preprocessing
+
 
 # declare common options
 ALLOW_EXTRA_ARGS = {"help_option_names": ["-h", "--help"], "ignore_unknown_options": True, "allow_extra_args": True}
@@ -154,6 +155,14 @@ parallel_mode_ = click.option(
     show_default=True,
     required=False,
 )
+project_path_single_ = click.option(
+    "-p",
+    "--project_dir",
+    help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
+    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
+    show_default=True,
+    required=True,
+)
 project_path_multi_ = click.option(
     "-p",
     "--project_dir",
@@ -163,14 +172,6 @@ project_path_multi_ = click.option(
     required=True,
     multiple=True,
     callback=cli_parse_paths_sort,
-)
-project_path_single_ = click.option(
-    "-p",
-    "--project_dir",
-    help="Path to the WsiReg project directory. It usually ends in .i2reg extension.",
-    type=click.Path(exists=True, resolve_path=True, file_okay=False, dir_okay=True),
-    show_default=True,
-    required=True,
 )
 modality_multi_ = click.option(
     "-n",
@@ -207,7 +208,7 @@ files_ = click.option(
     show_default=True,
     multiple=True,
     required=True,
-    callback=cli_parse_paths_sort,
+    callback=cli_parse_paths_sort_auto_glob,
 )
 output_dir_ = click.option(
     "-o",

@@ -26,11 +26,13 @@ from image2image_reg.cli._common import (
     attach_points_,
     attach_shapes_,
     attach_to_,
+    files_,
     fmt_,
     modality_multi_,
     modality_single_,
     n_parallel_,
     output_dir_,
+    output_dir_current_,
     overwrite_,
     parallel_mode_,
     pixel_size_opt_,
@@ -671,6 +673,75 @@ if is_installed("valis"):
             overwrite=overwrite,
         )
         return path
+
+    @click.option(
+        "-S",
+        "--suffix",
+        help="Suffix appended to the filename.",
+        type=click.STRING,
+        show_default=True,
+        default="_transformed",
+        multiple=False,
+        required=True,
+    )
+    @pixel_size_opt_
+    @as_uint8_
+    @output_dir_current_
+    @click.option(
+        "-a",
+        "--attached_to",
+        help="Name of the modality to which the file is attached to.",
+        type=str,
+        show_default=True,
+        required=True,
+    )
+    @project_path_single_
+    @files_
+    @valis.command("apply", aliases=["transform"], help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
+    def transform(
+        files: ty.Sequence[str],
+        project_dir: str,
+        attached_to: str,
+        output_dir: str,
+        as_uint8: bool | None,
+        pixel_size: float | None,
+        suffix: str,
+    ) -> None:
+        """Transform image, mask, points or GeoJSON data using transformation file."""
+        transform_runner(files, project_dir, attached_to, output_dir, as_uint8, pixel_size, suffix)
+
+    def transform_runner(
+        files: ty.Sequence[str],
+        project_dir: str,
+        attached_to: str,
+        output_dir: str,
+        as_uint8: bool | None = None,
+        pixel_size: float | None = None,
+        suffix: str = "_transformed",
+    ) -> None:
+        """Apply transformation."""
+        from image2image_reg.workflows.transform import transform_valis
+
+        print_parameters(
+            Parameter("Files to transform", "-f/--file", files),
+            Parameter("Project directory", "-p/--project_dir", project_dir),
+            Parameter("Modality to which files are attached", "-a/--attached_to", attached_to),
+            Parameter("Output directory", "-o/--output_dir", output_dir),
+            Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
+            Parameter("Pixel size", "-s/--pixel_size", pixel_size),
+            Parameter("Suffix", "-S/--suffix", suffix),
+        )
+
+        transform_valis(
+            files,
+            project_dir,
+            attached_to=attached_to,
+            output_dir=output_dir,
+            as_uint8=as_uint8,
+            pixel_size=pixel_size,
+            # crop=crop,
+            suffix=suffix,
+        )
 
     @click.option(
         "--all",

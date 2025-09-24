@@ -578,9 +578,9 @@ class ValisReg(Workflow):
                 paths_ = transform_attached_shapes(
                     self.registrar,
                     attach_to_modality.path,  # type: ignore[arg-type]
-                    self.image_dir,
                     attached_dict["files"],
-                    source_pixel_size,
+                    output_dir=self.image_dir,
+                    source_pixel_size=source_pixel_size,
                     overwrite=overwrite,
                     non_rigid=self.non_rigid_registration,
                     as_image=True,
@@ -605,9 +605,9 @@ class ValisReg(Workflow):
                 paths_ = transform_attached_points(
                     self.registrar,
                     attach_to_modality.path,  # type: ignore[arg-type]
-                    self.image_dir,
                     attached_dict["files"],
-                    source_pixel_size,
+                    output_dir=self.image_dir,
+                    source_pixel_size=source_pixel_size,
                     overwrite=overwrite,
                     non_rigid=self.non_rigid_registration,
                     as_image=True,

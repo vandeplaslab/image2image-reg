@@ -8,6 +8,7 @@ from multiprocessing import freeze_support, set_start_method
 import click
 from click_groups import GroupedGroup
 from image2image_io.cli.convert import convert
+from image2image_io.cli.transform import transform
 from koyo.compat import enable_compat
 from koyo.system import IS_MAC
 from koyo.typing import PathLike
@@ -77,14 +78,17 @@ def cli(
     extra_args: tuple[str, ...] | None = None,
 ) -> None:
     """Launch registration app."""
-    from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
-    from koyo.faulthandler import  install_segfault_handler
     from pathlib import Path
 
-    if "-h" not in sys.argv and "--help" not in sys.argv:
+    from koyo.faulthandler import install_segfault_handler
+    from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
 
-        install_segfault_handler(Path.cwd())
+    if "-h" not in sys.argv and "--help" not in sys.argv:
         if dev:
+            from image2image_reg.utils._platformdirs import USER_LOG_DIR
+
+            if USER_LOG_DIR:
+                install_segfault_handler(USER_LOG_DIR)
             if running_as_pyinstaller_app():
                 click.echo("Developer mode is disabled in bundled app.")
                 dev = False
@@ -117,6 +121,8 @@ if simple_valis:
     cli.add_command(simple_valis, help_group="Registration")
 cli.add_command(convert, help_group="Utility")
 cli.add_command(merge, help_group="Utility")
+if transform:
+    cli.add_command(transform, help_group="Utility")
 
 
 def main() -> None:
