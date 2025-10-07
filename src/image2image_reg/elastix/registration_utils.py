@@ -181,21 +181,21 @@ def register_2d_images(
 
     # Create a registration object
     with MeasureTimer() as timer:
-        logger.info("creating selx")
-        selx = itk.ElastixRegistrationMethod.New(source.image, target.image)
-        logger.info("created selx")
-        selx.SetLogToConsole(True)
-        selx.LogToConsoleOn()
-        selx.SetLogToFile(True)
-        selx.SetOutputDirectory(str(output_dir))
-        logger.info("setup selx")
+        logger.trace("Creating Elastix registrar")
+        registrar = itk.ElastixRegistrationMethod.New(source.image, target.image)
+        logger.trace("Create Elastix registrar")
+        registrar.SetLogToConsole(True)
+        registrar.LogToConsoleOn()
+        registrar.SetLogToFile(True)
+        registrar.SetOutputDirectory(str(output_dir))
+        logger.trace("Setup registrar parameters")
         if source.mask is not None:
-            selx.SetMovingMask(source.mask)
+            registrar.SetMovingMask(source.mask)
         if target.mask is not None:
-            selx.SetFixedMask(target.mask)
-        selx.SetMovingImage(source.image)
-        selx.SetFixedImage(target.image)
-        logger.info("setup selx images")
+            registrar.SetFixedMask(target.mask)
+        registrar.SetMovingImage(source.image)
+        registrar.SetFixedImage(target.image)
+        logger.trace("Setup registrar images")
 
         # Set registration parameters
         parameter_object_registration = itk.ParameterObject.New()
@@ -212,18 +212,18 @@ def register_2d_images(
                 pmap["WriteResultImage"] = ["true"] if return_image else ["false"]
                 pmap["AutomaticTransformInitialization"] = ["false"]
                 parameter_object_registration.AddParameterMap(pmap)
-            logger.info(f"Setup registration model {idx}")
-        selx.SetParameterObject(parameter_object_registration)
-        logger.info("setup selx object")
+            logger.trace(f"Added registration model {idx} to registrar")
+        registrar.SetParameterObject(parameter_object_registration)
+        logger.trace("Finished setting up registrar")
     logger.info(f"Setting up registration took {timer()}")
 
     # Update filter object (required)
     with MeasureTimer() as timer:
-        selx.UpdateLargestPossibleRegion()
+        registrar.UpdateLargestPossibleRegion()
     logger.info(f"Registration took {timer()}")
 
     # Results of Registration
-    result_transform_parameters = selx.GetTransformParameterObject()
+    result_transform_parameters = registrar.GetTransformParameterObject()
 
     # execute registration:
     tform_list = []
@@ -234,7 +234,7 @@ def register_2d_images(
         tform_list.append(tform)
 
     if return_image:
-        image = selx.GetOutput()
+        image = registrar.GetOutput()
         image = itk_image_to_sitk_image(image)
         image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
         return tform_list, image
