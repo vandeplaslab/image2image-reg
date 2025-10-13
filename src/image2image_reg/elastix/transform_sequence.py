@@ -449,6 +449,14 @@ class TransformSequence(TransformMixin):
         )
         return rep
 
+    def extract_to_ts(self, index: int) -> "TransformSequence":
+        """Separates a single transform from the sequence and returns it as a new TransformSequence object."""
+        if index < 0 or index >= len(self.transforms):
+            raise IndexError("Index out of range.")
+        single_transform = self.transforms[index]
+        single_index = self.transform_sequence_index[index]
+        return TransformSequence([single_transform], [single_index])
+
     @property
     def final_transform(self) -> sitk.Transform:  # type: ignore[override]
         """Final ITK transform."""

@@ -1170,6 +1170,72 @@ class ElastixReg(Workflow):
             logger.trace(f"Saved overlap image to '{path}'.")
         return images, greys, names
 
+    def _generate_overlap_debug_image_for_modality(
+        self, source: str, pyramid: int = -1, overwrite: bool = False
+    ) -> tuple[list, list, list]:
+        """Generate overlap of images for EACH transformation step."""
+        # TODO: this is essentially same as above, but we need to apply each transformation step, and then
+        # export it as an image
+        # from image2image_io.utils.utilities import get_shape_of_image
+        # from koyo.visuals import save_rgb
+        #
+        # from image2image_reg.elastix.transform import transform_images_debug_for_pyramid
+        # from image2image_reg.utils.visuals import create_overlap_img
+        #
+        # images, greys, names = [], [], []  # type: ignore[var-annotated]
+        # target_pair = self.registration_paths[source]
+        # target, through = (target_pair[-1], target_pair[0]) if len(target_pair) == 2 else (target_pair[0], None)
+        # path = self.overlap_dir / f"overlap_{source}_to_{target}.png"
+        # if path.exists() and not overwrite:
+        #     logger.warning(f"Overlap image already exists at '{path}'. Skipping.")
+        #     return images, greys, names
+        #
+        # with MeasureTimer() as timer:
+        #     target_modality = self.modalities[target]
+        #     target_wrapper = self.get_wrapper(name=target_modality.name)
+        #     assert target_wrapper, f"Could not find wrapper for {target_modality.name}"
+        #     _, transform_seq, _ = self._prepare_transform(target_modality.name)
+        #     if transform_seq:
+        #         shape = target_wrapper.reader.pyramid[pyramid].shape
+        #         _, _, shape = get_shape_of_image(shape)
+        #         transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+        #     target_images = transform_images_debug_for_pyramid(target_wrapper, transform_seq, pyramid)
+        #     logger.trace(f"Transformed {target} in {timer(since_last=True)}")
+        #     _, _, shape = get_shape_of_image(target_image)
+        #     # TODO: resample to maximum shape e.g. 1000px
+        #     images.append(target_image)
+        #     names.append(target_modality.name)
+        #     logger.trace(f"Previewing overview with {shape} ({pyramid})")
+        #
+        #     if through:
+        #         through_modality = self.modalities[through]
+        #         through_wrapper = self.get_wrapper(name=through_modality.name)
+        #         assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
+        #         _, transform_seq, _ = self._prepare_transform(through_modality.name)
+        #         assert transform_seq is not None, f"Transformation is None for {through_modality.name}"
+        #         transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+        #         images.append(transform_images_debug_for_pyramid(through_wrapper, transform_seq, pyramid))
+        #         names.append(through_modality.name)
+        #         logger.trace(f"Transformed {through} in {timer(since_last=True)}")
+        #
+        #     source_modality = self.modalities[source]
+        #     source_wrapper = self.get_wrapper(name=source_modality.name)
+        #     assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
+        #     _, transform_seq, _ = self._prepare_transform(source_modality.name)
+        #     assert transform_seq is not None, f"Transformation is None for {source_modality.name}"
+        #     transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+        #     images.append(transform_images_debug_for_pyramid(source_wrapper, transform_seq, pyramid))
+        #     names.append(source_modality.name)
+        #     logger.trace(f"Transformed {source} in {timer(since_last=True)}")
+        #
+        #     # create overlap images
+        #     overlap, greys = create_overlap_img(images)
+        #
+        #     # export gray-scale images
+        #     save_rgb(path, overlap)
+        #     logger.trace(f"Saved overlap image to '{path}'.")
+        # return images, greys, names
+
     def write(
         self,
         fmt: WriterMode = "ome-tiff",

@@ -704,3 +704,32 @@ def transform_images_for_pyramid(
         image.SetSpacing(reader.scale_for_pyramid(pyramid))
         transformed.append(sitk.GetArrayFromImage(transformation_sequence(image)))
     return np.stack(transformed, axis=channel_axis)
+
+
+def transform_images_debug_for_pyramid(
+    wrapper: ImageWrapper,
+    transformation_sequence: TransformSequence | None,
+    pyramid: int = -1,
+    channel_ids: list[int] | None = None,
+) -> dict[int, np.ndarray]:
+    """Transform all images."""
+    import SimpleITK as sitk
+
+    reader = wrapper.reader
+    channel_axis, n_channels = reader.get_channel_axis_and_n_channels()
+    channel_axis = channel_axis or 0
+    if transformation_sequence is None:
+        return np.asarray(reader.pyramid[pyramid])
+
+    transformed = {}
+    for transform_index in range(len(transformation_sequence.transforms)):
+        transform_sequence_ = transformation_sequence.extract_to_ts(transform_index)
+        transformed_ = []
+        channel_ids = channel_ids or reader.channel_ids
+        for channel_index in channel_ids:
+            image = np.squeeze(reader.get_channel(channel_index, pyramid, split_rgb=True))
+            image = sitk.GetImageFromArray(image)
+            image.SetSpacing(reader.scale_for_pyramid(pyramid))
+            transformed.append(sitk.GetArrayFromImage(transform_sequence_(image)))
+        transformed_[transform_index] = np.stack(transformed, axis=channel_axis)
+    return transformed
