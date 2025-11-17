@@ -1,6 +1,7 @@
 """Test models/transform_sequence.py."""
-from image2image_wsireg.models import TransformSequence
-from image2image_wsireg.utils._test import get_test_files
+
+from image2image_reg.elastix.transform_sequence import TransformSequence
+from image2image_reg.utils._test import get_test_files
 
 
 def test_transform_sequence_one_dataset_no_initial():
