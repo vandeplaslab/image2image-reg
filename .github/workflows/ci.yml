@@ -61,15 +61,8 @@ jobs:
           path: ./.coverage*
           include-hidden-files: true
 
-
-  # now add another job to combine and upload the coverage
-  upload_coverage:
-    name: Upload coverage
-    if: always()
-    needs: [test]
-    uses: pyapp-kit/workflows/.github/workflows/upload-coverage.yml@v2
-    secrets:
-      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Coverage
+        uses: codecov/codecov-action@v4
 
   deploy_test:
     name: Deploy to PyPI (test)
