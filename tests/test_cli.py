@@ -2,8 +2,6 @@
 
 import os
 
-import pytest
-
 from image2image_reg.utils._test import get_test_file
 from image2image_reg.workflows import ElastixReg
 

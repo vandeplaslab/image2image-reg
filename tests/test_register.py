@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from image2image_reg.models import Preprocessing
 from image2image_reg.utils._test import get_test_file

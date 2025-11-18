@@ -41,7 +41,7 @@ dynamic = ["version"]
 dependencies = [
     "koyo>=0.3.2",
     "pydantic>=2",
-    "numpy<2",
+    "numpy",
 #    "itk!=5.4.4; platform_system=='MacOS'",
     "itk==5.4.0",
     "itk-elastix==0.19.2",

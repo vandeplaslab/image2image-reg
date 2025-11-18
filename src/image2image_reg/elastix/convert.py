@@ -127,7 +127,7 @@ def convert_to_itk(tform: dict) -> sitk.Transform:
     return itk_tform
 
 
-def convert_to_dict(tform: sitk.Transform, spacing: tuple[float, float] = None, size: tuple[int, int] = None) -> dict:
+def convert_to_dict(tform: sitk.Transform, spacing: tuple[float, float] | None = None, size: tuple[int, int] | None = None) -> dict:
     """Convert ITK transform to dictionary."""
     if isinstance(tform, sitk.Euler2DTransform):
         out = euler_itk2d_to_dict(tform)
