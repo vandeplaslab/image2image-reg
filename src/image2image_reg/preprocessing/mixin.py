@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import SimpleITK as sitk
 
-from image2image_reg.preprocessing.convert import numpy_to_sitk_image, numpy_view_to_sitk_image, sitk_image_to_numpy
+from image2image_reg.preprocessing.convert import numpy_to_sitk_image, sitk_image_to_numpy
 
 
 class PreprocessorMixin:
@@ -25,7 +25,7 @@ class PreprocessorMixin:
         if isinstance(self.array, np.ndarray):
             shape = self.array.shape
         else:
-            shape = numpy_view_to_sitk_image(self.array).shape
+            shape = sitk_image_to_numpy(self.array).shape
         return shape
 
     @property
@@ -52,12 +52,12 @@ class PreprocessorMixin:
 
     @property
     def is_multi_channel(self) -> bool:
-        """Check if image is multichannel."""
+        """Check if the image is multichannel."""
         return not self.is_rgb and not self.is_single_channel
 
     @property
     def is_single_channel(self) -> bool:
-        """Check if image is single-channel."""
+        """Check if the image is single-channel."""
         return len(self.shape) == 2
 
     def to_sitk(self) -> sitk.Image:

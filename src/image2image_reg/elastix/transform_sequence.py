@@ -39,7 +39,7 @@ def transform_points(
     source_pixel_size: float = 1,
     silent: bool = False,
     copy: bool = False,
-):
+) -> np.ndarray:
     """Transform points."""
     inv_target_pixel_size = 1 / target_pixel_size
 
@@ -449,7 +449,7 @@ class TransformSequence(TransformMixin):
         )
         return rep
 
-    def extract_to_ts(self, index: int) -> "TransformSequence":
+    def extract_to_ts(self, index: int) -> TransformSequence:
         """Separates a single transform from the sequence and returns it as a new TransformSequence object."""
         if index < 0 or index >= len(self.transforms):
             raise IndexError("Index out of range.")
@@ -497,7 +497,7 @@ class TransformSequence(TransformMixin):
         self.add_transforms(other.transforms, other.transform_sequence_index)
 
     def insert(self, other: TransformSequence) -> None:
-        """Insert transformation sequence before all the other transforms."""
+        """Insert a transformation sequence before all the other transforms."""
         n_in_other = len(other.transforms)
         existing_indices = self.transform_sequence_index
         existing_transforms = self.transforms
@@ -698,14 +698,14 @@ class TransformSequence(TransformMixin):
         return cls(transforms, transform_sequence_index)
 
     def to_dict(self) -> list[dict]:
-        """Export transformation sequence to dictionary."""
+        """Export the transformation sequence to a dictionary."""
         out = []
         for transform in self.transforms:
             out.append(transform.to_dict())
         return out
 
     def to_json(self, path: PathLike) -> Path:
-        """Export transformation sequence to json file."""
+        """Export the transformation sequence to a JSON file."""
         path = Path(path)
         if len(path.suffixes) == 1:
             path = path.with_suffix(".elastix.json")
@@ -715,7 +715,7 @@ class TransformSequence(TransformMixin):
         return path
 
     def to_gzip_json(self, path: PathLike) -> Path:
-        """Export transformation sequence to json file."""
+        """Export the transformation sequence to a Gzipped JSON file."""
         path = Path(path)
         if len(path.suffixes) == 1:
             path = path.with_suffix(".elastix.json.gz")

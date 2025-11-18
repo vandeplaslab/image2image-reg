@@ -260,6 +260,9 @@ def add_modality_runner(
         affines = [affines]  # type: ignore[list-item]
     if not isinstance(preprocessings, (list, tuple)):
         preprocessings = [preprocessings]  # type: ignore[list-item]
+    if not methods:
+        methods = [methods] * len(paths)
+
     if len(preprocessings) == 1 and len(paths) > 1:
         preprocessings = preprocessings * len(paths)
         info_msg(f"Using same pre-processing for all images: {preprocessings[0]}")
@@ -1101,7 +1104,7 @@ def final_runner(
     write_registered: bool = True,
     write_not_registered: bool = True,
     write_attached: bool = True,
-        gzip: bool = True
+    gzip: bool = True,
 ) -> None:
     """Register images."""
     from image2image_reg.workflows import ElastixReg
@@ -1125,7 +1128,7 @@ def final_runner(
             write_registered=write_registered,
             write_not_registered=write_not_registered,
             write_attached=write_attached,
-            gzip=gzip
+            gzip=gzip,
         )
 
 

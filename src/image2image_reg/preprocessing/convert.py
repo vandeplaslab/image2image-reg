@@ -16,24 +16,23 @@ def itk_image_to_sitk_image(image: itk.ImageBase) -> sitk.Image:
     image.SetOrigin(origin)
     image.SetSpacing(spacing)
     image.SetDirection(direction)
-    return image
+    return image  # type: ignore[no-any-return]
 
 
-def sitk_image_to_itk_image(image: sitk.Image, cast_to_float32=False) -> itk.ImageBase:
+def sitk_image_to_itk_image(image: sitk.Image, cast_to_float32: bool = False) -> itk.ImageBase:
     """Convert SITK image to ITK image."""
-    origin = image.GetOrigin()
-    spacing = image.GetSpacing()
-    # direction = image.GetDirection()
-    is_vector = image.GetNumberOfComponentsPerPixel() > 1
+    origin = image.GetOrigin()  # type: ignore[no-untyped-call]
+    spacing = image.GetSpacing()  # type: ignore[no-untyped-call]
+    is_vector = image.GetNumberOfComponentsPerPixel() > 1  # type: ignore[no-untyped-call]
     if cast_to_float32:
-        image = sitk.Cast(image, sitk.sitkFloat32)
-        image = sitk.GetArrayFromImage(image)
+        image = sitk.Cast(image, sitk.sitkFloat32)  # type: ignore[no-untyped-call]
+        image = sitk.GetArrayFromImage(image)  # type: ignore[no-untyped-call,assignment]
     else:
-        image = sitk.GetArrayFromImage(image)
+        image = sitk.GetArrayFromImage(image)  # type: ignore[no-untyped-call,assignment]
 
     image = itk.GetImageFromArray(image, is_vector=is_vector)
-    image.SetOrigin(origin)
-    image.SetSpacing(spacing)
+    image.SetOrigin(origin)  # type: ignore[no-untyped-call]
+    image.SetSpacing(spacing)  # type: ignore[no-untyped-call]
     return image
 
 
@@ -42,14 +41,17 @@ def sitk_image_to_numpy(image: sitk.Image) -> np.ndarray:
     return sitk.GetArrayFromImage(image)
 
 
-def numpy_view_to_sitk_image(image: sitk.Image, resolution: Float = 1.0) -> np.ndarray:
+def numpy_view_to_sitk_image(image: np.ndarray, resolution: float = 1.0) -> np.ndarray:
     """Convert numpy array to SITK image."""
-    image = sitk.GetArrayViewFromImage(image)
-    image.SetSpacing((resolution, resolution))
+    ndim = image.ndim
+    image = sitk.GetArrayViewFromImage(image)  # type: ignore[no-untyped-call,assignment,arg-type]
+    image.SetSpacing((resolution,) * ndim)  # type: ignore[no-untyped-call,attr-defined]
     return image
 
-def numpy_to_sitk_image(image: np.ndarray, resolution: Float = 1.0) -> sitk.Image:
+
+def numpy_to_sitk_image(image: np.ndarray, resolution: float = 1.0) -> sitk.Image:
     """Convert numpy array to SITK image."""
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing((resolution, resolution))
-    return image
+    ndim = image.ndim
+    image = sitk.GetImageFromArray(image)  # type: ignore[no-untyped-call,assignment]
+    image.SetSpacing((resolution,) * ndim)  # type: ignore[no-untyped-call,attr-defined]
+    return image  # type: ignore[no-any-return]
