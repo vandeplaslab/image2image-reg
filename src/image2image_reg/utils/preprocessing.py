@@ -28,6 +28,15 @@ from image2image_reg.models import Preprocessing
 from image2image_reg.models.bbox import BoundingBox
 
 
+def convert_image_to_array(array: da.core.Array) -> np.ndarray:
+    """Convert dask array to numpy array."""
+    if isinstance(array, da.core.Array):
+        return array.compute()
+    if isinstance(array, sitk.Image):
+        return sitk.GetArrayFromImage(array)
+    return array
+
+
 def get_channel_indices_from_names(channel_names: list[str], channel_names_to_select: list[str]) -> list[int]:
     """Get channel indices from channel names."""
     channel_indices = []
@@ -69,8 +78,15 @@ def preprocess_dask_array(
     logger.trace(f"Pre-processing array of shape {array.shape}")
     is_rgb = is_rgb if isinstance(is_rgb, bool) else guess_rgb(array.shape)
     with MeasureTimer() as timer:
+        # handle 2D image
+        if array.ndim == 2:
+            array = np.asarray(array)
+            if preprocessing and preprocessing.as_uint8:
+                array = cv2.normalize(np.asarray(array), None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+            array = sitk.GetImageFromArray(array)  # type: ignore[assignment]
+            logger.trace(f"Converted 2D array to SimpleITK image in {timer()} ({array.GetSize()})")
         # handle RGB image
-        if is_rgb:
+        elif is_rgb:
             if preprocessing:
                 array = np.asarray(grayscale(array, is_interleaved=is_rgb))
                 array = sitk.GetImageFromArray(array)  # type: ignore[assignment]
@@ -79,13 +95,6 @@ def preprocess_dask_array(
                 array = np.asarray(array)
                 array = sitk.GetImageFromArray(array, isVector=True)  # type: ignore[assignment]
                 logger.trace(f"Converted RGB to SimpleITK image in {timer()} ({array.GetSize()})")
-        # handle 2D image
-        elif len(array.shape) == 2:
-            array = np.asarray(array)
-            if preprocessing and preprocessing.as_uint8:
-                array = cv2.normalize(np.asarray(array), None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
-            array = sitk.GetImageFromArray(array)  # type: ignore[assignment]
-            logger.trace(f"Converted 2D array to SimpleITK image in {timer()} ({array.GetSize()})")
         # handle multi-channel image
         else:
             # select channels
@@ -107,8 +116,68 @@ def preprocess_dask_array(
     return array
 
 
+def resize_image(
+    array: np.ndarray, resolution: float, is_rgb: bool | None = None, max_size: int = 1_024, as_sitk: bool = False
+) -> tuple[np.ndarray | sitk.Image, float]:
+    """Resize the image to a maximum size.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Image, which could be 2D, RGB or multichannel.
+    resolution : float
+        Resolution for the image in microns per pixel.
+    is_rgb : bool, optional
+        Flag indicating if the image is RGB.
+    max_size : int
+        Maximum size in pixels. This will be applied to the longest dimension of the image.
+    as_sitk : bool
+        Convert image to SimpleITK image.
+    """
+    with MeasureTimer() as timer:
+        shape = array.shape if hasattr(array, "shape") else array.GetSize()
+        is_rgb = is_rgb if isinstance(is_rgb, bool) else guess_rgb(shape)
+        ndim = array.ndim if hasattr(array, "ndim") else array.GetDimension()
+        breakpoint()
+
+        if ndim == 2:
+            height, width = shape
+        elif is_rgb:
+            height, width, _ = shape
+        else:
+            _, height, width = shape
+        longest_dim = max(height, width)
+        if longest_dim > max_size:
+            scale_factor = max_size / longest_dim
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+
+            array = convert_image_to_array(array)
+            if array.ndim == 2:
+                array = cv2.resize(array, (new_width, new_height), interpolation=cv2.INTER_AREA)
+            elif is_rgb:
+                array = np.asarray(
+                    [
+                        cv2.resize(array[:, :, i], (new_width, new_height), interpolation=cv2.INTER_AREA)
+                        for i in range(array.shape[2])
+                    ]
+                )
+            else:
+                array = np.asarray(
+                    [
+                        cv2.resize(array[i, :, :], (new_width, new_height), interpolation=cv2.INTER_AREA)
+                        for i in range(array.shape[0])
+                    ]
+                )
+            resolution = resolution / scale_factor
+            logger.debug(f"Resized image to {array.shape} at resolution {resolution:.2f} um/px in {timer()}")
+    if as_sitk and not isinstance(array, sitk.Image):
+        array = sitk.GetImageFromArray(array)
+    return array, resolution
+
+
 def convert_and_cast(image: sitk.Image, preprocessing: Preprocessing | None = None) -> sitk.Image:
-    """Covert image to uint8 if specified in preprocessing."""
+    """Covert the image to uint8 if specified in preprocessing."""
     with MeasureTimer() as timer:
         if preprocessing is not None and preprocessing.as_uint8 and image.GetPixelID() != sitk.sitkUInt8:
             image = sitk.RescaleIntensity(image)
@@ -431,16 +500,16 @@ def preprocess_intensity(
 def compute_mask_to_bbox(mask: sitk.Image, mask_padding: int = 100) -> BoundingBox:
     """Calculate bbox of mask."""
     mask.SetSpacing((1, 1))
-    mask_size = mask.GetSize()
+    mask_size = mask.GetSize()  # type: ignore[no-untyped-call]
     mask = sitk.Threshold(mask, 1, 255)
     mask = sitk.ConnectedComponent(mask)
 
-    label_stats = sitk.LabelShapeStatisticsImageFilter()
-    label_stats.SetBackgroundValue(0)
-    label_stats.ComputePerimeterOff()
-    label_stats.ComputeFeretDiameterOff()
-    label_stats.ComputeOrientedBoundingBoxOff()
-    label_stats.Execute(mask)
+    label_stats = sitk.LabelShapeStatisticsImageFilter()  # type: ignore[no-untyped-call]
+    label_stats.SetBackgroundValue(0)  # type: ignore[no-untyped-call]
+    label_stats.ComputePerimeterOff()  # type: ignore[no-untyped-call]
+    label_stats.ComputeFeretDiameterOff()  # type: ignore[no-untyped-call]
+    label_stats.ComputeOrientedBoundingBoxOff()  # type: ignore[no-untyped-call]
+    label_stats.Execute(mask)  # type: ignore[no-untyped-call]
 
     bb_points = []
     for label in label_stats.GetLabels():
@@ -506,13 +575,16 @@ def preprocess_spatial(
         If True, mask will be transformed using the same transformation parameters as the image.
     """
     transforms: list[dict] = []
-    original_size = image.GetSize()
+    original_size = image.GetSize()  # type: ignore[no-untyped-call]
 
     with MeasureTimer() as timer:
         if preprocessing.downsample > 1 and spatial:
             logger.trace(f"Performing downsampling by factor: {preprocessing.downsample}")
-            image.SetSpacing((pixel_size, pixel_size))
-            image = sitk.Shrink(image, (preprocessing.downsample, preprocessing.downsample))
+            image.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
+            image = sitk.Shrink(  # type: ignore[no-untyped-call]
+                image,
+                (preprocessing.downsample, preprocessing.downsample),
+            )
 
             if mask is not None:
                 mask.SetSpacing((pixel_size, pixel_size))
@@ -525,13 +597,18 @@ def preprocess_spatial(
             logger.trace("Applying affine transformation")
             affine_tform = preprocessing.affine
             if isinstance(affine_tform, np.ndarray):
-                affine_tform = affine_to_itk_affine(affine_tform, original_size, pixel_size, True)
-            transforms.append(affine_tform)
+                affine_tform = affine_to_itk_affine(  # type: ignore[assignment]
+                    affine_tform,
+                    original_size,
+                    pixel_size,
+                    True,
+                )
+            transforms.append(affine_tform)  # type: ignore[arg-type]
             composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [affine_tform]})
             image = transform_plane(image, final_tform, composite_transform)
 
             if mask is not None and transform_mask:
-                mask.SetSpacing((pixel_size, pixel_size))
+                mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
                 mask = transform_plane(mask, final_tform, composite_transform)
             logger.trace(f"Applied affine transformation in {timer(since_last=True)} ({image.GetSize()})")
 
@@ -544,7 +621,7 @@ def preprocess_spatial(
             image = transform_plane(image, final_tform, composite_transform)
 
             if mask is not None and transform_mask:
-                mask.SetSpacing((pixel_size, pixel_size))
+                mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
                 mask = transform_plane(mask, final_tform, composite_transform)
             logger.trace(f"Applied flip transformation in {timer(since_last=True)} ({image.GetSize()})")
 
@@ -557,7 +634,7 @@ def preprocess_spatial(
             image = transform_plane(image, final_tform, composite_transform)
 
             if mask is not None and transform_mask:
-                mask.SetSpacing((pixel_size, pixel_size))
+                mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
                 mask = transform_plane(mask, final_tform, composite_transform)
             logger.trace(f"Applied rotation transformation in {timer(since_last=True)} ({image.GetSize()})")
 
@@ -572,7 +649,7 @@ def preprocess_spatial(
             image = transform_plane(image, final_tform, composite_transform)
 
             if mask is not None and transform_mask:
-                mask.SetSpacing((pixel_size, pixel_size))
+                mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
                 mask = transform_plane(mask, final_tform, composite_transform)
             logger.trace(f"Applied translation transformation in {timer(since_last=True)} ({image.GetSize()})")
 
@@ -642,9 +719,9 @@ def preprocess(
     # intensity based pre-processing
     image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
     # ensure that intensity-based pre-processing resulted in a single-channel image
-    if image.GetDepth() >= 1:
+    if image.GetDepth() >= 1:  # type: ignore[no-untyped-call]
         raise ValueError("preprocessing did not result in a single image plane\nmulti-channel or 3D image return")
-    if image.GetNumberOfComponentsPerPixel() > 1:
+    if image.GetNumberOfComponentsPerPixel() > 1:  # type: ignore[no-untyped-call]
         raise ValueError(
             "preprocessing did not result in a single image plane\nmulti-component / RGB(A) image returned"
         )
@@ -653,7 +730,7 @@ def preprocess(
     image, mask, transforms, original_size_transform = preprocess_spatial(
         image, preprocessing, pixel_size, mask, transforms, transform_mask=transform_mask, spatial=spatial
     )
-    return image, mask, transforms, original_size_transform
+    return image, mask, transforms, original_size_transform  # type: ignore[return-value]
 
 
 def create_thumbnail(input_image: sitk.Image, max_thumbnail_size: int = 512) -> sitk.Image:
@@ -672,8 +749,8 @@ def create_thumbnail(input_image: sitk.Image, max_thumbnail_size: int = 512) -> 
     - A SimpleITK.Image object representing the thumbnail.
     """
     # Get the original size and spacing
-    original_size = input_image.GetSize()
-    original_spacing = input_image.GetSpacing()
+    original_size = input_image.GetSize()  # type: ignore[no-untyped-call]
+    original_spacing = input_image.GetSpacing()  # type: ignore[no-untyped-call]
 
     # Calculate the aspect ratio and new size while maintaining the aspect ratio
     aspect_ratio = original_size[1] / original_size[0]
@@ -689,15 +766,13 @@ def create_thumbnail(input_image: sitk.Image, max_thumbnail_size: int = 512) -> 
     ]
 
     # Resample the image to the new size
-    resampler = sitk.ResampleImageFilter()
-    resampler.SetSize(new_size)
-    resampler.SetOutputSpacing(new_spacing)
-    resampler.SetOutputOrigin(input_image.GetOrigin())
-    resampler.SetOutputDirection(input_image.GetDirection())
-    resampler.SetInterpolator(sitk.sitkLinear)
-    thumbnail = resampler.Execute(input_image)
-
-    return thumbnail
+    resampler = sitk.ResampleImageFilter()  # type: ignore[no-untyped-call]
+    resampler.SetSize(new_size)  # type: ignore[no-untyped-call]
+    resampler.SetOutputSpacing(new_spacing)  # type: ignore[no-untyped-call]
+    resampler.SetOutputOrigin(input_image.GetOrigin())  # type: ignore[no-untyped-call]
+    resampler.SetOutputDirection(input_image.GetDirection())  # type: ignore[no-untyped-call]
+    resampler.SetInterpolator(sitk.sitkLinear)  # type: ignore[no-untyped-call]
+    return resampler.Execute(input_image)  # type: ignore[no-untyped-call]
 
 
 def preprocess_preview(
@@ -709,31 +784,37 @@ def preprocess_preview(
     transform_mask: bool = False,
     spatial: bool = True,
     valis: bool = False,
-) -> np.ndarray:
+) -> tuple[np.ndarray, float]:
     """Complete pre-processing."""
     channel_names = preprocessing.channel_names
 
-    # if valis:
-    #     image = preprocess_valis_array(image, channel_names, is_rgb=is_rgb, preprocessing=preprocessing)
-    # else:
-    image = preprocess_dask_array(image, channel_names, is_rgb=is_rgb, preprocessing=preprocessing)
+    # process image
+    image = preprocess_dask_array(  # type: ignore[assignment]
+        image,  # type: ignore[arg-type]
+        channel_names,  # type: ignore[arg-type]
+        is_rgb=is_rgb,
+        preprocessing=preprocessing,
+    )
+    # resize the image so that it's not too large during preview
+    image, resolution = resize_image(image, resolution, as_sitk=True)
     # convert and cast
-    image = convert_and_cast(image, preprocessing)
+    image = convert_and_cast(image, preprocessing)  # type: ignore[assignment,arg-type]
 
-    # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
-    # set image
-    image, mask, initial_transforms, original_size_transform = preprocess(
-        image,
+    # if the mask is not going to be transformed, then we don't need to retrieve it at this moment in time
+    image, mask, initial_transforms, original_size_transform = preprocess(  # type: ignore[assignment]
+        image,  # type: ignore[arg-type]
         None,
         preprocessing=preprocessing,
         pixel_size=resolution,
         is_rgb=is_rgb,
-        transforms=initial_transforms,
+        transforms=initial_transforms,  # type: ignore[arg-type]
         transform_mask=transform_mask,
         check=False,
         spatial=spatial,
     )
-    return sitk.GetArrayFromImage(image)
+
+    breakpoint()
+    return sitk.GetArrayFromImage(image), resolution  # type: ignore[return-value,arg-type]
 
 
 def preprocess_preview_valis(
@@ -744,29 +825,36 @@ def preprocess_preview_valis(
     initial_transforms: list | None = None,
     transform_mask: bool = False,
     spatial: bool = True,
-) -> np.ndarray:
+) -> tuple[np.ndarray, float]:
     """Complete pre-processing."""
     if preprocessing.method == "I2RegPreprocessor":
         channel_names = preprocessing.channel_names
 
-        image = preprocess_dask_array(image, channel_names, preprocessing=preprocessing)
+        # process image
+        image = preprocess_dask_array(  # type: ignore[assignment]
+            image,  # type: ignore[arg-type]
+            channel_names,  # type: ignore[arg-type]
+            preprocessing=preprocessing,
+        )
+        # resize the image so that it's not too large during preview
+        image, resolution = resize_image(image, resolution, as_sitk=True)
         # convert and cast
-        image = convert_and_cast(image, preprocessing)
+        image = convert_and_cast(image, preprocessing)  # type: ignore[assignment,arg-type]
 
         # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
         # set image
-        image, mask, initial_transforms, original_size_transform = preprocess(
-            image,
+        image, mask, initial_transforms, original_size_transform = preprocess(  # type: ignore[assignment]
+            image,  # type: ignore[arg-type]
             None,
             preprocessing,
             resolution,
             is_rgb,
-            initial_transforms,
+            initial_transforms,  # type: ignore[arg-type]
             transform_mask=transform_mask,
             check=False,
             spatial=spatial,
         )
-        return sitk.GetArrayFromImage(image)
+        return sitk.GetArrayFromImage(image)  # type: ignore[arg-type]
     else:
         from image2image_reg.valis.utilities import get_preprocessor
 
@@ -778,4 +866,4 @@ def preprocess_preview_valis(
                 image = image.compute()
             return image
         preprocessor = get_preprocessor(method)(image, "", 0, 0)
-        return preprocessor.process_image(**kws)
+        return preprocessor.process_image(**kws), resolution

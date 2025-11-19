@@ -308,7 +308,7 @@ class I2RegPreprocessor(ImageProcesser):
             as_uint8=as_uint8,
         )
         is_rgb = get_simple_reader(self.src_f, init_pyramid=False, auto_pyramid=False).is_rgb
-        return preprocess_preview(self.image, is_rgb, 1.0, preprocessing=pre, spatial=False, valis=True)
+        return preprocess_preview(self.image, is_rgb, 1.0, preprocessing=pre, spatial=False, valis=True)[0]
 
 
 class OD(ImageProcesser):
