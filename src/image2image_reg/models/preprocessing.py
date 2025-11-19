@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from koyo.json import read_json_data
 from koyo.typing import PathLike
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from image2image_reg.enums import ArrayLike, CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
@@ -74,12 +74,7 @@ class Preprocessing(BaseModel):
         to the image. Must take in an sitk.Image and return an sitk.Image
     """
 
-    class Config:
-        """Pydantic config."""
-
-        use_enum_names = True
-        arbitrary_types_allowed = True
-        validate_assignment = True
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True)
 
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK

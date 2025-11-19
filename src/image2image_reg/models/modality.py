@@ -6,7 +6,7 @@ import dask.array as da
 import numpy as np
 import zarr
 from koyo.typing import PathLike
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from image2image_reg.enums import ArrayLike
 from image2image_reg.models.export import Export
@@ -20,11 +20,7 @@ if ty.TYPE_CHECKING:
 class Modality(BaseModel):
     """Modality."""
 
-    class Config:
-        """Pydantic config."""
-
-        arbitrary_types_allowed = True
-        validate_assignment = True
+    model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     name: str
     path: ty.Union[PathLike, np.ndarray, da.core.Array, zarr.Array]

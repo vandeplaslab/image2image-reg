@@ -117,7 +117,7 @@ def draw_workflow(
 ):
     """Draw entire workflow, including attachments."""
 
-    def _nudge(pos, x_shift, y_shift):
+    def _nudge(pos: dict, x_shift: float, y_shift: float) -> dict:
         return {n: (x + x_shift, y + y_shift) for n, (x, y) in pos.items()}
 
     if ax is None:
@@ -252,6 +252,7 @@ def draw_workflow(
                 annotation_clip=False,
             )
 
+    source, targets = None, None
     for source, targets in workflow.registration_paths.items():
         src_color = g.nodes[source]["color"]
         cstyle = g.nodes[source]["cstyle"]
@@ -275,32 +276,33 @@ def draw_workflow(
             },
             annotation_clip=False,
         )
-    path_targets = nx.algorithms.shortest_path(g, source, targets[-1])[1:]
-    legend["direct modality"] = {"color": "white", "ls": "solid"}
-    if len(path_targets) > 1:
-        legend["through modality"] = {"color": "white", "ls": "dotted"}
-        for idx, cont_src in enumerate(path_targets[:-1]):
-            current, target = cont_src, path_targets[idx + 1]
-            ax.annotate(
-                "",
-                xy=pos[current],
-                xycoords="data",
-                xytext=pos[target],
-                textcoords="data",
-                arrowprops={
-                    "arrowstyle": "<-",
-                    "color": src_color,
-                    "shrinkA": 5,
-                    "shrinkB": 5,
-                    "patchA": None,
-                    "patchB": None,
-                    "mutation_aspect": 2,
-                    "connectionstyle": cstyle,
-                    "linewidth": 1,
-                    "linestyle": "dotted",
-                },
-                annotation_clip=False,
-            )
+    if source and targets:
+        path_targets = nx.algorithms.shortest_path(g, source, targets[-1])[1:]
+        legend["direct modality"] = {"color": "white", "ls": "solid"}
+        if len(path_targets) > 1:
+            legend["through modality"] = {"color": "white", "ls": "dotted"}
+            for idx, cont_src in enumerate(path_targets[:-1]):
+                current, target = cont_src, path_targets[idx + 1]
+                ax.annotate(
+                    "",
+                    xy=pos[current],
+                    xycoords="data",
+                    xytext=pos[target],
+                    textcoords="data",
+                    arrowprops={
+                        "arrowstyle": "<-",
+                        "color": src_color,
+                        "shrinkA": 5,
+                        "shrinkB": 5,
+                        "patchA": None,
+                        "patchB": None,
+                        "mutation_aspect": 2,
+                        "connectionstyle": cstyle,
+                        "linewidth": 1,
+                        "linestyle": "dotted",
+                    },
+                    annotation_clip=False,
+                )
 
     if len(pos.keys()) > 2:
         pos_labels = _nudge(pos, 0, -0.075)
