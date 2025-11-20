@@ -455,7 +455,7 @@ def transform_attached_points(
 ) -> list[Path]:
     """Transform attached points."""
     from image2image_io.readers.points_reader import read_points
-    from image2image_io.readers.utilities import get_column_name
+    from image2image_io.utils.utilities import get_column_name
     from valis.valtils import get_name
 
     slide_src = registrar.get_slide(get_name(str(attach_to)))

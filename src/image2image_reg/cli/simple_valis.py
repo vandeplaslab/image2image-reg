@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import click
 from click_groups import GroupedGroup
-from koyo.click import (
-    Parameter,
-    cli_parse_paths_sort,
-    print_parameters,
-)
+from koyo.click import Parameter, cli_parse_paths_sort, print_parameters
+from koyo.system import is_installed
 from koyo.typing import PathLike
-from koyo.utilities import is_installed
 
 simple_valis = None
 if is_installed("valis"):

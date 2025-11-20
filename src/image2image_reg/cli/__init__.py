@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import sys
-from multiprocessing import freeze_support, set_start_method
 
 import click
 from click_groups import GroupedGroup
 from image2image_io.cli.convert import convert
 from image2image_io.cli.transform import transform
 from koyo.compat import enable_compat
-from koyo.system import IS_MAC
 from koyo.typing import PathLike
-from koyo.utilities import running_as_pyinstaller_app
 from loguru import logger
 
 from image2image_reg import __version__
@@ -78,10 +75,10 @@ def cli(
     extra_args: tuple[str, ...] | None = None,
 ) -> None:
     """Launch registration app."""
-    from pathlib import Path
-
     from koyo.faulthandler import install_segfault_handler
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
+    from koyo.system import IS_MAC
+    from koyo.utilities import running_as_pyinstaller_app
 
     if "-h" not in sys.argv and "--help" not in sys.argv:
         if dev:
@@ -127,6 +124,8 @@ if transform:
 
 def main() -> None:
     """Execute the "i2reg" command line program."""
+    from multiprocessing import freeze_support, set_start_method
+
     freeze_support()
     if sys.platform == "darwin":
         set_start_method("spawn", True)

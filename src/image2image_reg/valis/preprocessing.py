@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import colour
 import numpy as np
-from image2image_io.readers.utilities import grayscale
+from image2image_io.utils.utilities import grayscale
 from scipy import ndimage, spatial
 from skimage import exposure, filters, measure
 from valis import slide_io

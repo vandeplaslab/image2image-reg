@@ -15,7 +15,7 @@ import SimpleITK as sitk
 from image2image_reg.elastix.registration_utils import json_to_pmap_dict
 from image2image_reg.elastix.transform_sequence import Transform
 from image2image_reg.elastix.transformation_map import BASE_AFFINE_TRANSFORM, BASE_RIGID_TRANSFORM
-from image2image_reg.enums import ELX_TO_ITK_INTERPOLATORS
+from image2image_reg.constants import ELX_TO_ITK_INTERPOLATORS
 from image2image_reg.preprocessing.convert import itk_image_to_sitk_image, sitk_image_to_itk_image
 
 

@@ -8,8 +8,7 @@ import cv2
 import dask.array as da
 import numpy as np
 import SimpleITK as sitk
-from image2image_io.readers.utilities import grayscale
-from image2image_io.utils.utilities import guess_rgb
+from image2image_io.utils.utilities import grayscale, guess_rgb
 from koyo.timer import MeasureTimer
 from loguru import logger
 

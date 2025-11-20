@@ -187,7 +187,7 @@ class TransformMixin:
 
     def _build_resampler(self, inverse: bool = False) -> None:
         """Build resampler."""
-        from image2image_reg.enums import ELX_TO_ITK_INTERPOLATORS
+        from image2image_reg.constants import ELX_TO_ITK_INTERPOLATORS
 
         if any(v is None for v in [self.output_origin, self.output_size, self.output_spacing, self.output_direction]):
             raise ValueError("Output parameters not set, call `set_output_params` first")

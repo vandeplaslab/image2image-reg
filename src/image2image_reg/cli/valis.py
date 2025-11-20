@@ -14,9 +14,9 @@ from koyo.click import (
     print_parameters,
     warning_msg,
 )
+from koyo.system import is_installed
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
-from koyo.utilities import is_installed
 from loguru import logger
 
 from image2image_reg.cli._common import (

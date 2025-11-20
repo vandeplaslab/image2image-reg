@@ -11,7 +11,6 @@ from click_groups import GroupedGroup
 from koyo.click import Parameter, cli_parse_paths_sort, exit_with_error, info_msg, print_parameters, warning_msg
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
-from koyo.utilities import reraise_exception_if_debug
 from loguru import logger
 
 from image2image_reg.cli._common import (
@@ -700,6 +699,7 @@ def register_runner(
     overwrite: bool = False,
 ) -> None:
     """Register images."""
+    from koyo.utilities import reraise_exception_if_debug
     from mpire import WorkerPool
 
     print_parameters(
