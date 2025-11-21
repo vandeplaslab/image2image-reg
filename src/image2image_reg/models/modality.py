@@ -1,6 +1,7 @@
 """Modality."""
 
 import typing as ty
+from pathlib import Path
 
 import dask.array as da
 import numpy as np
@@ -57,7 +58,7 @@ class Modality(BaseModel):
         if data.get("export"):
             if isinstance(data["export"], Export):
                 data["export"] = data["export"].to_dict()
-        if isinstance(data["path"], ArrayLike):
+        if not isinstance(data["path"], (str, Path)):
             data["path"] = "ArrayLike"
 
         # if export for wsireg, let's remove all extra components and rename few attributes
