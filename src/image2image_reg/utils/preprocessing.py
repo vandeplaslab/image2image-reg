@@ -137,7 +137,6 @@ def resize_image(
         shape = array.shape if hasattr(array, "shape") else array.GetSize()
         is_rgb = is_rgb if isinstance(is_rgb, bool) else guess_rgb(shape)
         ndim = array.ndim if hasattr(array, "ndim") else array.GetDimension()
-        breakpoint()
 
         if ndim == 2:
             height, width = shape
