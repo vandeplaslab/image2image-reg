@@ -1,8 +1,14 @@
 """Whole slide image registration using elastix."""
 
+from importlib.metadata import PackageNotFoundError, version
+
 from loguru import logger
 
-__version__ = "0.2.1"
+try:
+    __version__ = version("image2image-reg")
+except PackageNotFoundError:
+    __version__ = "uninstalled"
+
 __author__ = "Lukasz G. Migas"
 __email__ = "lukas.migas@yahoo.com"
 
