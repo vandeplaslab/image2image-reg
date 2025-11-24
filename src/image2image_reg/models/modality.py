@@ -9,7 +9,6 @@ import zarr
 from koyo.typing import PathLike
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from image2image_reg.enums import ArrayLike
 from image2image_reg.models.export import Export
 from image2image_reg.models.preprocessing import Preprocessing
 
@@ -24,7 +23,7 @@ class Modality(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     name: str
-    path: ty.Union[PathLike, np.ndarray, da.core.Array, zarr.Array]
+    path: ty.Union[PathLike, np.ndarray, da.Array, zarr.Array]
     preprocessing: ty.Optional[Preprocessing] = None
     export: ty.Optional[Export] = None
     channel_names: ty.Optional[list[str]] = None

@@ -54,7 +54,7 @@ dependencies = [
     "colour-science>=0.4.1",
     "tabulate",
     "loguru",
-    "image2image-io>=0.2.2",
+    "image2image-io>=0.2.3",
     "networkx==3.2.0; python_version < '3.10'",
     "networkx==3.4.0; python_version >= '3.10'",  # fixed circular import problem
     "scikit-learn",

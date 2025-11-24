@@ -781,6 +781,7 @@ def preprocess_preview(
     initial_transforms: list | None = None,
     transform_mask: bool = False,
     spatial: bool = True,
+    resize: bool = True,
     valis: bool = False,
 ) -> tuple[np.ndarray, float]:
     """Complete pre-processing."""
@@ -794,7 +795,8 @@ def preprocess_preview(
         preprocessing=preprocessing,
     )
     # resize the image so that it's not too large during preview
-    image, resolution = resize_image(image, resolution, as_sitk=True)
+    if resize:
+        image, resolution = resize_image(image, resolution, as_sitk=True)
     # convert and cast
     image = convert_and_cast(image, preprocessing)  # type: ignore[assignment,arg-type]
 
@@ -810,8 +812,6 @@ def preprocess_preview(
         check=False,
         spatial=spatial,
     )
-
-    breakpoint()
     return sitk.GetArrayFromImage(image), resolution  # type: ignore[return-value,arg-type]
 
 
@@ -823,6 +823,7 @@ def preprocess_preview_valis(
     initial_transforms: list | None = None,
     transform_mask: bool = False,
     spatial: bool = True,
+    resize: bool = True,
 ) -> tuple[np.ndarray, float]:
     """Complete pre-processing."""
     if preprocessing.method == "I2RegPreprocessor":
@@ -835,7 +836,8 @@ def preprocess_preview_valis(
             preprocessing=preprocessing,
         )
         # resize the image so that it's not too large during preview
-        image, resolution = resize_image(image, resolution, as_sitk=True)
+        if resize:
+            image, resolution = resize_image(image, resolution, as_sitk=True)
         # convert and cast
         image = convert_and_cast(image, preprocessing)  # type: ignore[assignment,arg-type]
 

@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 from koyo.json import read_json_data
 from koyo.typing import PathLike
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 
 from image2image_reg.enums import ArrayLike, CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
@@ -74,7 +74,7 @@ class Preprocessing(BaseModel):
         to the image. Must take in an sitk.Image and return an sitk.Image
     """
 
-    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True, validate_assignment=True)
+    model_config = ConfigDict(use_enum_values=False, arbitrary_types_allowed=True, validate_assignment=True)
 
     # intensity preprocessing
     image_type: ImageType = ImageType.DARK
@@ -109,7 +109,91 @@ class Preprocessing(BaseModel):
 
     # valis-only
     method: ty.Optional[str] = None
-    # method: ty.Optional[ty.Union[str, tuple[str, dict]]] = None
+
+    @field_validator("image_type", mode="before")
+    @classmethod
+    def _validate_image_type(cls, v) -> ImageType:
+        if isinstance(v, str):
+            v = v.lower()
+            if v in ["dark", "fluorescence"]:
+                v = "dark"
+            elif v in ["light", "brightfield"]:
+                v = "light"
+            v = ImageType(v.upper())
+        return ImageType(v)
+
+    @field_validator("flip", mode="before")
+    @classmethod
+    def _validate_flip(cls, v) -> CoordinateFlip:
+        if isinstance(v, str):
+            v = v.lower()
+            if v in ["vertical", "vert"]:
+                v = "v"
+            elif v in ["horizontal", "horz"]:
+                v = "h"
+            v = CoordinateFlip(v)
+        return v
+
+    @field_validator("mask_bbox", "crop_bbox", mode="before")
+    @classmethod
+    def _validate_bbox(cls, v) -> ty.Optional[BoundingBox]:
+        return _transform_to_bbox(v)
+
+    @field_validator("mask_polygon", "crop_polygon", mode="before")
+    @classmethod
+    def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
+        return _transform_to_polygon(v)
+
+    @field_validator("channel_indices", "channel_names", mode="before")
+    @classmethod
+    def _make_ch_list(cls, v):
+        return _index_to_list(v)
+
+    @field_validator("custom_processing", mode="before")
+    @classmethod
+    def _check_custom_prepro(cls, v):
+        if isinstance(v, (list, tuple)):
+            return _transform_custom_proc(v)
+        return v
+
+    @field_validator("affine", mode="before")
+    @classmethod
+    def _check_affine(cls, v):
+        if v is not None:
+            if isinstance(v, (str, Path)):
+                v = read_json_data(Path(v))
+            v = np.asarray(v)
+            assert v.ndim == 2, "affine must be 2D"
+            assert v.shape[0] == v.shape[1], "affine must be square"
+            assert v.shape[0] == 3, "affine must be 3x3"
+        return v
+
+    @field_validator("rotate_counter_clockwise", mode="before")
+    @classmethod
+    def _validate_rotate_counter_clockwise(cls, v):
+        if v == 360:
+            v = 0
+        if v > 360:
+            v = v % 360
+        return v
+
+    @field_serializer("affine", mode="plain")
+    def _serialize_affine(self, value) -> ty.Optional[list]:
+        if value is not None and isinstance(value, np.ndarray):
+            return value.tolist()
+        return None
+
+    @field_serializer("image_type", "flip", mode="plain")
+    def _serialize_enum(self, value) -> ty.Optional[str]:
+        if value is not None and isinstance(value, Enum):
+            return value.value
+        return None
+
+    @field_serializer("crop_bbox", "crop_polygon", "mask_bbox", "mask_polygon", mode="plain")
+    def _serialize_bbox_or_polygon(self, value) -> ty.Optional[list]:
+        if value is not None and isinstance(value, (BoundingBox, Polygon)):
+            return value.to_dict()
+        return None
 
     def __init__(self, **kwargs: ty.Any):
         if "max_int_proj" in kwargs:
@@ -148,8 +232,11 @@ class Preprocessing(BaseModel):
 
     def as_str(self, valis: bool = False) -> tuple[str, str]:
         """Create nice formatting based on pre-processing."""
-        text = f"{self.image_type.value}; "
-        tooltip = f"Image type: {self.image_type.value}\n"
+        image_type = self.image_type.value if isinstance(self.image_type, Enum) else self.image_type
+        flip = self.flip.value if isinstance(self.flip, Enum) else self.flip
+
+        text = f"{image_type}; "
+        tooltip = f"Image type: {image_type}\n"
         if valis and self.method:
             text += f"{self.method}; "
             tooltip += f"Method: {self.method}\n"
@@ -172,8 +259,8 @@ class Preprocessing(BaseModel):
             text += f"ids: {self.channel_indices}\n"
             tooltip += f"Channel indices: {self.channel_indices}\n"
         if self.flip and not valis:
-            text += f"flip-{self.flip.value}; "
-            tooltip += f"Flip: {self.flip.value}\n"
+            text += f"flip-{flip}; "
+            tooltip += f"Flip: {flip}\n"
         if (self.translate_x or self.translate_y) and not valis:
             text += f"translate({self.translate_x}, {self.translate_y}); "
             tooltip += f"Translate: ({self.translate_x}, {self.translate_y})\n"
@@ -209,8 +296,6 @@ class Preprocessing(BaseModel):
     def to_dict(self, as_wsireg: bool = False) -> dict:
         """Return dict."""
         data = self.model_dump(exclude_none=True, exclude_defaults=True)
-        if data.get("affine"):
-            data["affine"] = data["affine"].tolist()
         if data.get("crop_bbox") and hasattr(data["crop_bbox"], "to_dict"):
             data["crop_bbox"] = data["crop_bbox"].to_dict(as_wsireg)
         if data.get("crop_polygon") and hasattr(data["crop_polygon"], "to_dict"):
@@ -257,11 +342,10 @@ class Preprocessing(BaseModel):
         return self
 
     def select_channel(self, channel_id: ty.Optional[int] = None, channel_name: ty.Optional[str] = None) -> None:
-        """Select channel."""
-        if channel_name is not None:
-            if channel_name in self.channel_names:
-                channel_id = self.channel_indices.index(channel_name)
-        if channel_id is not None:
+        """Select a specific channel."""
+        if channel_name is not None and channel_name in self.channel_names:
+            channel_id = self.channel_names.index(channel_name)
+        if channel_id is not None and isinstance(channel_id, int):
             self.channel_indices = [channel_id]
 
     def select_channels(self, channel_names: list[str]) -> None:
@@ -429,56 +513,3 @@ class Preprocessing(BaseModel):
             method="I2RegPreprocessor" if valis else None,
             **kwargs,
         )
-
-    @field_validator("mask_bbox", "crop_bbox", mode="before")
-    @classmethod
-    def _validate_bbox(cls, v) -> ty.Optional[BoundingBox]:
-        return _transform_to_bbox(v)
-
-    @field_validator("mask_polygon", "crop_polygon", mode="before")
-    @classmethod
-    def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
-        return _transform_to_polygon(v)
-
-    @field_validator("channel_indices", "channel_names", mode="before")
-    @classmethod
-    def _make_ch_list(cls, v):
-        return _index_to_list(v)
-
-    @field_validator("custom_processing", mode="before")
-    @classmethod
-    def _check_custom_prepro(cls, v):
-        if isinstance(v, (list, tuple)):
-            return _transform_custom_proc(v)
-        return v
-
-    @field_validator("affine", mode="before")
-    @classmethod
-    def _check_affine(cls, v):
-        if v is not None:
-            if isinstance(v, (str, Path)):
-                v = read_json_data(Path(v))
-            v = np.asarray(v)
-            assert v.ndim == 2, "affine must be 2D"
-            assert v.shape[0] == v.shape[1], "affine must be square"
-            assert v.shape[0] == 3, "affine must be 3x3"
-        return v
-
-    @field_validator("rotate_counter_clockwise", mode="before")
-    @classmethod
-    def _validate_rotate_counter_clockwise(cls, v):
-        if v == 360:
-            v = 0
-        if v > 360:
-            v = v % 360
-        return v
-
-    def model_dump(self, **kwargs: ty.Any) -> dict:
-        """Convert to dict."""
-        output = super().model_dump(**kwargs)
-        for k, v in output.items():
-            if isinstance(v, Enum):
-                output[k] = v.value
-            elif isinstance(v, (BoundingBox, Polygon)):
-                output[k] = v.to_dict()
-        return output
