@@ -8,7 +8,7 @@ import numpy as np
 def combined_transform(
     image_size: tuple[int, int],
     image_spacing: tuple[float, float],
-    rotation_angle: float | int = 0,
+    rotation_angle: float = 0,
     translation: tuple[float, float] = (0, 0),
     flip_lr: bool = False,
 ) -> np.ndarray:
@@ -42,7 +42,7 @@ def centered_translation_transform(
 def centered_rotation_transform(
     image_size: tuple[int, int],
     image_spacing: tuple[float, float],
-    rotation_angle: float | int,
+    rotation_angle: float,
 ) -> np.ndarray:
     """Centered rotation transform."""
     angle = np.deg2rad(rotation_angle)

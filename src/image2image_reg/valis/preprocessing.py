@@ -33,7 +33,7 @@ def clean_mask(mask, img, rel_min_size=0.001):
     c = exposure.rescale_intensity(jch[..., 1], out_range=(0, 1))
     colorfulness_img = np.zeros(mask.shape)
 
-    for _i, r in enumerate(fg_regions):
+    for r in fg_regions:
         # Fill in contours that are touching border
         r0, c0, r1, c1 = r.bbox
         r_filled_img = r.image_filled.copy()
@@ -86,7 +86,7 @@ def clean_mask(mask, img, rel_min_size=0.001):
 
     # Get final regions
     fg_mask = np.zeros(mask.shape[0:2], np.uint8)
-    for _i, rid in enumerate(keep_region_idx):
+    for rid in keep_region_idx:
         r = feature_regions[rid]
         fg_mask[r.slice][r.image_filled] = 255
 
@@ -137,9 +137,7 @@ def jc_dist(img, cspace="IHLS", p=99, metric="euclidean"):
     bg_j = np.percentile(j01, p)
     bg_c = np.percentile(c01, 100 - p)
 
-    jc_dist_img = spatial.distance.cdist(jc01, np.array([[bg_j, bg_c]]), metric=metric).reshape(img.shape[0:2])
-
-    return jc_dist_img
+    return spatial.distance.cdist(jc01, np.array([[bg_j, bg_c]]), metric=metric).reshape(img.shape[0:2])
 
 
 def create_tissue_mask_with_jc_dist(img):
@@ -267,8 +265,7 @@ class MaxIntensityProjection(ImageProcesser):
         chnl = exposure.rescale_intensity(image, in_range="image", out_range=(0.0, 1.0))
         if adaptive_eq:
             chnl = exposure.equalize_adapthist(chnl)
-        chnl = exposure.rescale_intensity(chnl, in_range="image", out_range=(0, 255)).astype(np.uint8)
-        return chnl
+        return exposure.rescale_intensity(chnl, in_range="image", out_range=(0, 255)).astype(np.uint8)
 
 
 class I2RegPreprocessor(ImageProcesser):
@@ -334,5 +331,4 @@ class OD(ImageProcesser):
 
         if adaptive_eq:
             od_clipped = exposure.equalize_adapthist(exposure.rescale_intensity(od_clipped, out_range=(0, 1)))
-        processed = exposure.rescale_intensity(od_clipped, out_range=np.uint8)
-        return processed
+        return exposure.rescale_intensity(od_clipped, out_range=np.uint8)

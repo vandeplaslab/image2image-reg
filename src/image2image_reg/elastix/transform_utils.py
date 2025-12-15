@@ -12,15 +12,18 @@ import itk
 import numpy as np
 import SimpleITK as sitk
 
+from image2image_reg.constants import ELX_TO_ITK_INTERPOLATORS
 from image2image_reg.elastix.registration_utils import json_to_pmap_dict
 from image2image_reg.elastix.transform_sequence import Transform
 from image2image_reg.elastix.transformation_map import BASE_AFFINE_TRANSFORM, BASE_RIGID_TRANSFORM
-from image2image_reg.constants import ELX_TO_ITK_INTERPOLATORS
 from image2image_reg.preprocessing.convert import itk_image_to_sitk_image, sitk_image_to_itk_image
 
 
 def resample(
-    image: sitk.Image, transform: Transform, image_shape: tuple[int, int], inverse: bool = False
+    image: sitk.Image,
+    transform: Transform,
+    image_shape: tuple[int, int],
+    inverse: bool = False,
 ) -> sitk.Image:
     """Resample image for specified transform."""
     resampler = sitk.ResampleImageFilter()  # type: ignore[no-untyped-call]
@@ -31,7 +34,7 @@ def resample(
 
     interpolator = ELX_TO_ITK_INTERPOLATORS[transform.resample_interpolator]
     resampler.SetInterpolator(interpolator)  # type: ignore[no-untyped-call]
-    resampler.SetTransform(  #  type: ignore[no-untyped-call]
+    resampler.SetTransform(  # type: ignore[no-untyped-call]
         transform.final_transform if not inverse else transform.final_transform.GetInverse(),
     )
     return resampler.Execute(image)  # type: ignore[no-untyped-call]
@@ -44,7 +47,9 @@ def compute_affine_bound_for_image(image: sitk.Image, affine: np.ndarray) -> tup
 
 
 def compute_affine_bound(
-    shape: tuple[int, int], affine: np.ndarray, spacing: float = 1
+    shape: tuple[int, int],
+    affine: np.ndarray,
+    spacing: float = 1,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     """Compute affine bounds."""
     w, h = shape
@@ -106,7 +111,9 @@ def calculate_rotation_angle(affine: np.ndarray) -> float:
 
 
 def calculate_center_of_rotation(
-    affine: np.ndarray, shape: tuple[int, int], spacing: tuple[float, float]
+    affine: np.ndarray,
+    shape: tuple[int, int],
+    spacing: tuple[float, float],
 ) -> tuple[float, float]:
     """Calculate the center of rotation based on the affine matrix, image shape, and pixel spacing.
 
@@ -198,7 +205,7 @@ def affine_to_itk_affine2(
     tform = deepcopy(BASE_AFFINE_TRANSFORM)
     tform["Spacing"] = [str(spacing), str(spacing)]
     # compute new image shape
-    (bound_w, bound_h), (origin_x, origin_y) = compute_affine_bound(image_shape, affine, spacing)  # width, height
+    (bound_w, bound_h), (_origin_x, _origin_y) = compute_affine_bound(image_shape, affine, spacing)  # width, height
 
     # calculate rotation center point
     # center_of_rot = calculate_center_of_rotation(affine, image_shape, (spacing, spacing))
@@ -248,7 +255,10 @@ def prepare_tform_dict(tform_dict: dict, shape_tform: bool = False) -> dict:
 
 
 def transform_2d_image_itkelx(
-    image: sitk.Image, transformation_maps: list, writer: str = "sitk", **_zarr_kwargs: ty.Any
+    image: sitk.Image,
+    transformation_maps: list,
+    writer: str = "sitk",
+    **_zarr_kwargs: ty.Any,
 ):
     """Transform 2D images with multiple models.
 
@@ -312,10 +322,9 @@ def transform_2d_image_itkelx(
 
     if writer == "sitk" or writer is None:
         return transform_image_itkelx_to_sitk(image, tfx)
-    elif writer == "zarr":
-        return
-    else:
-        raise ValueError(f"writer type {writer} not recognized")
+    if writer == "zarr":
+        return None
+    raise ValueError(f"writer type {writer} not recognized")
 
 
 def transform_image_to_sitk(image, tfx):
@@ -645,7 +654,7 @@ def generate_rigid_translation_transform_alt3(
         ((bound_w_px - 1) / 2, (bound_h_px - 1) / 2),
     )  # type: ignore[no-untyped-call]
     (translation_x_phy, translation_y_phy) = image.TransformPhysicalPointToContinuousIndex(
-        (float(translation_x_px), float(translation_y_px))
+        (float(translation_x_px), float(translation_y_px)),
     )
     rot_x_phy += translation_x_phy
     rot_y_phy += translation_y_phy
@@ -890,8 +899,7 @@ def sitk_transform_image(image: sitk.Image, final_tform: Transform, composite_tr
     """Transform image."""
     resampler = wsireg_transforms_to_resampler(final_tform)
     resampler.SetTransform(composite_transform)
-    image = resampler.Execute(image)
-    return image
+    return resampler.Execute(image)
 
 
 def transform_plane(image: sitk.Image, final_transform: Transform, composite_transform: Transform) -> sitk.Image:
@@ -914,8 +922,8 @@ def affine_to_euler2d(affine_matrix: np.ndarray, center=(0.0, 0.0)) -> sitk.Eule
     """
     assert affine_matrix.shape == (3, 3), "Expected 3x3 matrix"
 
-    a, b, tx = affine_matrix[0]
-    c, d, ty = affine_matrix[1]
+    a, _b, tx = affine_matrix[0]
+    c, _d, ty = affine_matrix[1]
 
     angle = np.arctan2(c, a)  # rotation in radians
 

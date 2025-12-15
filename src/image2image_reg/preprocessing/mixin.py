@@ -22,11 +22,7 @@ class PreprocessorMixin:
     @property
     def shape(self) -> tuple[int, ...]:
         """Get image shape."""
-        if isinstance(self.array, np.ndarray):
-            shape = self.array.shape
-        else:
-            shape = sitk_image_to_numpy(self.array).shape
-        return shape
+        return self.array.shape if isinstance(self.array, np.ndarray) else sitk_image_to_numpy(self.array).shape
 
     @property
     def original_spacing(self) -> tuple[float, ...]:
@@ -35,8 +31,7 @@ class PreprocessorMixin:
         ndim = len(shape)
         if ndim == 2:
             return self.pixel_size, self.pixel_size
-        else:
-            return (self.pixel_size, self.pixel_size, 1) if self.is_rgb else (1, self.pixel_size, self.pixel_size)
+        return (self.pixel_size, self.pixel_size, 1) if self.is_rgb else (1, self.pixel_size, self.pixel_size)
 
     @property
     def spacing(self) -> tuple[float, float]:

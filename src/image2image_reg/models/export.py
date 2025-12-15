@@ -1,6 +1,6 @@
 """Export model."""
 
-import typing as ty
+from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
 
@@ -9,9 +9,9 @@ class Export(BaseModel):
     """Specify how modality should be exported."""
 
     as_uint8: bool = False
-    channel_ids: ty.Optional[list[int]] = None
-    channel_names: ty.Optional[list[str]] = None
-    channel_colors: ty.Optional[list[str]] = None
+    channel_ids: list[int] | None = None
+    channel_names: list[str] | None = None
+    channel_colors: list[str] | None = None
 
     def to_dict(self) -> dict:
         """Export as dictionary."""
@@ -19,21 +19,21 @@ class Export(BaseModel):
 
     @field_validator("channel_ids", mode="before")
     @classmethod
-    def _validate_channel_ids(cls, v) -> ty.Optional[list[int]]:
+    def _validate_channel_ids(cls, v) -> list[int] | None:
         if v is None:
             return None
         return [int(x) for x in v]
 
     @field_validator("channel_names", mode="before")
     @classmethod
-    def _validate_channel_names(cls, v) -> ty.Optional[list[str]]:
+    def _validate_channel_names(cls, v) -> list[str] | None:
         if v is None:
             return None
         return [str(x) for x in v]
 
     @field_validator("channel_colors", mode="before")
     @classmethod
-    def _validate_channel_colors(cls, v) -> ty.Optional[list[str]]:
+    def _validate_channel_colors(cls, v) -> list[str] | None:
         if v is None:
             return None
         return [str(x) for x in v]

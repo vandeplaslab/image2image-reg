@@ -44,12 +44,9 @@ def _transform_to_polygon(v: np.ndarray) -> Polygon:
         return None
     if isinstance(v, list):
         assert len(v) > 0, "Polygon must have at least 1 value"
-        if isinstance(v[0], (list, np.ndarray)):
-            v = [np.array(v_) for v_ in v]
-        else:
-            v = [np.array(v)]
+        v = [np.array(v_) for v_ in v] if isinstance(v[0], (list, np.ndarray)) else [np.array(v)]
         return Polygon(v)
-    elif isinstance(v, Polygon):
+    if isinstance(v, Polygon):
         return v
     return Polygon(v)
 
@@ -79,8 +76,7 @@ class Polygon(MaskMixin):
             for xy in self.xy:
                 mask = cv2.fillPoly(mask, pts=[xy.astype(np.int32)], color=np.iinfo(dtype).max)
             return mask
-        mask = cv2.fillPoly(mask, pts=[self.xy.astype(np.int32)], color=np.iinfo(dtype).max)
-        return mask
+        return cv2.fillPoly(mask, pts=[self.xy.astype(np.int32)], color=np.iinfo(dtype).max)
 
     def as_str(self) -> str:
         """Stringify bounding box."""
@@ -142,7 +138,7 @@ def _transform_to_bbox(v: tuple[int, int, int, int] | list[int]) -> BoundingBox:
         return None
     if isinstance(v, dict):
         return BoundingBox(**v)
-    elif isinstance(v, (list, tuple)):
+    if isinstance(v, (list, tuple)):
         if isinstance(v, tuple):
             v = list(v)
         assert len(v) > 0, "Bounding box must have at least 1 value"
@@ -153,6 +149,6 @@ def _transform_to_bbox(v: tuple[int, int, int, int] | list[int]) -> BoundingBox:
         width = [v_[2] for v_ in v]
         height = [v_[3] for v_ in v]
         return BoundingBox(x, y, width, height)
-    elif isinstance(v, BoundingBox):
+    if isinstance(v, BoundingBox):
         return v
     return BoundingBox(*v)

@@ -70,7 +70,11 @@ def elastix() -> None:
 
 
 @click.option(
-    "--merge/--no_merge", help="Merge modalities once co-registered.", is_flag=True, default=True, show_default=True
+    "--merge/--no_merge",
+    help="Merge modalities once co-registered.",
+    is_flag=True,
+    default=True,
+    show_default=True,
 )
 @click.option(
     "--cache/--no_cache",
@@ -421,7 +425,11 @@ def add_attachment_cmd(project_dir: str, attach_to: str, name: list[str], image:
 
 
 def add_attachment_runner(
-    project_dir: str, attach_to: str, names: list[str], paths: list[str], valis: bool = False
+    project_dir: str,
+    attach_to: str,
+    names: list[str],
+    paths: list[str],
+    valis: bool = False,
 ) -> None:
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
@@ -457,14 +465,23 @@ def add_attachment_runner(
 @project_path_single_
 @elastix.command("attach-points", help_group="Project", aliases=["atp"])
 def add_points_cmd(
-    project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
+    project_dir: str,
+    attach_to: str,
+    name: str,
+    file: list[str | Path],
+    pixel_size: float | None,
 ) -> None:
     """Attach points (csv/tsv/txt) to existing image."""
     add_points_runner(project_dir, attach_to, name, file, pixel_size)
 
 
 def add_points_runner(
-    project_dir: str, attach_to: str, name: str, paths: list[str | Path], pixel_size: float | None, valis: bool = False
+    project_dir: str,
+    attach_to: str,
+    name: str,
+    paths: list[str | Path],
+    pixel_size: float | None,
+    valis: bool = False,
 ) -> None:
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
@@ -492,14 +509,23 @@ def add_points_runner(
 @project_path_single_
 @elastix.command("attach-shape", help_group="Project", aliases=["ats"])
 def add_shape_cmd(
-    project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
+    project_dir: str,
+    attach_to: str,
+    name: str,
+    file: list[str | Path],
+    pixel_size: float | None,
 ) -> None:
     """Attach shapes (GeoJSON) to existing image."""
     add_shape_runner(project_dir, attach_to, name, file, pixel_size)
 
 
 def add_shape_runner(
-    project_dir: str, attach_to: str, name: str, paths: list[str | Path], pixel_size: float | None, valis: bool = False
+    project_dir: str,
+    attach_to: str,
+    name: str,
+    paths: list[str | Path],
+    pixel_size: float | None,
+    valis: bool = False,
 ) -> None:
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
@@ -546,7 +572,11 @@ def add_merge_cmd(project_dir: ty.Sequence[str], name: str, modality: ty.Iterabl
 
 
 def add_merge_runner(
-    paths: ty.Sequence[str], name: str, modalities: ty.Iterable[str] | None, auto: bool = False, valis: bool = False
+    paths: ty.Sequence[str],
+    name: str,
+    modalities: ty.Iterable[str] | None,
+    auto: bool = False,
+    valis: bool = False,
 ) -> None:
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
@@ -576,7 +606,10 @@ def preprocess_cmd(project_dir: ty.Sequence[str], n_parallel: int, parallel_mode
 
 
 def preprocess_runner(
-    paths: ty.Sequence[str], n_parallel: int = 1, parallel_mode: str = "outer", overwrite: bool = False
+    paths: ty.Sequence[str],
+    n_parallel: int = 1,
+    parallel_mode: str = "outer",
+    overwrite: bool = False,
 ) -> None:
     """Register images."""
     from mpire import WorkerPool
@@ -708,7 +741,9 @@ def register_runner(
         Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
         Parameter(
-            "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
+            "Write not-registered images",
+            "--write_not_registered/--no_write_not_registered",
+            write_not_registered,
         ),
         Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
@@ -777,6 +812,7 @@ def register_runner(
     logger.info(f"Finished registering all projects in {timer()}.")
     if errors:
         return exit_with_error()
+    return None
 
 
 def _register(
@@ -952,7 +988,9 @@ def export_runner(
         Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
         Parameter(
-            "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
+            "Write not-registered images",
+            "--write_not_registered/--no_write_not_registered",
+            write_not_registered,
         ),
         Parameter("Write not-registered images", "--write_attached/--no_write_attached", write_attached),
         Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
@@ -1024,6 +1062,7 @@ def export_runner(
         errors = "\n- ".join(errors)
         logger.error(f"Failed to export the following projects:\n{errors}")
         return exit_with_error()
+    return None
 
 
 def _export(
@@ -1321,7 +1360,10 @@ def update_cmd(project_dir: list[str], source_dir: list[str], recursive: bool) -
 
 
 def update_runner(
-    paths: list[PathLike], source_dirs: list[PathLike], recursive: bool = False, valis: bool = False
+    paths: list[PathLike],
+    source_dirs: list[PathLike],
+    recursive: bool = False,
+    valis: bool = False,
 ) -> None:
     """Register images."""
     from image2image_reg.workflows import ElastixReg, ValisReg

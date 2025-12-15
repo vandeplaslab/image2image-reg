@@ -61,9 +61,9 @@ class ImageWrapper:
                     quiet=self.quiet,
                     scene_index=reader_kws.get("scene_index", None),
                 )
-            except Exception as e:
+            except Exception:
                 if self.raise_on_error:
-                    raise e
+                    raise
                 self._reader = None
         return self._reader
 
@@ -74,14 +74,13 @@ class ImageWrapper:
         if preprocessing is None:
             preprocessing = self.modality.preprocessing
 
-        if self._mask is None and preprocessing:
-            if preprocessing.use_mask:
-                if self.modality.preprocessing.mask is not None:
-                    self._mask = self.read_mask(self.modality.preprocessing.mask)
-                if self.modality.preprocessing.mask_bbox is not None:
-                    self._mask = self.make_bbox_mask(self.modality.preprocessing.mask_bbox)
-                elif self.modality.preprocessing.mask_polygon is not None:
-                    self._mask = self.make_bbox_mask(self.modality.preprocessing.mask_polygon)
+        if self._mask is None and preprocessing and preprocessing.use_mask:
+            if self.modality.preprocessing.mask is not None:
+                self._mask = self.read_mask(self.modality.preprocessing.mask)
+            if self.modality.preprocessing.mask_bbox is not None:
+                self._mask = self.make_bbox_mask(self.modality.preprocessing.mask_bbox)
+            elif self.modality.preprocessing.mask_polygon is not None:
+                self._mask = self.make_bbox_mask(self.modality.preprocessing.mask_polygon)
         return self._mask
 
     @property
@@ -109,7 +108,10 @@ class ImageWrapper:
 
     @staticmethod
     def get_cache_path(
-        modality: Modality, cache_dir: PathLike, extra: str | None = None, preprocessing: Preprocessing | None = None
+        modality: Modality,
+        cache_dir: PathLike,
+        extra: str | None = None,
+        preprocessing: Preprocessing | None = None,
     ) -> Path:
         """Get the cache path."""
         cache_dir = Path(cache_dir)
@@ -122,9 +124,7 @@ class ImageWrapper:
     def check_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None) -> bool:
         """Check the image cache."""
         filename = self.get_cache_path(self.modality, cache_dir, extra=extra, preprocessing=self.preprocessing)
-        if use_cache and filename.exists():
-            return True
-        return False
+        return bool(use_cache and filename.exists())
 
     def save_cache(self, cache_dir: PathLike, use_cache: bool = True, extra: str | None = None) -> None:
         """Save the image to the cache."""
@@ -140,15 +140,18 @@ class ImageWrapper:
             write_json_data(filename_with_suffix(filename, "initial", ".json"), self.initial_transforms or None)
             if self.modality.preprocessing:
                 write_json_data(
-                    filename_with_suffix(filename, "preprocessing", ".json"), self.modality.preprocessing.dict()
+                    filename_with_suffix(filename, "preprocessing", ".json"),
+                    self.modality.preprocessing.dict(),
                 )
             if self.preprocessing:
                 write_json_data(
-                    filename_with_suffix(filename, "preprocessing_override", ".json"), self.preprocessing.dict()
+                    filename_with_suffix(filename, "preprocessing_override", ".json"),
+                    self.preprocessing.dict(),
                 )
             if self.original_size_transform:
                 write_json_data(
-                    filename_with_suffix(filename, "original_size_transform", ".json"), self.original_size_transform
+                    filename_with_suffix(filename, "original_size_transform", ".json"),
+                    self.original_size_transform,
                 )
             # write mask
             if self.mask is not None:
@@ -176,11 +179,11 @@ class ImageWrapper:
             logger.trace(f"Loaded image from cache: {filename} for {self.modality.name}")
             if filename_with_suffix(filename, "preprocessing", ".json").exists():
                 self.preprocessing = Preprocessing(
-                    **read_json_data(filename_with_suffix(filename, "preprocessing", ".json"))
+                    **read_json_data(filename_with_suffix(filename, "preprocessing", ".json")),
                 )
             if filename_with_suffix(filename, "original_size_transform", ".json").exists():
                 self.original_size_transform = read_json_data(
-                    filename_with_suffix(filename, "original_size_transform", ".json")
+                    filename_with_suffix(filename, "original_size_transform", ".json"),
                 )
             if filename_with_suffix(filename, "mask", ".tiff").exists():
                 self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
@@ -291,7 +294,10 @@ class ImageWrapper:
         return mask
 
     def make_bbox_mask(
-        self, bbox: BoundingBox | Polygon, pixel_size: float | None = None, image_shape: tuple[int, int] | None = None
+        self,
+        bbox: BoundingBox | Polygon,
+        pixel_size: float | None = None,
+        image_shape: tuple[int, int] | None = None,
     ) -> sitk.Image:
         """Make mask from bounding box."""
         if image_shape is None:
@@ -303,6 +309,6 @@ class ImageWrapper:
         mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
         kind = "bbox" if isinstance(bbox, BoundingBox) else "polygon"
         logger.trace(
-            f"Loaded mask from {kind} for {self.modality.name} with shape: {image_shape} and pixel size: {pixel_size:.2f}"
+            f"Loaded mask from {kind} for {self.modality.name} with shape: {image_shape} and pixel size: {pixel_size:.2f}",
         )
         return mask

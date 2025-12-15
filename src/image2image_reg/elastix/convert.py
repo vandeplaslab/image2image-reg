@@ -127,7 +127,11 @@ def convert_to_itk(tform: dict) -> sitk.Transform:
     return itk_tform
 
 
-def convert_to_dict(tform: sitk.Transform, spacing: tuple[float, float] | None = None, size: tuple[int, int] | None = None) -> dict:
+def convert_to_dict(
+    tform: sitk.Transform,
+    spacing: tuple[float, float] | None = None,
+    size: tuple[int, int] | None = None,
+) -> dict:
     """Convert ITK transform to dictionary."""
     if isinstance(tform, sitk.Euler2DTransform):
         out = euler_itk2d_to_dict(tform)
@@ -144,6 +148,7 @@ def convert_to_dict(tform: sitk.Transform, spacing: tuple[float, float] | None =
     if spacing:
         out["Spacing"] = [str(s) for s in spacing]
     return out
+
 
 def get_elastix_transforms(transformations):
     """Get elastix transforms from reg_transforms."""

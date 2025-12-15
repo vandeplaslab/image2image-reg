@@ -1,5 +1,7 @@
 """Modality."""
 
+from __future__ import annotations
+
 import typing as ty
 from pathlib import Path
 
@@ -23,18 +25,18 @@ class Modality(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     name: str
-    path: ty.Union[PathLike, np.ndarray, da.Array, zarr.Array]
-    preprocessing: ty.Optional[Preprocessing] = None
-    export: ty.Optional[Export] = None
-    channel_names: ty.Optional[list[str]] = None
-    channel_colors: ty.Optional[list[str]] = None
+    path: PathLike | np.ndarray | da.Array | zarr.Array
+    preprocessing: Preprocessing | None = None
+    export: Export | None = None
+    channel_names: list[str] | None = None
+    channel_colors: list[str] | None = None
     pixel_size: float = 1.0
-    output_pixel_size: ty.Optional[tuple[float, float]] = None
-    reader_kws: ty.Optional[dict[str, ty.Any]] = Field(None)
+    output_pixel_size: tuple[float, float] | None = None
+    reader_kws: dict[str, ty.Any] | None = Field(None)
 
     @field_validator("output_pixel_size", mode="before")
     @classmethod
-    def _validate_output_pixel_size(cls, value) -> ty.Optional[tuple[float, float]]:
+    def _validate_output_pixel_size(cls, value) -> tuple[float, float] | None:
         if isinstance(value, (tuple, list)):
             if len(value) != 2:
                 raise ValueError("output_pixel_size should be a tuple of 2 floats")
@@ -54,9 +56,8 @@ class Modality(BaseModel):
                 for k, v in data["preprocessing"].items():
                     pre[k] = v.to_dict(as_wsireg) if hasattr(v, "to_dict") else v
                 data["preprocessing"] = pre
-        if data.get("export"):
-            if isinstance(data["export"], Export):
-                data["export"] = data["export"].to_dict()
+        if data.get("export") and isinstance(data["export"], Export):
+            data["export"] = data["export"].to_dict()
         if not isinstance(data["path"], (str, Path)):
             data["path"] = "ArrayLike"
 
@@ -72,7 +73,7 @@ class Modality(BaseModel):
                 data.pop("export")
         return data
 
-    def to_wrapper(self) -> "ImageWrapper":
+    def to_wrapper(self) -> ImageWrapper:
         """Convert to ImageWrapper."""
         from image2image_reg.wrapper import ImageWrapper
 

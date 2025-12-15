@@ -287,7 +287,9 @@ def arg_split_bbox(ctx, param, value):
 
 
 def get_preprocessing(
-    preprocessing: str | None, affine: str | None = None, method: str | None = None
+    preprocessing: str | None,
+    affine: str | None = None,
+    method: str | None = None,
 ) -> Preprocessing | None:
     """Get a pre-processing object."""
     from image2image_reg.models import Preprocessing
@@ -296,15 +298,15 @@ def get_preprocessing(
         pre = Preprocessing.fluorescence()
     elif preprocessing in ["light", "brightfield"]:
         pre = Preprocessing.brightfield()
-    elif preprocessing in ["basic"]:
+    elif preprocessing == "basic":
         pre = Preprocessing.basic()
-    elif preprocessing in ["postaf"]:
+    elif preprocessing == "postaf":
         pre = Preprocessing.postaf()
-    elif preprocessing in ["pas"]:
+    elif preprocessing == "pas":
         pre = Preprocessing.pas()
-    elif preprocessing in ["he"]:
+    elif preprocessing == "he":
         pre = Preprocessing.he()
-    elif preprocessing in ["mip"]:
+    elif preprocessing == "mip":
         pre = Preprocessing.dapi()
     else:
         pre = None

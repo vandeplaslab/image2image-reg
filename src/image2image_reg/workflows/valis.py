@@ -84,7 +84,7 @@ class ValisReg(Workflow):
         path = Path(path)
         if not path.exists():
             raise ValueError(f"Path does not exist ({path}).")
-        if path.is_file() and path.name in [cls.CONFIG_NAME]:
+        if path.is_file() and path.name == cls.CONFIG_NAME:
             path = path.parent
         if not path.is_dir():
             raise ValueError("Path is not a directory.")
@@ -94,9 +94,8 @@ class ValisReg(Workflow):
 
         with MeasureTimer() as timer:
             config: dict | ValisRegConfig | None = None
-            if config_path.exists():
-                if config_path.exists():
-                    config = read_json_data(config_path)
+            if config_path.exists() and config_path.exists():
+                config = read_json_data(config_path)
             if config and "name" not in config:
                 config["name"] = path.stem
             obj = cls(project_dir=path, **config)
@@ -481,7 +480,7 @@ class ValisReg(Workflow):
             except Exception as exc:
                 registration.kill_jvm()
                 logger.exception(f"Error during registration: {exc}")
-                raise exc
+                raise
         logger.info(f"Completed registration in {main_timer()}")
 
     def write(
@@ -517,8 +516,12 @@ class ValisReg(Workflow):
         if write_registered:
             paths.extend(
                 self._export_registered_images(
-                    fmt=fmt, tile_size=tile_size, as_uint8=as_uint8, rename=rename, overwrite=overwrite
-                )
+                    fmt=fmt,
+                    tile_size=tile_size,
+                    as_uint8=as_uint8,
+                    rename=rename,
+                    overwrite=overwrite,
+                ),
             )
 
         # export attachment modalities
@@ -529,8 +532,12 @@ class ValisReg(Workflow):
         if write_attached_images:
             paths.extend(
                 self._export_attachment_images(
-                    fmt=fmt, tile_size=tile_size, as_uint8=as_uint8, rename=rename, overwrite=overwrite
-                )
+                    fmt=fmt,
+                    tile_size=tile_size,
+                    as_uint8=as_uint8,
+                    rename=rename,
+                    overwrite=overwrite,
+                ),
             )
         return paths
 
@@ -954,7 +961,7 @@ def valis_registration(
         except Exception as exc:
             logger.exception(f"Failed to register images: {exc}")
             registration.kill_jvm()
-            raise exc
+            raise
         registration.kill_jvm()
     logger.info(f"Completed registration in {main_timer()}")
 

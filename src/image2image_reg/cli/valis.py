@@ -131,7 +131,11 @@ if is_installed("valis"):
         callback=cli_parse_detector,
     )
     @click.option(
-        "--merge/--no_merge", help="Merge modalities once co-registered.", is_flag=True, default=True, show_default=True
+        "--merge/--no_merge",
+        help="Merge modalities once co-registered.",
+        is_flag=True,
+        default=True,
+        show_default=True,
     )
     @click.option(
         "--cache/--no_cache",
@@ -270,7 +274,11 @@ if is_installed("valis"):
     @project_path_single_
     @valis.command("attach-points", help_group="Project", aliases=["atp"])
     def add_points_cmd(
-        project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
+        project_dir: str,
+        attach_to: str,
+        name: str,
+        file: list[str | Path],
+        pixel_size: float | None,
     ) -> None:
         """Add attachment points (csv/tsv/txt) to registered modality."""
         from image2image_reg.cli.elastix import add_points_runner
@@ -284,7 +292,11 @@ if is_installed("valis"):
     @project_path_single_
     @valis.command("attach-shape", help_group="Project", aliases=["ats"])
     def add_shape_cmd(
-        project_dir: str, attach_to: str, name: str, file: list[str | Path], pixel_size: float | None
+        project_dir: str,
+        attach_to: str,
+        name: str,
+        file: list[str | Path],
+        pixel_size: float | None,
     ) -> None:
         """Add attachment shape (GeoJSON) to registered modality."""
         from image2image_reg.cli.elastix import add_shape_runner
@@ -426,7 +438,9 @@ if is_installed("valis"):
             Parameter("Output format", "-f/--fmt", fmt),
             Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
             Parameter(
-                "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
+                "Write not-registered images",
+                "--write_not_registered/--no_write_not_registered",
+                write_not_registered,
             ),
             Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
             Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
@@ -487,6 +501,7 @@ if is_installed("valis"):
         logger.info(f"Finished registering all projects in {timer()}.")
         if errors:
             return exit_with_error()
+        return None
 
     @overwrite_
     @parallel_mode_
@@ -578,7 +593,9 @@ if is_installed("valis"):
             Parameter("Output format", "-f/--fmt", fmt),
             Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
             Parameter(
-                "Write not-registered images", "--write_not_registered/--no_write_not_registered", write_not_registered
+                "Write not-registered images",
+                "--write_not_registered/--no_write_not_registered",
+                write_not_registered,
             ),
             Parameter("Write attached modalities", "--write_attached/--no_write_attached", write_attached),
             Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
@@ -773,7 +790,12 @@ if is_installed("valis"):
     @project_path_multi_
     @valis.command("clear", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
     def clear_cmd(
-        project_dir: ty.Sequence[str], cache: bool, image: bool, metadata: bool, valis_: bool, all_: bool
+        project_dir: ty.Sequence[str],
+        cache: bool,
+        image: bool,
+        metadata: bool,
+        valis_: bool,
+        all_: bool,
     ) -> None:
         """Clear project data (cache/images/transformations/etc...)."""
         clear_runner(project_dir, cache, image, metadata, valis_, all_)

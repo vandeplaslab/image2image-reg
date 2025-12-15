@@ -34,10 +34,7 @@ def blend_colors(img: np.ndarray, colors: np.ndarray, scale_by: str):
         A colored version of `img`
 
     """
-    if len(colors) > 1:
-        n_channel_colors = colors.shape[1]
-    else:
-        n_channel_colors = len(colors)
+    n_channel_colors = colors.shape[1] if len(colors) > 1 else len(colors)
 
     if img.ndim > 2:
         r, c, nc = img.shape[:3]
@@ -98,7 +95,11 @@ def jzazbz_cmap(luminosity: float = 0.012, colorfulness: float = 0.02, max_h: fl
 
 
 def color_multichannel(
-    multichannel_img, marker_colors, rescale_channels=False, normalize_by="image", cspace="Hunter Lab"
+    multichannel_img,
+    marker_colors,
+    rescale_channels=False,
+    normalize_by="image",
+    cspace="Hunter Lab",
 ):
     """Color a multichannel image to view as RGB.
 
@@ -143,7 +144,7 @@ def color_multichannel(
             [
                 exposure.rescale_intensity(multichannel_img[..., i].astype(float), in_range="image", out_range=(0, 1))
                 for i in range(multichannel_img.shape[2])
-            ]
+            ],
         )
 
     is_srgb = cspace.lower() == "srgb"
@@ -232,8 +233,7 @@ def get_shape(img: np.ndarray) -> np.ndarray:
     """
     shape_rc = np.array(img.shape[0:2])
     ndim = img.shape[2] if img.ndim > 2 else 1
-    shape = np.array([*shape_rc, ndim])
-    return shape
+    return np.array([*shape_rc, ndim])
 
 
 def prepare_images_for_overlap(images: list[np.ndarray]) -> list[np.ndarray]:
@@ -242,7 +242,7 @@ def prepare_images_for_overlap(images: list[np.ndarray]) -> list[np.ndarray]:
 
     grey_images = []
     for img in images:
-        _, channel_axis, shape = get_shape_of_image(img)
+        _, channel_axis, _shape = get_shape_of_image(img)
         is_rgb = guess_rgb(img.shape)
         if is_rgb:
             grey_images.append(rgb2gray(img))

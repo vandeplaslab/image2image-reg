@@ -103,7 +103,10 @@ def normalize_he(img: np.ndarray, intensity: int = 240, alpha: int = 1, beta: fl
 
 
 def deconvolution_he(
-    img: np.ndarray, concentrations: np.ndarray, stain: ty.Literal["hem", "eos"] = "hem", intensity: int = 240
+    img: np.ndarray,
+    concentrations: np.ndarray,
+    stain: ty.Literal["hem", "eos"] = "hem",
+    intensity: int = 240,
 ) -> np.ndarray:
     """Unmix the hematoxylin or eosin channel based on their respective normalized concentrations.
 
@@ -136,12 +139,13 @@ def deconvolution_he(
         raise ValueError(f"Stain '{stain}' is unknown.")
 
     np.clip(out, a_min=0, a_max=255, out=out)
-    out = np.reshape(out, (h, w)).astype(np.uint8)
-    return out
+    return np.reshape(out, (h, w)).astype(np.uint8)
 
 
 def calc_background_color_dist(
-    img: np.ndarray, brightness_q: float = 0.99, mask: np.ndarray | None = None
+    img: np.ndarray,
+    brightness_q: float = 0.99,
+    mask: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Create mask that only covers tissue.
 
@@ -177,21 +181,16 @@ def calc_background_color_dist(
 
 def rgb2jab(rgb: np.ndarray, cspace: str = "CAM16UCS") -> np.ndarray:
     eps = np.finfo("float").eps
-    if np.issubdtype(rgb.dtype, np.integer) and rgb.max() > 1:
-        rgb01 = rgb / 255.0
-    else:
-        rgb01 = rgb
+    rgb01 = rgb / 255.0 if np.issubdtype(rgb.dtype, np.integer) and rgb.max() > 1 else rgb
 
     with colour.utilities.suppress_warnings(colour_usage_warnings=True):
-        jab = colour.convert(rgb01 + eps, "sRGB", cspace)
-    return jab
+        return colour.convert(rgb01 + eps, "sRGB", cspace)
 
 
 def jab2rgb(jab: np.ndarray, cspace: str = "CAM16UCS") -> np.ndarray:
     eps = np.finfo("float").eps
     with colour.utilities.suppress_warnings(colour_usage_warnings=True):
-        rgb = colour.convert(jab + eps, cspace, "sRGB")
-    return rgb
+        return colour.convert(jab + eps, cspace, "sRGB")
 
 
 def estimate_k(x, max_k: int = 100, step_size: int = 10):
@@ -278,10 +277,7 @@ def thresh_unimodal(x: np.ndarray, bins: int = 256) -> int:
 
     peak_bin = np.argmax(counts)
     last_non_zero = np.where(counts > 0)[0][-1]
-    if last_non_zero == len(counts) - 1:
-        min_bin = last_non_zero
-    else:
-        min_bin = last_non_zero + 1
+    min_bin = last_non_zero if last_non_zero == len(counts) - 1 else last_non_zero + 1
 
     peak_x, min_bin_x = midpoints[peak_bin], midpoints[min_bin]
     peak_y, min_bin_y = counts[peak_bin], counts[min_bin]
@@ -332,11 +328,7 @@ def thresh_unimodal(x: np.ndarray, bins: int = 256) -> int:
 
 
 def rgb255_to_rgb1(rgb_img: np.ndarray) -> np.ndarray:
-    if np.issubdtype(rgb_img.dtype, np.integer) or rgb_img.max() > 1:
-        rgb01 = rgb_img / 255.0
-    else:
-        rgb01 = rgb_img
-    return rgb01
+    return rgb_img / 255.0 if np.issubdtype(rgb_img.dtype, np.integer) or rgb_img.max() > 1 else rgb_img
 
 
 def rgb2od(rgb_img: np.ndarray) -> np.ndarray:
@@ -353,8 +345,7 @@ def stainmat2decon(stain_mat_srgb255: np.ndarray) -> np.ndarray:
     eps = np.finfo("float").eps
     M = od_mat / np.linalg.norm(od_mat + eps, axis=1, keepdims=True)
     M[np.isnan(M)] = 0
-    D = np.linalg.pinv(M)
-    return D
+    return np.linalg.pinv(M)
 
 
 def deconvolve_img(rgb_img: np.ndarray, D) -> np.ndarray:
@@ -402,8 +393,7 @@ def standardize_colorfulness(img, c: float = 0.2, h: int = 0):
         rgb2 = colour.convert(new_cam, "CAM16UCS", "sRGB")
         rgb2 -= eps
 
-    rgb2 = (np.clip(rgb2, 0, 1) * 255).astype(np.uint8)
-    return rgb2
+    return (np.clip(rgb2, 0, 1) * 255).astype(np.uint8)
 
 
 def create_edges_mask(labeled_img):
@@ -421,7 +411,7 @@ def create_edges_mask(labeled_img):
             (regn.coords[:, 0] == 0)
             | (regn.coords[:, 0] == labeled_img.shape[0] - 1)
             | (regn.coords[:, 1] == 0)
-            | (regn.coords[:, 1] == labeled_img.shape[1] - 1)
+            | (regn.coords[:, 1] == labeled_img.shape[1] - 1),
         )[0]
         if len(on_border_idx) == 0:
             inner_mask[regn.coords[:, 0], regn.coords[:, 1]] = 255
@@ -434,5 +424,4 @@ def rescale_to_uint8(array: sitk.Image, min_value: int = 0, max_value: int = 255
     """Rescale image."""
     array = sitk.Cast(array, sitk.sitkFloat32)
     array = sitk.RescaleIntensity(array, min_value, max_value)
-    array = sitk.Cast(array, sitk.sitkUInt8)
-    return array
+    return sitk.Cast(array, sitk.sitkUInt8)

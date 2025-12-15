@@ -19,7 +19,7 @@ logger = logger.bind(src="Matcher")
 # distances, while kernels are similarities. Metrics in this set are assumed to be distaces, unless the metric_type
 # parameter in match_descriptors is set to "similarity".
 AMBIGUOUS_METRICS: set = set(metrics.pairwise._VALID_METRICS).intersection(
-    metrics.pairwise.PAIRWISE_KERNEL_FUNCTIONS.keys()
+    metrics.pairwise.PAIRWISE_KERNEL_FUNCTIONS.keys(),
 )
 
 
@@ -323,10 +323,7 @@ def filter_matches(kp1_xy, kp2_xy, method=DEFAULT_MATCH_FILTER, filtering_kwargs
     """
     all_matching_args = filtering_kwargs.copy()
     all_matching_args.update({"kp1_xy": kp1_xy, "kp2_xy": kp2_xy})
-    if method.upper() == GMS_NAME:
-        filter_fxn = filter_matches_gms
-    else:
-        filter_fxn = filter_matches_ransac
+    filter_fxn = filter_matches_gms if method.upper() == GMS_NAME else filter_matches_ransac
 
     filtered_src_points, filtered_dst_points, good_idx = filter_fxn(**all_matching_args)
 
@@ -415,10 +412,7 @@ def match_descriptors(
         raise ValueError("Descriptor length must equal.")
 
     if metric is None:
-        if np.issubdtype(descriptors1.dtype, np.bool_):
-            metric = "hamming"
-        else:
-            metric = "euclidean"
+        metric = "hamming" if np.issubdtype(descriptors1.dtype, np.bool_) else "euclidean"
 
     if metric_kwargs is None:
         metric_kwargs = {}
@@ -442,7 +436,7 @@ def match_descriptors(
                     "Assuming the metric function returns a distance. If a similarity is actually returned",
                     "set metric_type = 'similiarity'. If metric is a distance, set metric_type = 'distance'"
                     "to avoid this message",
-                )
+                ),
             )
 
             metric_type = "distance"
@@ -452,10 +446,7 @@ def match_descriptors(
         similarities = pairwise_kernels(descriptors1, descriptors2, metric=metric, **metric_kwargs)
         distances = convert_similarity_to_distance(similarities, n_features=descriptors1.shape[1])
 
-    if callable(metric):
-        metric_name = metric.__name__
-    else:
-        metric_name = metric
+    metric_name = metric.__name__ if callable(metric) else metric
 
     indices1 = np.arange(descriptors1.shape[0])
     indices2 = np.argmin(distances, axis=1)
@@ -483,8 +474,7 @@ def match_descriptors(
         indices2 = indices2[mask]
 
         return np.column_stack((indices1, indices2)), best_distances[indices1, indices2], metric, metric_type
-    else:
-        return np.column_stack((indices1, indices2)), distances[indices1, indices2], metric_name, metric_type
+    return np.column_stack((indices1, indices2)), distances[indices1, indices2], metric_name, metric_type
 
 
 def match_desc_and_kp(
@@ -638,7 +628,7 @@ def match_desc_and_kp(
     if filtering_kwargs is None:
         if filter_method != RANSAC_NAME:
             print(
-                Warning(f"filtering_kwargs not provided for {filter_method} match filtering. Will use RANSAC instead")
+                Warning(f"filtering_kwargs not provided for {filter_method} match filtering. Will use RANSAC instead"),
             )
             filter_method = RANSAC_NAME
             all_filtering_kwargs.update({"ransac_val": DEFAULT_RANSAC})
@@ -655,7 +645,10 @@ def match_desc_and_kp(
             all_filtering_kwargs.update({"feature_d": match_distances})
 
     filtered_matched_kp1_xy, filtered_matched_kp2_xy, good_matches_idx = filter_matches(
-        matched_kp1_xy, matched_kp2_xy, filter_method, all_filtering_kwargs
+        matched_kp1_xy,
+        matched_kp2_xy,
+        filter_method,
+        all_filtering_kwargs,
     )
 
     if len(good_matches_idx) > 0:
@@ -668,7 +661,7 @@ def match_desc_and_kp(
 
         mean_filtered_distance = np.mean(filterd_match_distances)
         mean_filtered_similarity = np.mean(
-            convert_distance_to_similarity(filterd_match_distances, n_features=desc1.shape[1])
+            convert_distance_to_similarity(filterd_match_distances, n_features=desc1.shape[1]),
         )
     else:
         filterd_match_distances = []
@@ -977,8 +970,8 @@ class Matcher:
                         f"Selected {self.match_filter_method},\
                               but did not provide argument\
                               additional_filtering_kwargs.\
-                              Defaulting to RANSAC"
-                    )
+                              Defaulting to RANSAC",
+                    ),
                 )
 
                 self.match_filter_method = RANSAC_NAME
@@ -991,8 +984,8 @@ class Matcher:
             print(
                 Warning(
                     f"Dont know {self.match_filter_method}.\
-                Defaulting to RANSAC"
-                )
+                Defaulting to RANSAC",
+                ),
             )
 
             self.match_filter_method = RANSAC_NAME

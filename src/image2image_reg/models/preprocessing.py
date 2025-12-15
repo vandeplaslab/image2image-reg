@@ -1,5 +1,7 @@
 """Preprocessing parameters for image2image registration."""
 
+from __future__ import annotations
+
 import typing as ty
 from enum import Enum
 from pathlib import Path
@@ -14,7 +16,7 @@ from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox
 from image2image_reg.utils.utilities import update_kwargs_on_channel_names
 
 
-def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:
+def _index_to_list(ch_indices: int | list[int]) -> list[int]:
     """Convert index to list."""
     if isinstance(ch_indices, (int, str)):
         ch_indices = [ch_indices]
@@ -22,7 +24,7 @@ def _index_to_list(ch_indices: ty.Union[int, list[int]]) -> list[int]:
 
 
 def _transform_custom_proc(
-    custom_procs: ty.Union[list[ty.Callable], tuple[ty.Callable, ...]],
+    custom_procs: list[ty.Callable] | tuple[ty.Callable, ...],
 ) -> dict[str, ty.Callable]:
     """Transform custom processing."""
     return {f"custom processing {str(idx + 1).zfill(2)}": proc for idx, proc in enumerate(custom_procs)}
@@ -82,33 +84,33 @@ class Preprocessing(BaseModel):
     equalize_histogram: bool = False
     contrast_enhance: bool = False
     invert_intensity: bool = False
-    channel_indices: ty.Optional[list[int]] = None
-    channel_names: ty.Optional[list[str]] = None
+    channel_indices: list[int] | None = None
+    channel_names: list[str] | None = None
     as_uint8: bool = True
-    custom_processing: ty.Optional[dict[str, ty.Callable]] = None
+    custom_processing: dict[str, ty.Callable] | None = None
 
     # spatial preprocessing
-    affine: ty.Optional[np.ndarray] = None
+    affine: np.ndarray | None = None
     rotate_counter_clockwise: float = 0
-    flip: ty.Optional[CoordinateFlip] = None
+    flip: CoordinateFlip | None = None
     translate_x: int = 0
     translate_y: int = 0
     downsample: int = 1
 
     # crop pre-processing
     use_crop: bool = False
-    crop_bbox: ty.Optional[BoundingBox] = None
-    crop_polygon: ty.Optional[Polygon] = None
+    crop_bbox: BoundingBox | None = None
+    crop_polygon: Polygon | None = None
 
     # mask pre-processing
     transform_mask: bool = False
     use_mask: bool = True
-    mask: ty.Optional[ty.Union[PathLike, np.ndarray]] = None
-    mask_bbox: ty.Optional[BoundingBox] = None
-    mask_polygon: ty.Optional[Polygon] = None
+    mask: PathLike | np.ndarray | None = None
+    mask_bbox: BoundingBox | None = None
+    mask_polygon: Polygon | None = None
 
     # valis-only
-    method: ty.Optional[str] = None
+    method: str | None = None
 
     @field_validator("image_type", mode="before")
     @classmethod
@@ -136,12 +138,12 @@ class Preprocessing(BaseModel):
 
     @field_validator("mask_bbox", "crop_bbox", mode="before")
     @classmethod
-    def _validate_bbox(cls, v) -> ty.Optional[BoundingBox]:
+    def _validate_bbox(cls, v) -> BoundingBox | None:
         return _transform_to_bbox(v)
 
     @field_validator("mask_polygon", "crop_polygon", mode="before")
     @classmethod
-    def _validate_polygon(cls, v) -> ty.Optional[Polygon]:
+    def _validate_polygon(cls, v) -> Polygon | None:
         return _transform_to_polygon(v)
 
     @field_validator("channel_indices", "channel_names", mode="before")
@@ -178,19 +180,19 @@ class Preprocessing(BaseModel):
         return v
 
     @field_serializer("affine", mode="plain")
-    def _serialize_affine(self, value) -> ty.Optional[list]:
+    def _serialize_affine(self, value) -> list | None:
         if value is not None and isinstance(value, np.ndarray):
             return value.tolist()
         return None
 
     @field_serializer("image_type", "flip", mode="plain")
-    def _serialize_enum(self, value) -> ty.Optional[str]:
+    def _serialize_enum(self, value) -> str | None:
         if value is not None and isinstance(value, Enum):
             return value.value
         return None
 
     @field_serializer("crop_bbox", "crop_polygon", "mask_bbox", "mask_polygon", mode="plain")
-    def _serialize_bbox_or_polygon(self, value) -> ty.Optional[list]:
+    def _serialize_bbox_or_polygon(self, value) -> list | None:
         if value is not None and isinstance(value, (BoundingBox, Polygon)):
             return value.to_dict()
         return None
@@ -222,11 +224,11 @@ class Preprocessing(BaseModel):
         """Return valis."""
         if self.method == "I2RegPreprocessor":
             return self.method, self.model_dump()
-        elif self.method == "ColorfulStandardizer":
+        if self.method == "ColorfulStandardizer":
             return "ColorfulStandardizer", {"c": 0.2, "h": 0}
-        elif self.method in ["mip", "MaxIntensityProjection"]:
+        if self.method in ["mip", "MaxIntensityProjection"]:
             return "MaxIntensityProjection", {"channel_names": self.channel_names}
-        elif self.method == "ChannelGetter":
+        if self.method == "ChannelGetter":
             return "ChannelGetter", {"channel": "dapi"}
         return self.method, {}
 
@@ -252,8 +254,7 @@ class Preprocessing(BaseModel):
         if self.invert_intensity:
             text += "invert"
             tooltip += "Invert intensity\n"
-        if text.endswith("; "):
-            text = text[:-2]
+        text = text.removesuffix("; ")
         text += "\n"
         if self.channel_indices:
             text += f"ids: {self.channel_indices}\n"
@@ -267,8 +268,7 @@ class Preprocessing(BaseModel):
         if self.rotate_counter_clockwise and not valis:
             text += f"{self.rotate_counter_clockwise}°"
             tooltip += f"Rotate: {self.rotate_counter_clockwise}°\n"
-        if text.endswith("; "):
-            text = text[:-2]
+        text = text.removesuffix("; ")
         if not text.endswith("\n"):
             text += "\n"
         if self.downsample > 1 and not valis:
@@ -289,8 +289,7 @@ class Preprocessing(BaseModel):
             if self.crop_polygon:
                 text += f" ({self.crop_polygon.as_str()})"
             tooltip += "Cropping image\n"
-        if tooltip.endswith("\n"):
-            tooltip = tooltip[:-1]
+        tooltip = tooltip.removesuffix("\n")
         return text, tooltip
 
     def to_dict(self, as_wsireg: bool = False) -> dict:
@@ -300,9 +299,8 @@ class Preprocessing(BaseModel):
             data["crop_bbox"] = data["crop_bbox"].to_dict(as_wsireg)
         if data.get("crop_polygon") and hasattr(data["crop_polygon"], "to_dict"):
             data["crop_polygon"] = data["crop_polygon"].to_dict(as_wsireg)
-        if data.get("mask"):
-            if isinstance(data["mask"], ArrayLike):
-                data["mask"] = "ArrayLike"
+        if data.get("mask") and isinstance(data["mask"], ArrayLike):
+            data["mask"] = "ArrayLike"
         if data.get("mask_bbox") and hasattr(data["mask_bbox"], "to_dict"):
             data["mask_bbox"] = data["mask_bbox"].to_dict(as_wsireg)
         if data.get("mask_polygon") and hasattr(data["mask_polygon"], "to_dict"):
@@ -334,14 +332,14 @@ class Preprocessing(BaseModel):
                     data.pop(key)
         return data
 
-    def update_from_another(self, preprocessing: "Preprocessing") -> "Preprocessing":
+    def update_from_another(self, preprocessing: Preprocessing) -> Preprocessing:
         """Update from another preprocessing."""
         for key, value in preprocessing.model_dump().items():
             if value is not None:
                 setattr(self, key, value)
         return self
 
-    def select_channel(self, channel_id: ty.Optional[int] = None, channel_name: ty.Optional[str] = None) -> None:
+    def select_channel(self, channel_id: int | None = None, channel_name: str | None = None) -> None:
         """Select a specific channel."""
         if channel_name is not None and channel_name in self.channel_names:
             channel_id = self.channel_names.index(channel_name)
@@ -365,7 +363,7 @@ class Preprocessing(BaseModel):
         as_uint8: bool = True,
         max_intensity_projection: bool = True,
         **kwargs: ty.Any,
-    ) -> "Preprocessing":
+    ) -> Preprocessing:
         """Basic image preprocessing."""
         return cls(
             image_type=image_type,
@@ -384,7 +382,7 @@ class Preprocessing(BaseModel):
         max_intensity_projection: bool = True,
         contrast_enhance: bool = True,
         **kwargs: ty.Any,
-    ) -> "Preprocessing":
+    ) -> Preprocessing:
         """Basic image preprocessing."""
         return cls(
             image_type=image_type,
@@ -404,7 +402,7 @@ class Preprocessing(BaseModel):
         max_intensity_projection: bool = True,
         which: ty.Literal["any", "brightfield", "egfp"] = "any",
         **kwargs: ty.Any,
-    ) -> "Preprocessing":
+    ) -> Preprocessing:
         """Basic image preprocessing."""
         changed = False
         if which in ["any", "brightfield"]:
@@ -439,7 +437,7 @@ class Preprocessing(BaseModel):
         equalize_histogram: bool = True,
         contrast_enhance: bool = False,
         **kwargs: ty.Any,
-    ) -> "Preprocessing":
+    ) -> Preprocessing:
         """Basic image preprocessing."""
         _, kwargs = update_kwargs_on_channel_names(["dapi"], **kwargs)
         return cls(
@@ -461,7 +459,7 @@ class Preprocessing(BaseModel):
         max_intensity_projection: bool = False,
         invert_intensity: bool = True,
         **kwargs: ty.Any,
-    ) -> "Preprocessing":
+    ) -> Preprocessing:
         """Basic image preprocessing."""
         return cls(
             image_type=image_type,
@@ -481,7 +479,7 @@ class Preprocessing(BaseModel):
         max_intensity_projection: bool = False,
         invert_intensity: bool = True,
         **kwargs: ty.Any,
-    ) -> "Preprocessing":
+    ) -> Preprocessing:
         """Basic image preprocessing."""
         return cls(
             image_type=image_type,
@@ -502,7 +500,7 @@ class Preprocessing(BaseModel):
         invert_intensity: bool = True,
         equalize_histogram: bool = True,
         **kwargs: ty.Any,
-    ) -> "Preprocessing":
+    ) -> Preprocessing:
         """Basic image preprocessing."""
         return cls(
             image_type=image_type,

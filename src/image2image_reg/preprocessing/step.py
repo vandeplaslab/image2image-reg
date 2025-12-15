@@ -89,7 +89,11 @@ class Preprocessor(PreprocessorMixin):
         return self.array
 
     def apply(
-        self, array: np.ndarray | sitk.Image, pixel_size: float, to_array: bool = False, **kwargs: ty.Any
+        self,
+        array: np.ndarray | sitk.Image,
+        pixel_size: float,
+        to_array: bool = False,
+        **kwargs: ty.Any,
     ) -> sitk.Image | np.ndarray:
         """Apply step to image."""
         res = self(array, pixel_size, **kwargs)
@@ -110,7 +114,11 @@ class ColorStandardizerPreprocessor(Preprocessor):
     allow_multi_channel = False
 
     def _apply(
-        self, c: float = 0.2, invert: bool = True, adaptive_equalize: bool = False, **kwargs: ty.Any
+        self,
+        c: float = 0.2,
+        invert: bool = True,
+        adaptive_equalize: bool = False,
+        **kwargs: ty.Any,
     ) -> sitk.Image:
         if self.is_rgb:
             array = self.to_array()
@@ -184,7 +192,12 @@ class StainFlattenerPreprocessor(Preprocessor):
     model: MiniBatchKMeans
 
     def _apply(
-        self, n_colors: int = 100, q: int = 95, adaptive_equalize: float = True, max_colors: int = 100, **kwargs: ty.Any
+        self,
+        n_colors: int = 100,
+        q: int = 95,
+        adaptive_equalize: float = True,
+        max_colors: int = 100,
+        **kwargs: ty.Any,
     ) -> sitk.Image:
         if self.is_rgb:
             from sklearn.cluster import MiniBatchKMeans

@@ -27,7 +27,7 @@ def read_elastix_iteration_data(iteration_txt: Path | str) -> dict[str, np.ndarr
 
     iteration_data = [it.split("\t") for it in iteration_data[1:]]
 
-    iteration_dict = {
+    return {
         "iteration": np.array([int(it[0]) for it in iteration_data]),
         "metric": np.array([float(it[1]) for it in iteration_data]),
         "time[a]": np.array([float(it[2]) for it in iteration_data]),
@@ -35,8 +35,6 @@ def read_elastix_iteration_data(iteration_txt: Path | str) -> dict[str, np.ndarr
         "gradient": np.array([float(it[4]) for it in iteration_data]),
         "iter_time": np.array([float(it[5]) for it in iteration_data]),
     }
-
-    return iteration_dict
 
 
 def read_elastix_iteration_dir(registration_dir: Path | str) -> dict[int, dict[int, dict[str, np.ndarray]]]:
@@ -61,7 +59,7 @@ def read_elastix_iteration_dir(registration_dir: Path | str) -> dict[int, dict[i
     all_iteration_data = {}
     for iter_fp in iter_info_fps:
         model_idx = int(iter_fp.name.split(".")[1])
-        if model_idx not in all_iteration_data.keys():
+        if model_idx not in all_iteration_data:
             all_iteration_data.update({model_idx: {}})
         res_idx = int(iter_fp.name.split(".")[2].strip("R"))
         model_res_data = read_elastix_iteration_data(iter_fp)
@@ -124,7 +122,7 @@ def read_elastix_transform_dir(registration_dir: Path | str) -> dict[int, dict[i
     for tform_fp in tform_info_fps:
         if len(tform_fp.name.split(".")) > 3:
             model_idx = int(tform_fp.name.split(".")[1])
-            if model_idx not in all_tform_data.keys():
+            if model_idx not in all_tform_data:
                 all_tform_data.update({model_idx: {}})
             res_idx = int(tform_fp.name.split(".")[2].strip("R"))
             model_res_data = read_elastix_intermediate_transform_data(tform_fp)

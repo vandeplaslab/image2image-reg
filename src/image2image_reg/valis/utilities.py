@@ -118,8 +118,7 @@ def get_max_image_dimensions(img_list: list[np.ndarray]) -> tuple[int, int]:
     """
     shapes = [img.shape[0:2] for img in img_list]
     all_w, all_h = list(zip(*shapes))
-    max_wh = (max(all_w), max(all_h))
-    return max_wh
+    return (max(all_w), max(all_h))
 
 
 def get_micro_registration_dimension(registrar: Valis, fraction: float = 0.125, max_size: int = 3000) -> int:
@@ -142,12 +141,8 @@ def get_image_name(filename: PathLike) -> str:
         return filename
 
     filename = Path(filename).name
-    if filename.endswith(".ome.tiff") or filename.endswith(".ome.tif"):
-        back_slice_idx = 2
-    else:
-        back_slice_idx = 1
-    img_name = "".join([".".join(filename.split(".")[:-back_slice_idx])])
-    return img_name
+    back_slice_idx = 2 if filename.endswith((".ome.tiff", ".ome.tif")) else 1
+    return "".join([".".join(filename.split(".")[:-back_slice_idx])])
 
 
 def get_preprocessor(preprocessor: str | type) -> type:
@@ -205,7 +200,7 @@ def get_feature_detector_str(feature_detector: str) -> str:
     all_available = list(available.values()) + list(available.keys())
     if feature_detector not in all_available:
         raise ValueError(f"Feature detector {feature_detector} not found. Please one of use: {all_available}")
-    return available[feature_detector] if feature_detector in available else feature_detector
+    return available.get(feature_detector, feature_detector)
 
 
 def get_feature_detector(feature_detector: str) -> type:
@@ -236,7 +231,7 @@ def get_feature_matcher_str(feature_matcher: str) -> str:
     }
     if feature_matcher not in available:
         raise ValueError(f"Feature matcher {feature_matcher} not found. Please one of use: {list(available.keys())}")
-    return available[feature_matcher] if feature_matcher in available else feature_matcher
+    return available.get(feature_matcher, feature_matcher)
 
 
 def get_feature_matcher(feature_matcher: str) -> type:
@@ -249,11 +244,7 @@ def get_feature_matcher(feature_matcher: str) -> type:
             feature_matcher = getattr(fm_valis, feature_matcher)
         else:
             raise ValueError(f"Feature detector {feature_matcher} not found.")
-    if method:
-        feature_matcher = feature_matcher(match_filter_method=method)
-    else:
-        feature_matcher = feature_matcher()
-    return feature_matcher
+    return feature_matcher(match_filter_method=method) if method else feature_matcher()
 
 
 def get_valis_registrar(project_name: str, output_dir: PathLike, init_jvm: bool = False) -> ty.Any:

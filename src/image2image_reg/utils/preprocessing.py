@@ -108,7 +108,7 @@ def preprocess_dask_array(
                     [
                         cv2.normalize(np.asarray(channel), None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
                         for channel in array
-                    ]
+                    ],
                 )
             array = sitk.GetImageFromArray(np.squeeze(np.asarray(array)))  # type: ignore[assignment]
             logger.trace(f"Pre-processed dask array in {timer()} ({array.GetSize()})")
@@ -116,7 +116,11 @@ def preprocess_dask_array(
 
 
 def resize_image(
-    array: np.ndarray, resolution: float, is_rgb: bool | None = None, max_size: int = 1_024, as_sitk: bool = False
+    array: np.ndarray,
+    resolution: float,
+    is_rgb: bool | None = None,
+    max_size: int = 1_024,
+    as_sitk: bool = False,
 ) -> tuple[np.ndarray | sitk.Image, float]:
     """Resize the image to a maximum size.
 
@@ -158,14 +162,14 @@ def resize_image(
                     [
                         cv2.resize(array[:, :, i], (new_width, new_height), interpolation=cv2.INTER_AREA)
                         for i in range(array.shape[2])
-                    ]
+                    ],
                 )
             else:
                 array = np.asarray(
                     [
                         cv2.resize(array[i, :, :], (new_width, new_height), interpolation=cv2.INTER_AREA)
                         for i in range(array.shape[0])
-                    ]
+                    ],
                 )
             resolution = resolution / scale_factor
             logger.debug(f"Resized image to {array.shape} at resolution {resolution:.2f} um/px in {timer()}")
@@ -222,9 +226,8 @@ def sitk_max_int_proj(image: sitk.Image) -> sitk.Image:
         if size[2] < size[0]:
             return sitk.MaximumProjection(image, 2)[:, :, 0]
         return sitk.MaximumProjection(image, 0)[0, :, :]
-    else:
-        logger.warning("Cannot perform maximum intensity project on single channel image")
-        return image
+    logger.warning("Cannot perform maximum intensity project on single channel image")
+    return image
 
 
 def sitk_mean_int_proj(image: sitk.Image) -> sitk.Image:
@@ -245,9 +248,8 @@ def sitk_mean_int_proj(image: sitk.Image) -> sitk.Image:
         if size[2] < size[0]:
             return sitk.MeanProjection(image, 2)[:, :, 0]
         return sitk.MeanProjection(image, 0)[0, :, :]
-    else:
-        logger.warning("Cannot perform maximum intensity project on single channel image")
-        return image
+    logger.warning("Cannot perform maximum intensity project on single channel image")
+    return image
 
 
 def sitk_inv_int(image: sitk.Image, mask_zeros: bool = True) -> sitk.Image:
@@ -463,7 +465,10 @@ def background_subtract(image: sitk.Image) -> sitk.Image:
 
 
 def preprocess_intensity(
-    image: sitk.Image, preprocessing: Preprocessing, pixel_size: float, is_rgb: bool
+    image: sitk.Image,
+    preprocessing: Preprocessing,
+    pixel_size: float,
+    is_rgb: bool,
 ) -> sitk.Image:
     """Preprocess image intensity data to single channel image."""
     with MeasureTimer() as timer:
@@ -640,7 +645,10 @@ def preprocess_spatial(
         if (preprocessing.translate_x or preprocessing.translate_y) and spatial:
             logger.trace(f"Transforming image by translation: {preprocessing.translate_x}, {preprocessing.translate_y}")
             translation_transform = generate_rigid_translation_transform_alt(
-                image, pixel_size, preprocessing.translate_x, preprocessing.translate_y
+                image,
+                pixel_size,
+                preprocessing.translate_x,
+                preprocessing.translate_y,
             )
             transforms.append(translation_transform)
             composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [translation_transform]})
@@ -673,11 +681,12 @@ def preprocess_spatial(
                 )
                 transforms.append(translation_transform)
                 composite_transform, _, final_tform = prepare_wsireg_transform_data(
-                    {"initial": [translation_transform]}
+                    {"initial": [translation_transform]},
                 )
                 image = transform_plane(image, final_tform, composite_transform)
                 original_size_transform = generate_rigid_original_transform(
-                    original_size, deepcopy(translation_transform)
+                    original_size,
+                    deepcopy(translation_transform),
                 )
 
                 if mask is not None:
@@ -721,12 +730,18 @@ def preprocess(
         raise ValueError("preprocessing did not result in a single image plane\nmulti-channel or 3D image return")
     if image.GetNumberOfComponentsPerPixel() > 1:  # type: ignore[no-untyped-call]
         raise ValueError(
-            "preprocessing did not result in a single image plane\nmulti-component / RGB(A) image returned"
+            "preprocessing did not result in a single image plane\nmulti-component / RGB(A) image returned",
         )
 
     # spatial pre-processing
     image, mask, transforms, original_size_transform = preprocess_spatial(
-        image, preprocessing, pixel_size, mask, transforms, transform_mask=transform_mask, spatial=spatial
+        image,
+        preprocessing,
+        pixel_size,
+        mask,
+        transforms,
+        transform_mask=transform_mask,
+        spatial=spatial,
     )
     return image, mask, transforms, original_size_transform  # type: ignore[return-value]
 
@@ -801,7 +816,7 @@ def preprocess_preview(
     image = convert_and_cast(image, preprocessing)  # type: ignore[assignment,arg-type]
 
     # if the mask is not going to be transformed, then we don't need to retrieve it at this moment in time
-    image, mask, initial_transforms, original_size_transform = preprocess(  # type: ignore[assignment]
+    image, _mask, initial_transforms, _original_size_transform = preprocess(  # type: ignore[assignment]
         image,  # type: ignore[arg-type]
         None,
         preprocessing=preprocessing,
@@ -843,7 +858,7 @@ def preprocess_preview_valis(
 
         # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
         # set image
-        image, mask, initial_transforms, original_size_transform = preprocess(  # type: ignore[assignment]
+        image, _mask, initial_transforms, _original_size_transform = preprocess(  # type: ignore[assignment]
             image,  # type: ignore[arg-type]
             None,
             preprocessing,
@@ -855,15 +870,14 @@ def preprocess_preview_valis(
             spatial=spatial,
         )
         return sitk.GetArrayFromImage(image)  # type: ignore[arg-type]
-    else:
-        from image2image_reg.valis.utilities import get_preprocessor
+    from image2image_reg.valis.utilities import get_preprocessor
 
-        method, kws = preprocessing.to_valis()
-        if method in ["OD"] and isinstance(image, da.Array):
+    method, kws = preprocessing.to_valis()
+    if method == "OD" and isinstance(image, da.Array):
+        image = image.compute()
+    elif method in ["ChannelGetter", "HEDeconvolution", "HEPreprocessing", "MaxIntensityProjection"]:
+        if isinstance(image, da.Array):
             image = image.compute()
-        elif method in ["ChannelGetter", "HEDeconvolution", "HEPreprocessing", "MaxIntensityProjection"]:
-            if isinstance(image, da.Array):
-                image = image.compute()
-            return image
-        preprocessor = get_preprocessor(method)(image, "", 0, 0)
-        return preprocessor.process_image(**kws), resolution
+        return image
+    preprocessor = get_preprocessor(method)(image, "", 0, 0)
+    return preprocessor.process_image(**kws), resolution

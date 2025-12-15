@@ -63,9 +63,13 @@ def transform_points(
         Whether to show progress bar, by default False
     """
     transformed_xy = seq.transform_points(
-        np.c_[x, y], is_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size, silent=silent
+        np.c_[x, y],
+        is_px=in_px,
+        as_px=as_px,
+        source_pixel_size=source_pixel_size,
+        silent=silent,
     )
-    tx, ty, mask = clip_func(x=transformed_xy[:, 0], y=transformed_xy[:, 1])
+    tx, ty, _mask = clip_func(x=transformed_xy[:, 0], y=transformed_xy[:, 1])
     return tx, ty
 
 
@@ -112,7 +116,8 @@ def transform_points_as_image(
     image_of_index, index_of_coords, _, _ = _prepare_transform_coordinate_image(height, width, x, y)
     image_of_index_transformed, _ = _transform_coordinate_image(seq, image_of_index)
     transformed_x, transformed_y, failed_mask = _cleanup_transform_coordinate_image(
-        image_of_index_transformed, index_of_coords
+        image_of_index_transformed,
+        index_of_coords,
     )
 
     # indices = indices[failed_indices]
@@ -124,15 +129,22 @@ def transform_points_as_image(
         n_failed_ = 0
         failed_mask_ = np.full(len(x), False)
         for failed_subset in tqdm(
-            random_chunks(failed_indices.copy(), n_tasks=4), desc="Retrying failed points...", leave=False, total=4
+            random_chunks(failed_indices.copy(), n_tasks=4),
+            desc="Retrying failed points...",
+            leave=False,
+            total=4,
         ):
             failed_subset = np.sort(failed_subset)  # sort since they were randomly sub-sampled
             image_of_index, index_of_coords, _, _ = _prepare_transform_coordinate_image(
-                height, width, x[failed_subset], y[failed_subset]
+                height,
+                width,
+                x[failed_subset],
+                y[failed_subset],
             )
             image_of_index_transformed, _ = _transform_coordinate_image(seq, image_of_index)
             transformed_x_, transformed_y_, failed_mask_in_subset = _cleanup_transform_coordinate_image(
-                image_of_index_transformed, index_of_coords
+                image_of_index_transformed,
+                index_of_coords,
             )
             if transformed_x_.size == 0:
                 logger.error(f"Failed to transform {len(failed_subset):,} points - but are no improvements...")
@@ -171,13 +183,18 @@ def transform_points_as_image(
         # n_failed = failed_mask.sum()
         # max_iter += 1
     transformed_x, transformed_y = _transform_transformed_from_px_to_um(
-        transformed_x, transformed_y, as_px, target_pixel_size
+        transformed_x,
+        transformed_y,
+        as_px,
+        target_pixel_size,
     )
     return transformed_x, transformed_y
 
 
 def _transform_coordinate_image(
-    seq: TransformSequence, image_of_index: np.ndarray, scale: tuple[float, float] = (1, 1)
+    seq: TransformSequence,
+    image_of_index: np.ndarray,
+    scale: tuple[float, float] = (1, 1),
 ) -> tuple[np.ndarray, np.ndarray]:
     # convert image to Image
     import SimpleITK as sitk
@@ -442,8 +459,7 @@ def remove_invalid_points(df: pd.DataFrame, group_by: str) -> pd.DataFrame:
     if group_by not in df.columns:
         raise ValueError(f"Invalid columns: {df.columns}")
     # remove any groups that have fewer than two entries by using group_by
-    df = df.groupby(group_by).filter(lambda x: len(x) > 2)
-    return df
+    return df.groupby(group_by).filter(lambda x: len(x) > 2)
 
 
 def transform_attached_shape(
@@ -546,10 +562,7 @@ def _transform_geojson_features_as_df(
     target_pixel_size = transform_sequence.output_spacing[0]
 
     df, n_to_prop = _convert_geojson_to_df(geojson_data, is_px, source_pixel_size)
-    if df.unique_index.nunique() > 1:
-        group_by = "unique_index"
-    else:
-        group_by = "outer"
+    group_by = "unique_index" if df.unique_index.nunique() > 1 else "outer"
     # don't remove all points if data is not actually a shape in the form of points
     if not group_by and clip == "remove":
         clip = "part-remove"
@@ -558,7 +571,7 @@ def _transform_geojson_features_as_df(
     counter = 0
     to_remove = []
     for index, (_group, df_group) in enumerate(
-        tqdm(df.groupby(group_by), desc="Transforming groups", leave=False, mininterval=1)
+        tqdm(df.groupby(group_by), desc="Transforming groups", leave=False, mininterval=1),
     ):
         df_group_transformed = transform_points_df(
             transform_sequence,
@@ -644,7 +657,7 @@ def _transform_geojson_features(
 
         elif geometry["type"] == "Polygon":
             for i, ring in enumerate(
-                tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, mininterval=1, disable=True)
+                tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, mininterval=1, disable=True),
             ):
                 x, y = np.array(ring).T
                 x, y = transform_points(
@@ -691,7 +704,7 @@ def transform_images_for_pyramid(
     import SimpleITK as sitk
 
     reader = wrapper.reader
-    channel_axis, n_channels = reader.get_channel_axis_and_n_channels()
+    channel_axis, _n_channels = reader.get_channel_axis_and_n_channels()
     channel_axis = channel_axis or 0
     if transformation_sequence is None:
         return np.asarray(reader.pyramid[pyramid])
@@ -716,7 +729,7 @@ def transform_images_debug_for_pyramid(
     import SimpleITK as sitk
 
     reader = wrapper.reader
-    channel_axis, n_channels = reader.get_channel_axis_and_n_channels()
+    channel_axis, _n_channels = reader.get_channel_axis_and_n_channels()
     channel_axis = channel_axis or 0
     if transformation_sequence is None:
         return np.asarray(reader.pyramid[pyramid])

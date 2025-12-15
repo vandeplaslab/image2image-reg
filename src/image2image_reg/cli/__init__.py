@@ -47,7 +47,11 @@ enable_compat()
     show_default=True,
 )
 @click.option(
-    "--quiet", "-q", "verbosity", flag_value=0, help="Minimal output - only errors and exceptions will be shown."
+    "--quiet",
+    "-q",
+    "verbosity",
+    flag_value=0,
+    help="Minimal output - only errors and exceptions will be shown.",
 )
 @click.option("--debug", "verbosity", flag_value=0.5, help="Maximum output - all messages will be shown.")
 @click.option(

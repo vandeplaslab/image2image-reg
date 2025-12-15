@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import typing as ty
 
-import SimpleITK as sitk
 import numpy as np
+import SimpleITK as sitk
 
 SITK_TO_NP_DTYPE = {
     0: np.int8,

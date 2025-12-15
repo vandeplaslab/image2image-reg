@@ -56,7 +56,7 @@ class Workflow:
             if output_dir is None:
                 raise ValueError("Output directory must be provided.")
             self.project_dir = (Path(output_dir) / self.format_project_name(name)).with_suffix(self.EXTENSION).resolve()
-        if not self.project_dir.suffix == self.EXTENSION:
+        if self.project_dir.suffix != self.EXTENSION:
             logger.warning(f"Project directory '{self.project_dir}' does not have the correct extension but that's ok.")
         self.name = self.format_project_name(name)
         self.cache_images = cache
@@ -212,7 +212,10 @@ class Workflow:
             print_versions()
 
     def get_modality(
-        self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None
+        self,
+        name: str | None = None,
+        path: PathLike | None = None,
+        name_or_path: PathLike | None = None,
     ) -> Modality | None:
         """Get modality."""
         for modality in self.modalities.values():
@@ -225,7 +228,10 @@ class Workflow:
         return None
 
     def get_wrapper(
-        self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None
+        self,
+        name: str | None = None,
+        path: PathLike | None = None,
+        name_or_path: PathLike | None = None,
     ) -> ImageWrapper | None:
         """Get modality."""
         from image2image_reg.wrapper import ImageWrapper
@@ -233,9 +239,13 @@ class Workflow:
         modality = self.get_modality(name, path, name_or_path)
         if modality:
             return ImageWrapper(modality)
+        return None
 
     def has_modality(
-        self, name: str | None = None, path: PathLike | None = None, name_or_path: PathLike | None = None
+        self,
+        name: str | None = None,
+        path: PathLike | None = None,
+        name_or_path: PathLike | None = None,
     ) -> bool:
         """Check whether modality has been previously added."""
         modality = self.get_modality(name, path, name_or_path)
@@ -522,7 +532,7 @@ class Workflow:
         if attach_to_modality not in self.modalities:
             raise ValueError(
                 f"The specified modality '{attach_to_modality}' does not exist. Please add it before adding attachment"
-                f" images."
+                f" images.",
             )
         path = Path(path)
         if self.has_modality(path=path):
@@ -569,7 +579,11 @@ class Workflow:
         logger.trace(f"Removed shape set '{name}'.")
 
     def add_attachment_geojson(
-        self, attach_to: str, name: str, paths: PathLike | list[PathLike], pixel_size: float | None = None
+        self,
+        attach_to: str,
+        name: str,
+        paths: PathLike | list[PathLike],
+        pixel_size: float | None = None,
     ) -> None:
         """
         Add attached shapes.
@@ -589,7 +603,7 @@ class Workflow:
         """
         if attach_to not in self.modalities:
             raise ValueError(
-                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment images."
+                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment images.",
             )
         if isinstance(paths, (str, Path)):
             paths = [paths]
@@ -632,11 +646,15 @@ class Workflow:
         }
         logger.trace(
             f"Added shape set '{name}' with {len(paths)} files, pixel size of {pixel_size:.3f}"
-            f" and attached to {attach_to}."
+            f" and attached to {attach_to}.",
         )
 
     def auto_add_attachment_points(
-        self, attach_to: str, name: str, path: PathLike, pixel_size: float | None = None
+        self,
+        attach_to: str,
+        name: str,
+        path: PathLike,
+        pixel_size: float | None = None,
     ) -> None:
         """Add modality."""
         from image2image_io.readers import is_supported
@@ -667,7 +685,11 @@ class Workflow:
         logger.trace(f"Removed points set '{name}'.")
 
     def add_attachment_points(
-        self, attach_to: str, name: str, paths: PathLike | list[PathLike], pixel_size: float | None = None
+        self,
+        attach_to: str,
+        name: str,
+        paths: PathLike | list[PathLike],
+        pixel_size: float | None = None,
     ) -> None:
         """
         Add attached shapes.
@@ -690,7 +712,7 @@ class Workflow:
 
         if attach_to not in self.modalities:
             raise ValueError(
-                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment objects."
+                f"The specified modality '{attach_to}' does not exist. Please add it before adding attachment objects.",
             )
         paths_: list[Path] = []
         for path in paths:
@@ -730,7 +752,7 @@ class Workflow:
         }
         logger.trace(
             f"Added points set '{name}' with {len(paths)} files, pixel size of {pixel_size:.3f}"
-            f" and attached to {attach_to}."
+            f" and attached to {attach_to}.",
         )
 
     def auto_add_merge_modalities(self, name: str):
@@ -823,7 +845,7 @@ class Workflow:
         from koyo.json import read_json_data
 
         path = Path(path)
-        if path.is_dir() and path.suffix in [cls.EXTENSION]:
+        if path.is_dir() and path.suffix == cls.EXTENSION:
             path = path / cls.CONFIG_NAME
         elif path.is_file() and path.name == cls.CONFIG_NAME:
             path = path.parent / cls.CONFIG_NAME
@@ -837,7 +859,7 @@ class Workflow:
         from koyo.json import write_json_data
 
         path = Path(path)
-        if path.is_dir() and path.suffix in [cls.EXTENSION]:
+        if path.is_dir() and path.suffix == cls.EXTENSION:
             path = path / cls.CONFIG_NAME
         elif path.is_file() and path.name == cls.CONFIG_NAME:
             path = path.parent / cls.CONFIG_NAME
@@ -874,7 +896,9 @@ class Workflow:
 
     @staticmethod
     def _update_attachment_paths(
-        config: dict[str, AttachedShapeOrPointDict] | None, source_dirs: list[Path], recursive: bool = False
+        config: dict[str, AttachedShapeOrPointDict] | None,
+        source_dirs: list[Path],
+        recursive: bool = False,
     ) -> AttachedShapeOrPointDict | None:
         if not config:
             return config
@@ -884,7 +908,7 @@ class Workflow:
                 if not path.exists():
                     logger.trace(f"Path '{path}' does not exist for attachment={attachment}.")
                     for source_dir in source_dirs:
-                        updated, new_path = _get_new_path(path, source_dir, recursive=recursive)
+                        _updated, new_path = _get_new_path(path, source_dir, recursive=recursive)
                         if new_path.exists():
                             attachment["files"][i] = str(new_path)
                             logger.trace(f"Updated path for attachment={attachment} to '{new_path}'.")
@@ -898,14 +922,13 @@ def _get_new_path(path: Path, source_dir: Path, recursive: bool = False) -> tupl
     new_path = source_dir / path.name
     if new_path.exists():
         return True, new_path
-    else:
-        # check whether part of the source directory is in the rest of the path
-        if source_dir.name in path.parts:
-            for i, part in enumerate(path.parts):
-                if part == source_dir.name:
-                    new_path = Path(source_dir).joinpath(*path.parts[i + 1 :])
-                    if new_path.exists():
-                        return True, new_path
+    # check whether part of the source directory is in the rest of the path
+    if source_dir.name in path.parts:
+        for i, part in enumerate(path.parts):
+            if part == source_dir.name:
+                new_path = Path(source_dir).joinpath(*path.parts[i + 1 :])
+                if new_path.exists():
+                    return True, new_path
     if recursive:
         for sub_dir in source_dir.glob("*"):
             if sub_dir.is_dir():

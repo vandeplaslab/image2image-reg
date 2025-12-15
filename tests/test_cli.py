@@ -70,7 +70,7 @@ def test_cli_add_images_override_preprocessing(tmp_path):
 
     # add paths
     exit_status = os.system(
-        f"i2reg --debug elastix add-path -p '{path!s}' -s source -t target -R rigid -S light -P dark"
+        f"i2reg --debug elastix add-path -p '{path!s}' -s source -t target -R rigid -S light -P dark",
     )
     assert exit_status == 0, "Failed to add registration path."
 
@@ -91,7 +91,7 @@ def test_cli_add_images_with_affine(tmp_path):
 
     # add images
     exit_status = os.system(
-        f"i2reg --debug elastix add-image -p '{path!s}' -n source -i '{source!s}' -P basic -A {affine!s}"
+        f"i2reg --debug elastix add-image -p '{path!s}' -n source -i '{source!s}' -P basic -A {affine!s}",
     )
     assert exit_status == 0, "Failed to add source image."
     exit_status = os.system(f"i2reg --debug elastix add-image -p '{path!s}' -n target -i '{target!s}' -P basic")
@@ -117,7 +117,7 @@ def test_cli_add_images_path_mask(tmp_path):
     exit_status = os.system(f"i2reg --debug elastix add-image -p '{path!s}' -n source -i '{source!s}' -P basic")
     assert exit_status == 0, "Failed to add source image."
     exit_status = os.system(
-        f"i2reg --debug elastix add-image -p '{path!s}' -n target -i '{target!s}' -P basic -m {mask!s}"
+        f"i2reg --debug elastix add-image -p '{path!s}' -n target -i '{target!s}' -P basic -m {mask!s}",
     )
     assert exit_status == 0, "Failed to add target image."
 
@@ -141,7 +141,7 @@ def test_cli_add_images_path_mask_bbox(tmp_path):
     exit_status = os.system(f"i2reg --debug elastix add-image -p '{path!s}' -n source -i '{source!s}' -P basic")
     assert exit_status == 0, "Failed to add source image."
     exit_status = os.system(
-        f"i2reg --debug elastix add-image -p '{path!s}' -n target -i '{target!s}' -P basic -b 0,0,1000,1000"
+        f"i2reg --debug elastix add-image -p '{path!s}' -n target -i '{target!s}' -P basic -b 0,0,1000,1000",
     )
     assert exit_status == 0, "Failed to add target image."
 

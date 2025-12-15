@@ -20,7 +20,10 @@ ClipFunc = ty.Callable[[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray, t
 
 
 def _prepare_transform_coordinate_image(
-    height: int, width: int, x: np.ndarray, y: np.ndarray
+    height: int,
+    width: int,
+    x: np.ndarray,
+    y: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     # get coordinates of the image
     x = np.round(x * MULTIPLIER).astype(int)
@@ -43,7 +46,11 @@ def _prepare_transform_coordinate_image(
 
 
 def _update_transform_coordinate_image(
-    image_of_index: np.ndarray, height: int, width: int, x: np.ndarray, y: np.ndarray
+    image_of_index: np.ndarray,
+    height: int,
+    width: int,
+    x: np.ndarray,
+    y: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     image_of_index[image_of_index > 0] = 0
     # get coordinates of the image
@@ -99,7 +106,8 @@ def _filter_transform_coordinate_image(
 
 
 def _cleanup_transform_coordinate_image(
-    image_of_index: np.ndarray, index_of_coords: np.ndarray
+    image_of_index: np.ndarray,
+    index_of_coords: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     yy, xx = np.nonzero(image_of_index)
     values = image_of_index[yy, xx]
@@ -110,10 +118,7 @@ def _cleanup_transform_coordinate_image(
     # find nearest indices
     indices = find_nearest_index_batch(values, index_of_coords)
     # find indices of elements that we failed to find
-    if indices.size == 0:
-        failed_mask = np.ones(len(values), dtype=bool)
-    else:
-        failed_mask = values[indices] != index_of_coords
+    failed_mask = np.ones(len(values), dtype=bool) if indices.size == 0 else values[indices] != index_of_coords
     new_x = xx[indices]
     new_x = new_x + np.random.uniform(-0.3, 0.3, len(indices))
     new_y = yy[indices]
@@ -122,7 +127,9 @@ def _cleanup_transform_coordinate_image(
 
 
 def _convert_geojson_to_df(
-    geojson_data: list[dict], is_px: bool, source_pixel_size: float = 1.0
+    geojson_data: list[dict],
+    is_px: bool,
+    source_pixel_size: float = 1.0,
 ) -> tuple[pd.DataFrame, dict[int, dict]]:
     """Convert GeoJSON data so that it can be transformed back to GeoJSON."""
     # types: pt = Point; pg = Polygon; mp = MultiPolygon
@@ -264,7 +271,10 @@ def _clip_noop(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np
 
 
 def _clip_points_outside_of_image(
-    x: np.ndarray, y: np.ndarray, height: int, width: int
+    x: np.ndarray,
+    y: np.ndarray,
+    height: int,
+    width: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Clip points outside of image dimensions, by setting them to the nearest edge.
 
@@ -276,7 +286,10 @@ def _clip_points_outside_of_image(
 
 
 def _remove_points_outside_of_image(
-    x: np.ndarray, y: np.ndarray, height: int, width: int
+    x: np.ndarray,
+    y: np.ndarray,
+    height: int,
+    width: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Remove points outside of image dimensions.
 
@@ -287,7 +300,10 @@ def _remove_points_outside_of_image(
 
 
 def _remove_all_points_if_outside_of_image(
-    x: np.ndarray, y: np.ndarray, height: int, width: int
+    x: np.ndarray,
+    y: np.ndarray,
+    height: int,
+    width: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Remove points outside of image dimensions.
 
@@ -306,18 +322,20 @@ def _get_clip_func(transform_sequence: TransformSequence, clip: str, as_px: bool
         width = width * transform_sequence.resolution
     if clip == "ignore":
         return _clip_noop
-    elif clip == "clip":
+    if clip == "clip":
         return partial(_clip_points_outside_of_image, height=height, width=width)
-    elif clip == "remove":
+    if clip == "remove":
         return partial(_remove_all_points_if_outside_of_image, height=height, width=width)
-    elif clip == "part-remove":
+    if clip == "part-remove":
         return partial(_remove_points_outside_of_image, height=height, width=width)
-    else:
-        raise ValueError(f"Invalid clip value: {clip}")
+    raise ValueError(f"Invalid clip value: {clip}")
 
 
 def _transform_original_from_um_to_px(
-    x: np.ndarray, y: np.ndarray, is_px: bool, source_pixel_size: float
+    x: np.ndarray,
+    y: np.ndarray,
+    is_px: bool,
+    source_pixel_size: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     inv_source_pixel_size = 1 / source_pixel_size
     if is_px:  # no need to transform since it's already in pixel coordinates
@@ -327,7 +345,10 @@ def _transform_original_from_um_to_px(
 
 
 def _transform_transformed_from_px_to_um(
-    x: np.ndarray, y: np.ndarray, as_px: bool, target_pixel_size: float
+    x: np.ndarray,
+    y: np.ndarray,
+    as_px: bool,
+    target_pixel_size: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     if as_px:  # no need to transform since it's already in pixel coordinates
         return x, y

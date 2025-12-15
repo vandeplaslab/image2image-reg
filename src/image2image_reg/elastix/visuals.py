@@ -121,7 +121,7 @@ def draw_workflow(
         return {n: (x + x_shift, y + y_shift) for n, (x, y) in pos.items()}
 
     if ax is None:
-        fig, ax = plt.subplots()
+        _fig, ax = plt.subplots()
 
     ax.clear()
     ax.axis("off")
@@ -304,10 +304,7 @@ def draw_workflow(
                     annotation_clip=False,
                 )
 
-    if len(pos.keys()) > 2:
-        pos_labels = _nudge(pos, 0, -0.075)
-    else:
-        pos_labels = pos
+    pos_labels = _nudge(pos, 0, -0.075) if len(pos.keys()) > 2 else pos
 
     nx.draw_networkx_labels(
         g,

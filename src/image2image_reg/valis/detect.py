@@ -128,7 +128,7 @@ class FeatureDetectorBase:
             except Exception:
                 logger.exception(
                     f"{self.kp_descriptor_name} unable to both detect and compute features. "
-                    f"Setting to {DEFAULT_FEATURE_DETECTOR.__class__.__name__}"
+                    f"Setting to {DEFAULT_FEATURE_DETECTOR.__class__.__name__}",
                 )
 
                 self.kp_detector = DEFAULT_FEATURE_DETECTOR

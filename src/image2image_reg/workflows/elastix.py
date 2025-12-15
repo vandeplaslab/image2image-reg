@@ -248,9 +248,7 @@ class ElastixReg(Workflow):
             for edge in self.registration_nodes:
                 if modality.name == edge["modalities"]["target"]:
                     return True
-        if modality.name not in self.registration_paths:
-            return False
-        return True
+        return not modality.name not in self.registration_paths
 
     def validate_paths(self, log: bool = True) -> tuple[bool, list[str]]:
         """Validate paths."""
@@ -318,10 +316,9 @@ class ElastixReg(Workflow):
                 logger.error(errors[-1])
             else:
                 logger.success(f"✅ Modality pair {modalities['source']} - {modalities['target']} exist.")
-        if require_paths:
-            if not self.registration_nodes:
-                errors.append("❌ No registration paths have been added.")
-                logger.error(errors[-1])
+        if require_paths and not self.registration_nodes:
+            errors.append("❌ No registration paths have been added.")
+            logger.error(errors[-1])
 
         # check whether all registration paths exist
         for source, targets in self.registration_paths.items():
@@ -342,13 +339,13 @@ class ElastixReg(Workflow):
                 if not edge["registered"]:
                     errors.append(
                         f"❌ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
-                        f"has not been registered."
+                        f"has not been registered.",
                     )
                     logger.error(errors[-1])
                 else:
                     logger.success(
                         f"✅ Modality pair {edge['modalities']['source']} - {edge['modalities']['target']} "
-                        f"has been registered."
+                        f"has been registered.",
                     )
 
             # check through modalities
@@ -357,7 +354,7 @@ class ElastixReg(Workflow):
                     modality = self.get_modality(name=targets[0])
                     if modality is not None and not self._is_being_registered(modality, check_target=False):
                         errors.append(
-                            f"❌ Through modality '{targets[0]}' has been defined but isn't being registered."
+                            f"❌ Through modality '{targets[0]}' has been defined but isn't being registered.",
                         )
 
         is_valid = not errors
@@ -413,7 +410,9 @@ class ElastixReg(Workflow):
                     source = registered_edge["modalities"]["source"]
                     target = self.registration_paths[source][-1]
                     transforms_seq = self._load_registered_transform(
-                        registered_edge, target, raise_on_error=raise_on_error
+                        registered_edge,
+                        target,
+                        raise_on_error=raise_on_error,
                     )
                     if transforms_seq:
                         transformations[source] = transforms_seq
@@ -449,13 +448,21 @@ class ElastixReg(Workflow):
 
             target_modality = self.modalities[target]
             target_wrapper = ImageWrapper(
-                target_modality, edge["target_preprocessing"], quick=True, quiet=True, raise_on_error=raise_on_error
+                target_modality,
+                edge["target_preprocessing"],
+                quick=True,
+                quiet=True,
+                raise_on_error=raise_on_error,
             )
             self.original_size_transforms[target_wrapper.name] = target_wrapper.original_size_transform
 
             source_modality = self.modalities[source]
             source_wrapper = ImageWrapper(
-                source_modality, edge["source_preprocessing"], quick=True, quiet=True, raise_on_error=raise_on_error
+                source_modality,
+                edge["source_preprocessing"],
+                quick=True,
+                quiet=True,
+                raise_on_error=raise_on_error,
             )
             source_wrapper.initial_transforms = source_wrapper.load_initial_transform(source_modality, self.cache_dir)
 
@@ -466,7 +473,7 @@ class ElastixReg(Workflow):
                 initial_transforms_seq = TransformSequence(initial_transforms_, initial_transforms_index)
 
             transforms_partial_seq, transforms_full_seq = TransformSequence.read_partial_and_full(
-                self.transformations_dir / transform_tag
+                self.transformations_dir / transform_tag,
             )
 
             # setup parameters
@@ -482,7 +489,8 @@ class ElastixReg(Workflow):
         }
 
     def _find_edge_by_edge(
-        self, edge: SerializedRegisteredRegistrationNode
+        self,
+        edge: SerializedRegisteredRegistrationNode,
     ) -> tuple[int | None, RegistrationNode | None]:
         """Find edge by another edge, potentially from cache."""
         for index, edge_ in enumerate(self.registration_nodes):
@@ -522,10 +530,7 @@ class ElastixReg(Workflow):
     def has_registration_path(self, source: str, target: str, through: str | None = None) -> bool:
         """Check whether registration path exists."""
         modalities = {"source": source, "target": through if through else target}
-        for node in self.registration_nodes:
-            if node["modalities"] == modalities:
-                return True
-        return False
+        return any(node["modalities"] == modalities for node in self.registration_nodes)
 
     def add_registration_path(
         self,
@@ -651,7 +656,7 @@ class ElastixReg(Workflow):
                 "transform_tag": None,
                 "source_preprocessing": source_preprocessing,
                 "target_preprocessing": target_preprocessing,
-            }
+            },
         )
         self._create_transformation_paths(self.registration_paths)
         logger.trace(f"Added registration path from '{source}' to '{target}' through '{through}'.")
@@ -722,7 +727,10 @@ class ElastixReg(Workflow):
 
     @staticmethod
     def __preprocess_image(
-        cache_dir: Path, cache_images: bool, modality: Modality, preprocessing: Preprocessing | None = None
+        cache_dir: Path,
+        cache_images: bool,
+        modality: Modality,
+        preprocessing: Preprocessing | None = None,
     ) -> ImageWrapper:
         """Pre-process image."""
         from image2image_reg.wrapper import ImageWrapper
@@ -838,9 +846,7 @@ class ElastixReg(Workflow):
         # remove nodes
         to_remove_nodes = []
         for index, node in enumerate(self.registration_nodes):
-            if name == node["modalities"]["source"]:
-                to_remove_nodes.append(index)
-            elif name == node["modalities"]["target"]:
+            if name == node["modalities"]["source"] or name == node["modalities"]["target"]:
                 to_remove_nodes.append(index)
         if to_remove_nodes:
             for index in reversed(to_remove_nodes):
@@ -896,11 +902,13 @@ class ElastixReg(Workflow):
 
         # compute transformation information
         for edge in tqdm(
-            reversed(self.registration_nodes), desc="Registering nodes...", total=len(self.registration_nodes)
+            reversed(self.registration_nodes),
+            desc="Registering nodes...",
+            total=len(self.registration_nodes),
         ):
             if edge["registered"]:
                 logger.trace(
-                    f"Skipping registration for {edge['modalities']['source']} to {edge['modalities']['target']}."
+                    f"Skipping registration for {edge['modalities']['source']} to {edge['modalities']['target']}.",
                 )
                 continue
 
@@ -1014,7 +1022,7 @@ class ElastixReg(Workflow):
         registered_modalities = [edge["modalities"]["source"] for edge in self.registration_nodes]
         non_reg_modalities = list(set(self.modalities.keys()).difference(registered_modalities))
         # remove attachment modalities
-        for attachment_modality in self.attachment_images.keys():
+        for attachment_modality in self.attachment_images:
             non_reg_modalities.pop(non_reg_modalities.index(attachment_modality))
         return non_reg_modalities
 
@@ -1044,7 +1052,7 @@ class ElastixReg(Workflow):
             write_json_data(output_path, tform_txt)
             out.append(output_path)
             logger.trace(
-                f"Saved transformations to '{output_path}'. source={source_modality}; target={target_modalities}."
+                f"Saved transformations to '{output_path}'. source={source_modality}; target={target_modalities}.",
             )
 
         not_registered_modalities = self._find_not_registered_modalities()
@@ -1059,7 +1067,7 @@ class ElastixReg(Workflow):
                 write_json_data(output_path, tform_txt)
                 logger.trace(
                     f"Saved transformations to '{output_path}'. source={attached_to_modality}; "
-                    f"target={target_modalities}."
+                    f"target={target_modalities}.",
                 )
         return out
 
@@ -1108,7 +1116,10 @@ class ElastixReg(Workflow):
             logger.error(f"Could not save overlap image of all images. {e}")
 
     def _generate_overlap_image_for_modality(
-        self, source: str, pyramid: int = -1, overwrite: bool = False
+        self,
+        source: str,
+        pyramid: int = -1,
+        overwrite: bool = False,
     ) -> tuple[list, list, list]:
         from image2image_io.utils.utilities import get_shape_of_image
         from koyo.visuals import save_rgb
@@ -1171,7 +1182,10 @@ class ElastixReg(Workflow):
         return images, greys, names
 
     def _generate_overlap_debug_image_for_modality(
-        self, source: str, pyramid: int = -1, overwrite: bool = False
+        self,
+        source: str,
+        pyramid: int = -1,
+        overwrite: bool = False,
     ) -> tuple[list, list, list]:
         """Generate overlap of images for EACH transformation step."""
         # TODO: this is essentially same as above, but we need to apply each transformation step, and then
@@ -1294,7 +1308,7 @@ class ElastixReg(Workflow):
                     rename=rename,
                     n_parallel=n_parallel,
                     overwrite=overwrite,
-                )
+                ),
             )
 
         # export modalities
@@ -1309,16 +1323,16 @@ class ElastixReg(Workflow):
                     rename=rename,
                     n_parallel=n_parallel,
                     overwrite=overwrite,
-                )
+                ),
             )
 
         if write_attached_shapes:
             paths.extend(
-                self._export_attachment_shapes(n_parallel=n_parallel, clip=clip, rename=rename, overwrite=overwrite)
+                self._export_attachment_shapes(n_parallel=n_parallel, clip=clip, rename=rename, overwrite=overwrite),
             )
         if write_attached_points:
             paths.extend(
-                self._export_attachment_points(n_parallel=n_parallel, clip=clip, rename=rename, overwrite=overwrite)
+                self._export_attachment_points(n_parallel=n_parallel, clip=clip, rename=rename, overwrite=overwrite),
             )
         if write_attached_images:
             paths.extend(
@@ -1331,13 +1345,15 @@ class ElastixReg(Workflow):
                     rename=rename,
                     n_parallel=n_parallel,
                     overwrite=overwrite,
-                )
+                ),
             )
 
         # export merge modalities
         if write_merged and self.merge_modalities:
             path = self._transform_write_merge_images(
-                to_original_size=to_original_size, as_uint8=as_uint8, overwrite=overwrite
+                to_original_size=to_original_size,
+                as_uint8=as_uint8,
+                overwrite=overwrite,
             )
             paths.append(path)
         return paths
@@ -1369,11 +1385,13 @@ class ElastixReg(Workflow):
 
         extension = ".elastix.json.gz" if gzip else ".elastix.json"
         self.load_preprocessed_cache()
-        reg_modality_list, not_reg_modality_list, merge_modalities = self._get_modalities_to_transform()
+        reg_modality_list, not_reg_modality_list, _merge_modalities = self._get_modalities_to_transform()
         if write_registered and reg_modality_list:
             for modality in reg_modality_list:
                 _, transform_seq, filename = self._prepare_transform(
-                    modality, to_original_size=to_original_size, rename=rename
+                    modality,
+                    to_original_size=to_original_size,
+                    rename=rename,
                 )
                 filename = _get_filename(filename)
                 if transform_seq:
@@ -1385,7 +1403,9 @@ class ElastixReg(Workflow):
         if write_not_registered and reg_modality_list:
             for modality in not_reg_modality_list:
                 _, transform_seq, filename = self._prepare_transform(
-                    modality, to_original_size=to_original_size, rename=rename
+                    modality,
+                    to_original_size=to_original_size,
+                    rename=rename,
                 )
                 filename = _get_filename(filename)
                 if transform_seq:
@@ -1396,7 +1416,8 @@ class ElastixReg(Workflow):
 
         if write_attached and self.attachment_images:
             for modality, attach_to_modality_key in tqdm(
-                self.attachment_images.items(), desc="Exporting attachment images..."
+                self.attachment_images.items(),
+                desc="Exporting attachment images...",
             ):
                 attached_modality = self.modalities[modality]
                 _, transform_seq, filename = self._prepare_transform(
@@ -1442,7 +1463,9 @@ class ElastixReg(Workflow):
         to_write = []
         for name in tqdm(modalities, desc="Exporting registered modalities...", total=len(modalities)):
             modality, transform_seq, output_path = self._prepare_transform(
-                name, to_original_size=to_original_size, rename=rename
+                name,
+                to_original_size=to_original_size,
+                rename=rename,
             )
 
             if _get_with_suffix(output_path, fmt).exists() and not overwrite:
@@ -1458,7 +1481,7 @@ class ElastixReg(Workflow):
                     tile_size,
                     as_uint8,
                     # lambda: (False, None, to_original_size),
-                )
+                ),
             )
         if to_write:
             if n_parallel > 1:
@@ -1488,7 +1511,9 @@ class ElastixReg(Workflow):
         for name in tqdm(modalities, desc="Exporting not-registered images..."):
             try:
                 modality, transform_seq, output_path = self._prepare_transform(
-                    name, to_original_size=to_original_size, rename=rename
+                    name,
+                    to_original_size=to_original_size,
+                    rename=rename,
                 )
                 if _get_with_suffix(output_path, fmt).exists() and not overwrite:
                     logger.trace(f"Skipping {name} as it already exists ({output_path}).")
@@ -1502,7 +1527,7 @@ class ElastixReg(Workflow):
                         fmt,
                         tile_size,
                         as_uint8,
-                    )
+                    ),
                 )
             except KeyError:
                 logger.exception(f"Could not find transformation data for {name}.")
@@ -1518,7 +1543,11 @@ class ElastixReg(Workflow):
         return paths
 
     def _export_attachment_shapes(
-        self, n_parallel: int = 1, clip: str = "ignore", rename: bool = False, overwrite: bool = False
+        self,
+        n_parallel: int = 1,
+        clip: str = "ignore",
+        rename: bool = False,
+        overwrite: bool = False,
     ) -> list[Path]:
         from image2image_reg.elastix.transform import transform_attached_shape
 
@@ -1540,7 +1569,7 @@ class ElastixReg(Workflow):
                 transform_seq = attached_to_modality_transform[attached_to]
                 if attached_to not in attached_to_modality_image_shape:
                     attached_to_modality_image_shape[attached_to] = self.get_wrapper(
-                        name=attached_to
+                        name=attached_to,
                     ).reader.image_shape
                 image_shape = attached_to_modality_image_shape[attached_to]
 
@@ -1579,7 +1608,11 @@ class ElastixReg(Workflow):
         return paths
 
     def _export_attachment_points(
-        self, n_parallel: int = 1, clip: str = "ignore", rename: bool = False, overwrite: bool = False
+        self,
+        n_parallel: int = 1,
+        clip: str = "ignore",
+        rename: bool = False,
+        overwrite: bool = False,
     ) -> list[Path]:
         from image2image_reg.elastix.transform import transform_attached_point
 
@@ -1600,7 +1633,7 @@ class ElastixReg(Workflow):
                 transform_seq = attached_to_modality_transform[attached_to]
                 if attached_to not in attached_to_modality_image_shape:
                     attached_to_modality_image_shape[attached_to] = self.get_wrapper(
-                        name=attached_to
+                        name=attached_to,
                     ).reader.image_shape
                 image_shape = attached_to_modality_image_shape[attached_to]
                 for file in attached_dict["files"]:
@@ -1656,7 +1689,8 @@ class ElastixReg(Workflow):
         # keys are: attached image - attached to image (the one that was registered)
         with MeasureTimer() as timer:
             for attached_modality_key, attach_to_modality_key in tqdm(
-                self.attachment_images.items(), desc="Exporting attachment images..."
+                self.attachment_images.items(),
+                desc="Exporting attachment images...",
             ):
                 if attached_modality_key in merge_modalities and remove_merged:
                     continue
@@ -1683,7 +1717,7 @@ class ElastixReg(Workflow):
                         as_uint8,
                         None,
                         # lambda: (True, attach_to_modality_key, to_original_size),
-                    )
+                    ),
                 )
             if to_write:
                 for args in tqdm(to_write, desc="Exporting attachment modalities..."):
@@ -1839,8 +1873,8 @@ class ElastixReg(Workflow):
                         identity_elx_transform(
                             self.preprocessed_cache["image_sizes"][modality_key],
                             self.preprocessed_cache["image_spacing"][modality_key],
-                        )
-                    )
+                        ),
+                    ),
                 ],
                 transform_sequence_index=[0],
             )
@@ -1858,8 +1892,8 @@ class ElastixReg(Workflow):
                         identity_elx_transform(
                             self.preprocessed_cache["image_sizes"][modality_key],
                             self.preprocessed_cache["image_spacing"][modality_key],
-                        )
-                    )
+                        ),
+                    ),
                 ],
                 transform_sequence_index=[0],
             )
@@ -1933,7 +1967,7 @@ class ElastixReg(Workflow):
         if isinstance(as_uint8_, bool):
             as_uint8 = as_uint8_
         logger.trace(f"Writing {name} to {filename}; channel_ids={channel_ids}; as_uint8={as_uint8}")
-        path = writer.write(
+        return writer.write(
             name,
             output_dir=self.image_dir,
             channel_ids=channel_ids,
@@ -1942,7 +1976,6 @@ class ElastixReg(Workflow):
             channel_names=channel_names,
             overwrite=True,
         )
-        return path
 
     def _transform_write_merge_images(
         self,
@@ -1956,7 +1989,7 @@ class ElastixReg(Workflow):
         from image2image_io.writers.merge_tiff_writer import MergeOmeTiffWriter
 
         def _determine_attachment(_image: str):
-            if _image in self.attachment_images.keys():
+            if _image in self.attachment_images:
                 return self.attachment_images[_image], True
             return None, False
 
@@ -1995,10 +2028,7 @@ class ElastixReg(Workflow):
             if isinstance(as_uint8_, bool):
                 as_uint8 = as_uint8_
 
-            if self.name == merge_name:
-                filename = "merged-registered"
-            else:
-                filename = f"{merge_name}_merged-registered"
+            filename = "merged-registered" if self.name == merge_name else f"{merge_name}_merged-registered"
             output_path = self.image_dir / filename
             if output_path.with_suffix(".ome.tiff").exists() and not overwrite:
                 logger.trace(f"Skipping {modality} as it already exists ({output_path}).")
@@ -2051,7 +2081,7 @@ class ElastixReg(Workflow):
                         "target_preprocessing": reg_edge["target_preprocessing"].to_dict()
                         if reg_edge["target_preprocessing"]
                         else None,
-                    }
+                    },
                 )
 
         modalities_out: dict[str, dict] = {}
@@ -2104,10 +2134,7 @@ class ElastixReg(Workflow):
         registration_paths = {}
         for index, edge in enumerate(self.registration_nodes):
             source = edge["modalities"]["source"]
-            if len(self.registration_paths[source]) > 1:
-                through = self.registration_paths[source][0]
-            else:
-                through = None
+            through = self.registration_paths[source][0] if len(self.registration_paths[source]) > 1 else None
             target = self.registration_paths[source][-1]
             registration_paths[f"reg_path_{index}"] = {
                 "src_modality_name": source,
@@ -2181,14 +2208,13 @@ class ElastixReg(Workflow):
 
 
 def _get_with_suffix(p: Path, fmt: str) -> Path:
-    if fmt.startswith("."):
-        fmt = fmt[1:]
+    fmt = fmt.removeprefix(".")
     name = p.stem
     for ext in [".ome", ".tiff", ".czi", ".txt", ".geojson", ".tsv", ".csv"]:
         name = name.replace(ext, "")
 
     if fmt in ["ome-tiff", "ome-tiff-by-plane", "ome-tiff-by-tile"]:
         return p.parent / (name + ".ome.tiff")
-    elif fmt in ["csv", "tsv", "txt", "geojson"]:
+    if fmt in ["csv", "tsv", "txt", "geojson"]:
         return p.parent / (name + "." + fmt)
     raise ValueError(f"Writer {fmt} is not supported.")

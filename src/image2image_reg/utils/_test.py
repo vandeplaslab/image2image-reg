@@ -40,7 +40,7 @@ def make_test_polygon(output_dir: Path) -> None:
                 (380, 730),
                 (220, 590),
                 (300, 300),
-            )
+            ),
         ),
     )
     im = im.astype(np.uint8)
@@ -56,7 +56,7 @@ def make_test_polygon(output_dir: Path) -> None:
                 (380, 730),
                 (220, 590),
                 (300, 300),
-            )
+            ),
         )
         + 900,
     )

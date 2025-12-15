@@ -61,7 +61,7 @@ def transform_elastix(
             if pixel_size is None:
                 logger.warning(
                     "You did not specify pixel size, using 1.0 as default. This warning can be ignored if the value"
-                    " is actually 1.0."
+                    " is actually 1.0.",
                 )
 
             path = transform_attached_point(
@@ -77,7 +77,7 @@ def transform_elastix(
             if pixel_size is None:
                 logger.warning(
                     "You did not specify pixel size, using 1.0 as default. This warning can be ignored if the value"
-                    " is actually 1.0."
+                    " is actually 1.0.",
                 )
             path = transform_attached_shape(
                 transform_seq,
@@ -147,7 +147,7 @@ def transform_valis(
             if pixel_size is None:
                 logger.warning(
                     "You did not specify pixel size, using 1.0 as default. This warning can be ignored if the value"
-                    " is actually 1.0."
+                    " is actually 1.0.",
                 )
             transform_attached_points(
                 project.registrar,
@@ -162,7 +162,7 @@ def transform_valis(
             if pixel_size is None:
                 logger.warning(
                     "You did not specify pixel size, using 1.0 as default. This warning can be ignored if the value"
-                    " is actually 1.0."
+                    " is actually 1.0.",
                 )
             transform_attached_shapes(
                 project.registrar,

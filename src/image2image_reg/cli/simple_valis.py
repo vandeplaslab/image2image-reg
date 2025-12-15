@@ -88,7 +88,13 @@ if is_installed("valis"):
     ) -> None:
         """Initialize Valis configuration file."""
         valis_quick_init_runner(
-            name, output_dir, image, reference, check_for_reflection, no_non_rigid_reg, no_micro_reg
+            name,
+            output_dir,
+            image,
+            reference,
+            check_for_reflection,
+            no_non_rigid_reg,
+            no_micro_reg,
         )
 
     def valis_quick_init_runner(

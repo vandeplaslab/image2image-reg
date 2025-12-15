@@ -97,7 +97,10 @@ def _transform_points_as_image(
     height, width = slide_src.slide_dimensions_wh[0][::-1]
     image_of_index, index_of_coords, x, y = _prepare_transform_coordinate_image(height, width, x, y)
     image_of_index_transformed, _ = _transform_coordinate_image(
-        slide_src, image_of_index, crop=crop, non_rigid=non_rigid
+        slide_src,
+        image_of_index,
+        crop=crop,
+        non_rigid=non_rigid,
     )
     new_x, new_y, _ = _cleanup_transform_coordinate_image(image_of_index_transformed, index_of_coords)
     return new_x, new_y, df
@@ -114,11 +117,17 @@ def _transform_coordinate_image(
         warnings.simplefilter("ignore", UserWarning)
         if slide_ref:
             image_of_index_ = slide_src.warp_img_from_to(
-                image_of_index, slide_ref, non_rigid=non_rigid, interp_method="nearest"
+                image_of_index,
+                slide_ref,
+                non_rigid=non_rigid,
+                interp_method="nearest",
             )
         else:
             image_of_index_ = slide_src.warp_img(
-                image_of_index, crop=crop, non_rigid=non_rigid, interp_method="nearest"
+                image_of_index,
+                crop=crop,
+                non_rigid=non_rigid,
+                interp_method="nearest",
             )
     return image_of_index_, image_of_index_.flatten()
 
@@ -200,12 +209,18 @@ def _transform_points_df(
     y = df[y_key].values
     if as_image:
         x, y, df = transform_points_as_image(
-            registrar, source_path, x, y, df, crop=crop, non_rigid=non_rigid, silent=silent
+            registrar,
+            source_path,
+            x,
+            y,
+            df,
+            crop=crop,
+            non_rigid=non_rigid,
+            silent=silent,
         )
     else:
         x, y = transform_points(registrar, source_path, x, y, crop=crop, non_rigid=non_rigid, silent=silent)
-    df = _replace_column(df, x, y, x_key, y_key, suffix, replace)
-    return df
+    return _replace_column(df, x, y, x_key, y_key, suffix, replace)
 
 
 def transform_vertices_df(
@@ -477,7 +492,7 @@ def transform_attached_points(
             path = Path(path)
             progress_bar.set_description(
                 f"Transforming {path.name} points to {slide_src.name} (is={is_px} as={is_px};"
-                f" s={source_pixel_size:.3f}; s-inv={inv_source_pixel_size:.3f}; t={target_pixel_size:.3f})"
+                f" s={source_pixel_size:.3f}; s-inv={inv_source_pixel_size:.3f}; t={target_pixel_size:.3f})",
             )
             # read data
             output_path = output_dir / path.name
@@ -511,7 +526,10 @@ def transform_attached_points(
                 as_image=as_image,
             )
             df_transformed[x_key], df_transformed[y_key] = _transform_transformed_from_px_to_um(
-                df_transformed[x_key], df_transformed[y_key], is_px, target_pixel_size
+                df_transformed[x_key],
+                df_transformed[y_key],
+                is_px,
+                target_pixel_size,
             )
 
             if path.suffix in [".csv", ".txt", ".tsv"]:
@@ -638,7 +656,7 @@ def _transform_geojson_features(
             geometry["coordinates"] = [x[0], y[0]]
         elif geometry["type"] == "Polygon":
             for i, ring in enumerate(
-                tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, mininterval=1, disable=True)
+                tqdm(geometry["coordinates"], desc="Transforming Polygon", leave=False, mininterval=1, disable=True),
             ):
                 x, y = np.array(ring).T
                 x, y = _transform_original_from_um_to_px(x, y, is_px, source_pixel_size)

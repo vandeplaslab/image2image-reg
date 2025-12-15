@@ -23,8 +23,7 @@ def _elx_lineparser(
         if not isinstance(v, list):
             v = [v]
         return k, v
-    else:
-        return None, None
+    return None, None
 
 
 def _read_elastix_parameter_file(
@@ -44,19 +43,17 @@ def _read_elastix_parameter_file(
 
 class _RegModelMeta(EnumMeta):
     def __getitem__(self, name):
-        if isinstance(name, str):
-            if "-" in name:
-                name = name.replace("-", "_")
+        if isinstance(name, str) and "-" in name:
+            name = name.replace("-", "_")
         try:
             return super().__getitem__(name)
         except (TypeError, KeyError):
             if isinstance(name, (str, Path)) and Path(name).exists():
                 return _read_elastix_parameter_file(name)
-            else:
-                raise ValueError(
-                    f"unrecognized registration parameter ({name}), please provide file path to elastix transform"
-                    f" parameters or specify one of {[i.name for i in self]}"
-                )
+            raise ValueError(
+                f"unrecognized registration parameter ({name}), please provide file path to elastix transform"
+                f" parameters or specify one of {[i.name for i in self]}",
+            )
 
 
 class Registration(dict, Enum, metaclass=_RegModelMeta):
