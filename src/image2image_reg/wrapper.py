@@ -289,7 +289,7 @@ class ImageWrapper:
             mask = mask
             logger.trace(f"Loaded mask from image for {self.modality.name}")
         else:
-            raise ValueError(f"Unknown mask type: {type(mask)}")
+            raise TypeError(f"Unknown mask type: {type(mask)}")
         mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
         return mask
 

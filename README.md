@@ -54,7 +54,7 @@ Usage: i2reg [OPTIONS] COMMAND1 [ARGS]... [COMMAND2 [ARGS]...]...
 
 Options:
   --version      Show the version and exit.
-  --dev          Flat to indicate that CLI should run in development mode and catch all errors.
+  --dev          Flag to indicate that CLI should run in development mode and catch all errors.
   --no_color     Flag to disable colored logs (essential when logging to file).
   -q, --quiet    Minimal output - only errors and exceptions will be shown.
   --debug        Maximum output - all messages will be shown.
