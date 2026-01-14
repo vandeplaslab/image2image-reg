@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from image2image_reg.enums import CoordinateFlip, ImageType
+from image2image_reg.enums import CoordinateFlip, ImageType, BackgroundSubtractType
 from image2image_reg.models import BoundingBox, Export, Modality, Polygon, Preprocessing
 
 
@@ -148,6 +148,15 @@ def test_prepro():
     prepro.flip = "v"
     assert isinstance(prepro.flip, CoordinateFlip), "flip should be CoordinateFlip"
     assert prepro.flip == CoordinateFlip.VERTICAL, "flip should be Vertical"
+    prepro.background_subtract = "sharp"
+    assert isinstance(prepro.background_subtract, BackgroundSubtractType), (
+        "background_subtract should be BackgroundSubtractType"
+    )
+    assert prepro.background_subtract == "sharp", "background_subtract should be sharp"
+    prepro.background_subtract = BackgroundSubtractType.SMOOTH
+    assert prepro.background_subtract == "smooth", "background_subtract should be smooth"
+    prepro.background_subtract = None
+    assert prepro.background_subtract == "none", "background_subtract should be none"
 
     # change translate
     prepro.translate_x = 50

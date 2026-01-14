@@ -11,7 +11,7 @@ from koyo.json import read_json_data
 from koyo.typing import PathLike
 from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 
-from image2image_reg.enums import ArrayLike, CoordinateFlip, ImageType
+from image2image_reg.enums import ArrayLike, CoordinateFlip, ImageType, BackgroundSubtractType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 from image2image_reg.utils.utilities import update_kwargs_on_channel_names
 
@@ -87,6 +87,7 @@ class Preprocessing(BaseModel):
     channel_indices: list[int] | None = None
     channel_names: list[str] | None = None
     as_uint8: bool = True
+    background_subtract: BackgroundSubtractType = BackgroundSubtractType.NONE
     custom_processing: dict[str, ty.Callable] | None = None
 
     # spatial preprocessing
@@ -134,6 +135,16 @@ class Preprocessing(BaseModel):
             elif v in ["horizontal", "horz"]:
                 v = "h"
             v = CoordinateFlip(v)
+        return v
+
+    @field_validator("background_subtract", mode="before")
+    @classmethod
+    def _validate_subtract(cls, v) -> BackgroundSubtractType:
+        if v is None:
+            v = BackgroundSubtractType.NONE
+        if isinstance(v, str):
+            v = v.lower()
+            v = BackgroundSubtractType(v)
         return v
 
     @field_validator("mask_bbox", "crop_bbox", mode="before")
@@ -251,6 +262,9 @@ class Preprocessing(BaseModel):
         if self.contrast_enhance:
             text += "enhance; "
             tooltip += "Contrast enhancement\n"
+        if self.background_subtract != BackgroundSubtractType.NONE:
+            text += f"bg_subtract-{self.background_subtract.value}; "
+            tooltip += f"Background subtraction: {self.background_subtract.value}\n"
         if self.invert_intensity:
             text += "invert"
             tooltip += "Invert intensity\n"
@@ -317,6 +331,7 @@ class Preprocessing(BaseModel):
             if data.get("max_intensity_projection"):
                 data["max_int_proj"] = data.pop("max_intensity_projection")
             for key in [
+                "background_subtract",
                 "use_crop",
                 "crop_polygon",
                 "translate_x",
