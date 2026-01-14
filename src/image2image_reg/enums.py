@@ -39,6 +39,7 @@ class BackgroundSubtractType(str, Enum):
     SMOOTH = "smooth"
     BLACKHAT = "blackhat"
     TOPHAT = "tophat"
+    BILATERAL = "bilateral"
 
 
 ProcessingDefaults = ty.Literal["none", "basic", "light", "dark", "he", "pas", "postaf", "mip"]

@@ -27,8 +27,22 @@ from image2image_reg.models import Preprocessing
 from image2image_reg.models.bbox import BoundingBox
 
 
+def _sitk_to_numpy(image: sitk.Image, as_uint8: bool = False) -> tuple[np.ndarray, tuple[float, float]]:
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    if as_uint8:
+        image = image.astype(np.uint8)
+    return image, spacing
+
+
+def _numpy_to_sitk(image: np.ndarray, spacing: tuple[float, float]) -> sitk.Image:
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
 def convert_image_to_array(array: da.core.Array) -> np.ndarray:
-    """Convert dask array to numpy array."""
+    """Convert dask array to a numpy array."""
     if isinstance(array, da.core.Array):
         return array.compute()
     if isinstance(array, sitk.Image):
@@ -269,118 +283,85 @@ def sitk_inv_int(image: sitk.Image, mask_zeros: bool = True) -> sitk.Image:
 
 def contrast_enhance(image: sitk.Image, alpha: float = 7, beta: float = 1) -> sitk.Image:
     """Enhance contrast of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     image = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def equalize_histogram(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image, spacing = _sitk_to_numpy(image, True)
     image = cv2.equalizeHist(image)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def clip_intensity(image: sitk.Image, min_val: int = 0, max_val: int = 255) -> sitk.Image:
     """Clip intensity of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     mask_below = image < min_val
     image[mask_below] = 0
     mask_above = image > max_val
     image[mask_above] = max_val
     # image = np.clip(image, min_val, max_val)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def equalize_clahe(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image, spacing = _sitk_to_numpy(image, True)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
     image = clahe.apply(image)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def equalize_adapthist(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
     from skimage import exposure
 
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image, spacing = _sitk_to_numpy(image, True)
     image = exposure.equalize_adapthist(image)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def norm_and_adjust(image: sitk.Image) -> sitk.Image:
     """Normalize and brightness adjustment."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image, spacing = _sitk_to_numpy(image, True)
     image = cv2.normalize(image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
     image = cv2.add(image, 50)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def median_filter(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     image = cv2.medianBlur(image, 5)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def remove_background_rolling_ball(image: sitk.Image) -> sitk.Image:
     """Remove background using rolling ball algorithm."""
     from skimage.restoration import rolling_ball
 
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     background = rolling_ball(image)
     image = image - background
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
-def remove_background_blackhat(image: sitk.Image) -> sitk.Image:
+def remove_background_blackhat(image: sitk.Image, size: int = 15) -> sitk.Image:
     """Remove background using black tophat algorithm."""
-    # use openCV
-    size = 15
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
     image = cv2.morphologyEx(image, cv2.MORPH_BLACKHAT, kernel)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
-def remove_background_tophat(image: sitk.Image) -> sitk.Image:
+def remove_background_tophat(image: sitk.Image, size: int = 5) -> sitk.Image:
     """Remove background using white tophat algorithm."""
-    # use openCV
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    image, spacing = _sitk_to_numpy(image)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
     image = cv2.morphologyEx(image, cv2.MORPH_TOPHAT, kernel)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def remove_background_noise(image: sitk.Image, bg_radius: int = 51, denoise_h: int = 5) -> sitk.Image:
@@ -390,9 +371,7 @@ def remove_background_noise(image: sitk.Image, bg_radius: int = 51, denoise_h: i
     - denoise_h: strength for NLMeans denoising (bigger -> more smoothing)
     Returns: enhanced_uint8
     """
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
-
+    image, spacing = _sitk_to_numpy(image)
     # Mild speckle reduction (keeps edges)
     image = cv2.medianBlur(image, 3)
     # Estimate smooth background using morphological opening
@@ -403,9 +382,7 @@ def remove_background_noise(image: sitk.Image, bg_radius: int = 51, denoise_h: i
     image = cv2.subtract(image, bg)
     # Denoise the residual (grain removal)
     image = cv2.fastNlMeansDenoising(image, None, h=denoise_h, templateWindowSize=7, searchWindowSize=21)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def remove_background_noise_sharp(image: sitk.Image) -> sitk.Image:
@@ -420,43 +397,31 @@ def remove_background_noise_smooth(image: sitk.Image) -> sitk.Image:
 
 def denoise_general(image: sitk.Image, h: int = 12) -> sitk.Image:
     """Denoise general."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     # Strong grain removal
     image = cv2.fastNlMeansDenoising(image, None, h=h, templateWindowSize=7, searchWindowSize=21)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
-def bilateral_filter(image: sitk.Image) -> sitk.Image:
+def bilateral_filter(image: sitk.Image, d: int = 5, color: int = 75, space: int = 75) -> sitk.Image:
     """Equalize histogram of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
-    image = cv2.bilateralFilter(image, 9, 75, 75)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    image, spacing = _sitk_to_numpy(image)
+    image = cv2.bilateralFilter(image, d, color, space)
+    return _numpy_to_sitk(image, spacing)
 
 
 def nlmeans_filter(image: sitk.Image) -> sitk.Image:
-    """Non-local means denoising.."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    """Non-local means denoising."""
+    image, spacing = _sitk_to_numpy(image)
     image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def background_subtract(image: sitk.Image) -> sitk.Image:
     """Subtract background from image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def preprocess_intensity(
@@ -489,6 +454,8 @@ def preprocess_intensity(
         elif preprocessing.background_subtract == BackgroundSubtractType.TOPHAT:
             image = remove_background_tophat(image)
             logger.trace(f"Background removed (whitehat) in {timer(since_last=True)}")
+        elif preprocessing.background_subtract == BackgroundSubtractType.BILATERAL:
+            image = bilateral_filter(image)
         # contrast enhancement
         if preprocessing.equalize_histogram:
             # image = equalize_histogram(image)
