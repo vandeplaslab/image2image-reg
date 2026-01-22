@@ -22,13 +22,27 @@ from image2image_reg.elastix.transform_utils import (
     prepare_wsireg_transform_data,
     transform_plane,
 )
-from image2image_reg.enums import ImageType
+from image2image_reg.enums import ImageType, BackgroundSubtractType
 from image2image_reg.models import Preprocessing
 from image2image_reg.models.bbox import BoundingBox
 
 
+def _sitk_to_numpy(image: sitk.Image, as_uint8: bool = False) -> tuple[np.ndarray, tuple[float, float]]:
+    spacing = image.GetSpacing()
+    image = sitk.GetArrayFromImage(image)
+    if as_uint8:
+        image = image.astype(np.uint8)
+    return image, spacing
+
+
+def _numpy_to_sitk(image: np.ndarray, spacing: tuple[float, float]) -> sitk.Image:
+    image = sitk.GetImageFromArray(image)
+    image.SetSpacing(spacing)
+    return image
+
+
 def convert_image_to_array(array: da.core.Array) -> np.ndarray:
-    """Convert dask array to numpy array."""
+    """Convert dask array to a numpy array."""
     if isinstance(array, da.core.Array):
         return array.compute()
     if isinstance(array, sitk.Image):
@@ -269,199 +283,145 @@ def sitk_inv_int(image: sitk.Image, mask_zeros: bool = True) -> sitk.Image:
 
 def contrast_enhance(image: sitk.Image, alpha: float = 7, beta: float = 1) -> sitk.Image:
     """Enhance contrast of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     image = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def equalize_histogram(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image, spacing = _sitk_to_numpy(image, True)
     image = cv2.equalizeHist(image)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def clip_intensity(image: sitk.Image, min_val: int = 0, max_val: int = 255) -> sitk.Image:
     """Clip intensity of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     mask_below = image < min_val
     image[mask_below] = 0
     mask_above = image > max_val
     image[mask_above] = max_val
     # image = np.clip(image, min_val, max_val)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def equalize_clahe(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image, spacing = _sitk_to_numpy(image, True)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
     image = clahe.apply(image)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def equalize_adapthist(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
     from skimage import exposure
 
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image, spacing = _sitk_to_numpy(image, True)
     image = exposure.equalize_adapthist(image)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def norm_and_adjust(image: sitk.Image) -> sitk.Image:
     """Normalize and brightness adjustment."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image).astype(np.uint8)
+    image, spacing = _sitk_to_numpy(image, True)
     image = cv2.normalize(image, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
     image = cv2.add(image, 50)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def median_filter(image: sitk.Image) -> sitk.Image:
     """Equalize histogram of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     image = cv2.medianBlur(image, 5)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def remove_background_rolling_ball(image: sitk.Image) -> sitk.Image:
     """Remove background using rolling ball algorithm."""
     from skimage.restoration import rolling_ball
 
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     background = rolling_ball(image)
     image = image - background
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
-def remove_background_black_tophat(image: sitk.Image) -> sitk.Image:
+def remove_background_blackhat(image: sitk.Image, size: int = 15) -> sitk.Image:
     """Remove background using black tophat algorithm."""
-    # use openCV
-    size = 15
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
     image = cv2.morphologyEx(image, cv2.MORPH_BLACKHAT, kernel)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
-def remove_background_white_tophat(image: sitk.Image) -> sitk.Image:
+def remove_background_tophat(image: sitk.Image, size: int = 5) -> sitk.Image:
     """Remove background using white tophat algorithm."""
-    # use openCV
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    image, spacing = _sitk_to_numpy(image)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
     image = cv2.morphologyEx(image, cv2.MORPH_TOPHAT, kernel)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
-# def test_filter(image: sitk.Image, brightness_q: float = 0.99) -> sitk.Image:
-#     from skimage import exposure
-#
-#     spacing = image.GetSpacing()
-#     image = sitk.GetArrayFromImage(image)
-#     image, _ = calc_background_color_dist(image, brightness_q=brightness_q)
-#     image = exposure.rescale_intensity(image, in_range="image", out_range=(0, 1))
-#     image = exposure.equalize_adapthist(image)
-#     image = exposure.rescale_intensity(image, in_range="image", out_range=(0, 255)).astype(np.uint8)
-#     image = sitk.GetImageFromArray(image)
-#     image.SetSpacing(spacing)
-#     return image
-#
-#
-# def calc_background_color_dist(
-#     img: np.ndarray, brightness_q: float = 0.99, mask: np.ndarray | None = None
-# ) -> tuple[np.ndarray, np.ndarray]:
-#     """Create mask that only covers tissue
-#
-#     #. Find background pixel (most luminescent)
-#     #. Convert image to CAM16-UCS
-#     #. Calculate distance between each pixel and background pixel
-#     #. Threshold on distance (i.e. higher distance = different color)
-#
-#     Returns
-#     -------
-#     cam_d : float
-#         Distance from background color
-#     cam : float
-#         CAM16UCS image
-#
-#     """
-#     import colour
-#
-#     eps = np.finfo("float").eps
-#     with colour.utilities.suppress_warnings(colour_usage_warnings=True):
-#         if 1 < img.max() <= 255 and np.issubdtype(img.dtype, np.integer):
-#             cam = colour.convert(img / 255 + eps, "sRGB", "CAM16UCS")
-#         else:
-#             cam = colour.convert(img + eps, "sRGB", "CAM16UCS")
-#
-#     if mask is None:
-#         brightest_thresh = np.quantile(cam[..., 0], brightness_q)
-#     else:
-#         brightest_thresh = np.quantile(cam[..., 0][mask > 0], brightness_q)
-#
-#     brightest_idx = np.where(cam[..., 0] >= brightest_thresh)
-#     brightest_pixels = cam[brightest_idx]
-#     bright_cam = brightest_pixels.mean(axis=0)
-#     cam_d = np.sqrt(np.sum((cam - bright_cam) ** 2, axis=2))
-#     return cam_d, cam
-def bilateral_filter(image: sitk.Image) -> sitk.Image:
+def remove_background_noise(image: sitk.Image, bg_radius: int = 51, denoise_h: int = 5) -> sitk.Image:
+    """
+    General background removal for a noisy 2D image.
+    - bg_radius: size of structures you consider "background" (bigger -> smoother background)
+    - denoise_h: strength for NLMeans denoising (bigger -> more smoothing)
+    Returns: enhanced_uint8
+    """
+    image, spacing = _sitk_to_numpy(image)
+    # Mild speckle reduction (keeps edges)
+    image = cv2.medianBlur(image, 3)
+    # Estimate smooth background using morphological opening
+    k = max(3, int(bg_radius) | 1)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    bg = cv2.morphologyEx(image, cv2.MORPH_OPEN, kernel)
+    # Subtract background
+    image = cv2.subtract(image, bg)
+    # Denoise the residual (grain removal)
+    image = cv2.fastNlMeansDenoising(image, None, h=denoise_h, templateWindowSize=7, searchWindowSize=21)
+    return _numpy_to_sitk(image, spacing)
+
+
+def remove_background_noise_sharp(image: sitk.Image) -> sitk.Image:
+    """Remove background noise."""
+    return remove_background_noise(image, bg_radius=31, denoise_h=1)
+
+
+def remove_background_noise_smooth(image: sitk.Image) -> sitk.Image:
+    """Remove background noise."""
+    return remove_background_noise(image, bg_radius=31, denoise_h=5)
+
+
+def denoise_general(image: sitk.Image, h: int = 12) -> sitk.Image:
+    """Denoise general."""
+    image, spacing = _sitk_to_numpy(image)
+    # Strong grain removal
+    image = cv2.fastNlMeansDenoising(image, None, h=h, templateWindowSize=7, searchWindowSize=21)
+    return _numpy_to_sitk(image, spacing)
+
+
+def bilateral_filter(image: sitk.Image, d: int = 5, color: int = 75, space: int = 75) -> sitk.Image:
     """Equalize histogram of image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
-    image = cv2.bilateralFilter(image, 9, 75, 75)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    image, spacing = _sitk_to_numpy(image)
+    image = cv2.bilateralFilter(image, d, color, space)
+    return _numpy_to_sitk(image, spacing)
 
 
 def nlmeans_filter(image: sitk.Image) -> sitk.Image:
-    """Non-local means denoising.."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    """Non-local means denoising."""
+    image, spacing = _sitk_to_numpy(image)
     image = cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def background_subtract(image: sitk.Image) -> sitk.Image:
     """Subtract background from image."""
-    spacing = image.GetSpacing()
-    image = sitk.GetArrayFromImage(image)
+    image, spacing = _sitk_to_numpy(image)
     image = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    image = sitk.GetImageFromArray(image)
-    image.SetSpacing(spacing)
-    return image
+    return _numpy_to_sitk(image, spacing)
 
 
 def preprocess_intensity(
@@ -473,6 +433,7 @@ def preprocess_intensity(
     """Preprocess image intensity data to single channel image."""
     with MeasureTimer() as timer:
         image = convert_and_cast(image, preprocessing)
+        # reduction to a single channel
         if preprocessing.max_intensity_projection:
             image = sitk_max_int_proj(image)
             logger.trace(f"Maximum intensity projection applied in {timer(since_last=True)} ({image.GetSize()})")
@@ -480,18 +441,33 @@ def preprocess_intensity(
             logger.warning("Image has more than one channel, mean intensity projection will be used")
             image = sitk_mean_int_proj(image)
             logger.trace(f"Mean intensity projection applied in {timer(since_last=True)} ({image.GetSize()})")
+        # background removal
+        if preprocessing.background_subtract == BackgroundSubtractType.SHARP:
+            image = remove_background_noise_sharp(image)
+            logger.trace(f"Background (sharp) removed in {timer(since_last=True)}")
+        elif preprocessing.background_subtract == BackgroundSubtractType.SMOOTH:
+            image = remove_background_noise_smooth(image)
+            logger.trace(f"Background removed (smooth) in {timer(since_last=True)}")
+        elif preprocessing.background_subtract == BackgroundSubtractType.BLACKHAT:
+            image = remove_background_blackhat(image)
+            logger.trace(f"Background removed (blackhat) in {timer(since_last=True)}")
+        elif preprocessing.background_subtract == BackgroundSubtractType.TOPHAT:
+            image = remove_background_tophat(image)
+            logger.trace(f"Background removed (whitehat) in {timer(since_last=True)}")
+        elif preprocessing.background_subtract == BackgroundSubtractType.BILATERAL:
+            image = bilateral_filter(image)
+        # contrast enhancement
         if preprocessing.equalize_histogram:
             # image = equalize_histogram(image)
             image = equalize_clahe(image)
             logger.trace(f"Equalized histogram applied in {timer(since_last=True)} ({image.GetSize()})")
-        # image = remove_background_black_tophat(image)
-        # logger.trace(f"Background removed in {timer(since_last=True)}")
         if preprocessing.contrast_enhance:
             image = contrast_enhance(image)
             logger.trace(f"Contrast enhancement applied in {timer(since_last=True)} ({image.GetSize()})")
         if preprocessing.invert_intensity:
             image = sitk_inv_int(image)
             logger.trace(f"Inverted intensity in {timer(since_last=True)} ({image.GetSize()})")
+        # custom pre-processing
         if preprocessing.custom_processing:
             for k, v in preprocessing.custom_processing.items():
                 logger.trace(f"Performing preprocessing step: {k} in {timer(since_last=True)} ({image.GetSize()})")
@@ -582,7 +558,6 @@ def preprocess_spatial(
 
     with MeasureTimer() as timer:
         if preprocessing.downsample > 1 and spatial:
-            logger.trace(f"Performing downsampling by factor: {preprocessing.downsample}")
             image.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
             image = sitk.Shrink(  # type: ignore[no-untyped-call]
                 image,
@@ -593,11 +568,12 @@ def preprocess_spatial(
                 mask.SetSpacing((pixel_size, pixel_size))
                 mask = sitk.Shrink(mask(preprocessing.downsample, preprocessing.downsample))
             pixel_size = image.GetSpacing()[0]
-            logger.trace(f"Downsampled image in {timer(since_last=True)} ({image.GetSize()})")
+            logger.trace(
+                f"Downsampled image (factor {preprocessing.downsample}) in {timer(since_last=True)} ({image.GetSize()})"
+            )
 
         # apply affine transformation
         if preprocessing.affine is not None and spatial:
-            logger.trace("Applying affine transformation")
             affine_tform = preprocessing.affine
             if isinstance(affine_tform, np.ndarray):
                 affine_tform = affine_to_itk_affine(  # type: ignore[assignment]
@@ -617,7 +593,6 @@ def preprocess_spatial(
 
         # flip image
         if preprocessing.flip and spatial:
-            logger.trace(f"Flipping image {preprocessing.flip.value}")
             flip_tform = generate_affine_flip_transform(image, pixel_size, preprocessing.flip.value)
             transforms.append(flip_tform)
             composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [flip_tform]})
@@ -626,11 +601,13 @@ def preprocess_spatial(
             if mask is not None and transform_mask:
                 mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
                 mask = transform_plane(mask, final_tform, composite_transform)
-            logger.trace(f"Applied flip transformation in {timer(since_last=True)} ({image.GetSize()})")
+            logger.trace(
+                f"Applied flip transformation ({preprocessing.flip.value}) in"
+                f" {timer(since_last=True)} ({image.GetSize()})"
+            )
 
         # rotate counter-clockwise
         if float(preprocessing.rotate_counter_clockwise) != 0.0 and spatial:
-            logger.trace(f"Rotating counter-clockwise {preprocessing.rotate_counter_clockwise}")
             rot_tform = generate_rigid_rotation_transform(image, pixel_size, preprocessing.rotate_counter_clockwise)
             transforms.append(rot_tform)
             composite_transform, _, final_tform = prepare_wsireg_transform_data({"initial": [rot_tform]})
@@ -639,11 +616,13 @@ def preprocess_spatial(
             if mask is not None and transform_mask:
                 mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
                 mask = transform_plane(mask, final_tform, composite_transform)
-            logger.trace(f"Applied rotation transformation in {timer(since_last=True)} ({image.GetSize()})")
+            logger.trace(
+                f"Applied rotation transformation ({preprocessing.rotate_counter_clockwise}) in"
+                f" {timer(since_last=True)} ({image.GetSize()})"
+            )
 
         # translate x/y image
         if (preprocessing.translate_x or preprocessing.translate_y) and spatial:
-            logger.trace(f"Transforming image by translation: {preprocessing.translate_x}, {preprocessing.translate_y}")
             translation_transform = generate_rigid_translation_transform_alt(
                 image,
                 pixel_size,
@@ -657,7 +636,10 @@ def preprocess_spatial(
             if mask is not None and transform_mask:
                 mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
                 mask = transform_plane(mask, final_tform, composite_transform)
-            logger.trace(f"Applied translation transformation in {timer(since_last=True)} ({image.GetSize()})")
+            logger.trace(
+                f"Applied translation ({preprocessing.translate_x}, {preprocessing.translate_y})"
+                f" transformation in {timer(since_last=True)} ({image.GetSize()})"
+            )
 
         # crop to bbox
         # if mask and preprocessing.use_crop:
@@ -670,7 +652,6 @@ def preprocess_spatial(
         original_size_transform = None
         if preprocessing.use_crop and (preprocessing.crop_bbox or preprocessing.crop_polygon):
             if preprocessing.crop_bbox:
-                logger.trace(f"Cropping to mask - {preprocessing.crop_bbox}")
                 translation_transform = generate_rigid_translation_transform(
                     image,
                     pixel_size,
@@ -692,7 +673,9 @@ def preprocess_spatial(
                 if mask is not None:
                     mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
                     mask = transform_plane(mask, final_tform, composite_transform)
-                logger.trace(f"Applied cropping in {timer(since_last=True)} ({image.GetSize()})")
+                logger.trace(
+                    f"Applied cropping ({preprocessing.crop_bbox}) in {timer(since_last=True)} ({image.GetSize()})"
+                )
             elif preprocessing.crop_polygon:
                 logger.trace(f"Cropping to mask - {preprocessing.crop_polygon}")
                 logger.warning("Polygon cropping not implemented yet")
@@ -723,7 +706,7 @@ def preprocess(
     # Always convert to uint8
     preprocessing.as_uint8 = True
 
-    # intensity based pre-processing
+    # intensity-based pre-processing
     image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
     # ensure that intensity-based pre-processing resulted in a single-channel image
     if image.GetDepth() >= 1:  # type: ignore[no-untyped-call]

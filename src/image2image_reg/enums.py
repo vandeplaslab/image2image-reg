@@ -31,6 +31,17 @@ class CoordinateFlip(str, Enum):
     VERTICAL = "v"
 
 
+class BackgroundSubtractType(str, Enum):
+    """Background subtraction mode."""
+
+    NONE = "none"
+    SHARP = "sharp"
+    SMOOTH = "smooth"
+    BLACKHAT = "blackhat"
+    TOPHAT = "tophat"
+    BILATERAL = "bilateral"
+
+
 ProcessingDefaults = ty.Literal["none", "basic", "light", "dark", "he", "pas", "postaf", "mip"]
 PreprocessingOptionsWithNone = ty.get_args(ProcessingDefaults)
 PreprocessingOptions = PreprocessingOptionsWithNone[1::]
