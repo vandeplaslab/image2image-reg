@@ -870,6 +870,7 @@ def preprocess_preview_valis(
             spatial=spatial,
         )
         return sitk.GetArrayFromImage(image)  # type: ignore[arg-type]
+
     from image2image_reg.valis.utilities import get_preprocessor
 
     method, kws = preprocessing.to_valis()
