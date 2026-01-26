@@ -93,7 +93,13 @@ class FeatureDetectorBase:
 
     """
 
-    def __init__(self, kp_detector: OpenCVDetector | None = None, kp_descriptor: OpenCVDescriptor | None = None):
+    def __init__(
+        self,
+        kp_detector: OpenCVDetector | None = None,
+        kp_descriptor: OpenCVDescriptor | None = None,
+        rgb: bool = False,
+        n_levels: int = 1,
+    ):
         """
         Parameters
         ----------
@@ -106,6 +112,8 @@ class FeatureDetectorBase:
         """
         self.kp_detector = kp_detector
         self.kp_descriptor = kp_descriptor
+        self.rgb = rgb
+        self.n_levels = n_levels
 
         if kp_descriptor is not None and kp_detector is not None:
             # User provides both a detector and descriptor #
