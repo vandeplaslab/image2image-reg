@@ -46,9 +46,12 @@ from image2image_reg.cli._common import (
     write_merged_,
     write_not_registered_,
     write_registered_,
+    viewer_,
+    has_i2i,
 )
 from image2image_reg.elastix.registration_map import AVAILABLE_REGISTRATIONS
 from image2image_reg.enums import PreprocessingOptions, PreprocessingOptionsWithNone, WriterMode
+
 
 final_ = click.option(
     "--final/--no_final",
@@ -645,6 +648,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
 
 
 @overwrite_
+@viewer_
 @parallel_mode_
 @n_parallel_
 @clip_
@@ -690,6 +694,7 @@ def register_cmd(
     clip: str,
     n_parallel: int,
     parallel_mode: str,
+    viewer: bool,
     overwrite: bool,
 ) -> None:
     """Register images."""
@@ -709,6 +714,7 @@ def register_cmd(
         clip=clip,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
+        viewer=viewer,
         overwrite=overwrite,
     )
 
@@ -729,6 +735,7 @@ def register_runner(
     clip: str = "ignore",
     n_parallel: int = 1,
     parallel_mode: str = "outer",
+    viewer: bool = False,
     overwrite: bool = False,
 ) -> None:
     """Register images."""
@@ -751,6 +758,7 @@ def register_runner(
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
         Parameter("Rename", "-rename/--no_rename", rename),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
+        Parameter("Open in viewer", "-V/--viewer", viewer),
         Parameter("Overwrite", "-W/--overwrite", overwrite),
     )
 
@@ -775,6 +783,7 @@ def register_runner(
                             as_uint8,
                             rename,
                             clip,
+                            viewer,
                             overwrite,
                         )
                         for path in paths
@@ -799,6 +808,7 @@ def register_runner(
                         rename=rename,
                         clip=clip,
                         n_parallel=n_parallel,
+                        viewer=viewer,
                         overwrite=overwrite,
                     )
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
@@ -830,6 +840,7 @@ def _register(
     rename: bool = False,
     clip: str = "ignore",
     n_parallel: int = 1,
+    viewer: bool = False,
     overwrite: bool = False,
 ) -> PathLike:
     from image2image_reg.workflows.elastix import ElastixReg
@@ -853,6 +864,8 @@ def _register(
             rename=rename,
             clip=clip,
         )
+        if has_i2i and viewer:
+            open_in_viewer(obj.project_dir)
     return path
 
 
@@ -890,6 +903,7 @@ def preview_runner(paths: ty.Sequence[str], pyramid: int, overwrite: bool = Fals
 
 
 @overwrite_
+@viewer_
 @parallel_mode_
 @n_parallel_
 @final_
@@ -926,6 +940,7 @@ def export_cmd(
     final: bool,
     n_parallel: int,
     parallel_mode: str,
+    viewer: bool,
     overwrite: bool,
 ) -> None:
     """Export registered images."""
@@ -947,6 +962,7 @@ def export_cmd(
         final=final,
         n_parallel=n_parallel,
         parallel_mode=parallel_mode,
+        viewer=viewer,
         overwrite=overwrite,
     )
 
@@ -969,6 +985,7 @@ def export_runner(
     final: bool = False,
     n_parallel: int = 1,
     parallel_mode: str = "outer",
+    viewer: bool = False,
     overwrite: bool = False,
 ) -> None:
     """Register images."""
@@ -1024,6 +1041,7 @@ def export_runner(
                             clip,
                             final,
                             1,
+                            viewer,
                             overwrite,
                         )
                         for path in paths
@@ -1051,6 +1069,7 @@ def export_runner(
                     clip=clip,
                     final=final,
                     n_parallel=n_parallel,
+                    viewer=viewer,
                     overwrite=overwrite,
                 )
                 log_func = logger.info if success else logger.error
@@ -1081,6 +1100,7 @@ def _export(
     clip: str = "ignore",
     final: bool = False,
     n_parallel: int = 1,
+    viewer: bool = False,
     overwrite: bool = False,
 ) -> tuple[PathLike, bool]:
     from image2image_reg.workflows.elastix import ElastixReg
@@ -1113,6 +1133,8 @@ def _export(
                 write_not_registered=write_not_registered,
                 write_attached=write_attached_images,
             )
+        if has_i2i and viewer:
+            open_in_viewer(obj.project_dir)
         return path, True
     except ValueError:
         logger.exception(f"Failed to export {path}.")
@@ -1381,3 +1403,17 @@ def update_runner(
             obj = klass.from_path(path)
             obj.set_logger()
             obj.validate(allow_not_registered=True, require_paths=True)
+
+
+def open_in_viewer(project_dir: PathLike) -> None:
+    """Open registered images in i2i-viewer."""
+    if not has_i2i:
+        warning_msg("image2image is not installed. Cannot open viewer.")
+        return None
+    from image2image.main import run
+
+    image_dir = Path(project_dir) / "Images"
+    if not image_dir.exists() and len(list(image_dir.glob("*.ome.iff"))) == 0:
+        warning_msg(f"No images found in {image_dir}. Cannot open viewer.")
+        return None
+    run(tool="viewer", image_dir=image_dir)
