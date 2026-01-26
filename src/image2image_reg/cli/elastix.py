@@ -1089,6 +1089,7 @@ def _export(
         obj = ElastixReg.from_path(path)
         obj.set_logger()
         if not obj.is_registered:
+            obj.check_registration()
             warning_msg(f"Project {obj.name} is not registered.")
             return path, False
         obj.write(
