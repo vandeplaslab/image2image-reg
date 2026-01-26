@@ -116,6 +116,15 @@ class ElastixReg(Workflow):
         """Check if the project has been registered."""
         return all(reg_edge["registered"] for reg_edge in self.registration_nodes)
 
+    def check_registration(self) -> None:
+        """Check if all registration paths have been registered."""
+        for reg_edge in self.registration_nodes:
+            if not reg_edge["registered"]:
+                logger.warning(
+                    f"Registration from '{reg_edge['modalities']['source']}' to "
+                    f"'{reg_edge['modalities']['target']}' has not been performed yet.",
+                )
+
     @classmethod
     def from_path(cls, path: PathLike, raise_on_error: bool = True, quick: bool = False) -> ElastixReg:
         """Initialize based on the project path."""
@@ -1083,6 +1092,7 @@ class ElastixReg(Workflow):
         from image2image_reg.utils.visuals import create_overlap_img
 
         if not self.is_registered:
+            self.check_registration()
             logger.warning("Project has not been registered. Cannot generate overlap images.")
             return
 
@@ -1381,6 +1391,7 @@ class ElastixReg(Workflow):
                 transform_seq.to_json(filename)
 
         if not self.is_registered:
+            self.check_registration()
             return
 
         extension = ".elastix.json.gz" if gzip else ".elastix.json"
