@@ -415,7 +415,7 @@ class Preprocessing(BaseModel):
         image_type: ImageType = ImageType.DARK,
         as_uint8: bool = True,
         max_intensity_projection: bool = True,
-        which: ty.Literal["any", "brightfield", "egfp"] = "any",
+        which: ty.Literal["any", "brightfield", "egfp", "exclude_brightfield"] = "any",
         **kwargs: ty.Any,
     ) -> Preprocessing:
         """Basic image preprocessing."""
@@ -426,9 +426,14 @@ class Preprocessing(BaseModel):
                 kwargs["invert_intensity"] = True
                 kwargs["equalize_histogram"] = True
                 kwargs["contrast_enhance"] = False
-
         if (which == "any" and not changed) or which == "egfp":
             changed, kwargs = update_kwargs_on_channel_names(["egfp"], **kwargs)
+            if changed:
+                kwargs["invert_intensity"] = False
+                kwargs["equalize_histogram"] = True
+                kwargs["contrast_enhance"] = False
+        if (which =="any" and not changed) or which == "exclude_brightfield":
+            changed, kwargs = update_kwargs_on_channel_names(["bright", "brightfield"], _exclude=True, **kwargs)
             if changed:
                 kwargs["invert_intensity"] = False
                 kwargs["equalize_histogram"] = True

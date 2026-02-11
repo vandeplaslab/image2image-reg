@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing as ty
 from pathlib import Path
+from copy import deepcopy
 
 import dask.array as da
 import numpy as np
@@ -86,3 +87,14 @@ class Modality(BaseModel):
     def is_cropped(self) -> bool:
         """Return if masked."""
         return self.preprocessing.is_cropped()
+
+    def auto_set_preprocessing(self, preprocessing_func: ty.Callable[..., Preprocessing], **kwargs) -> None:
+        """Auto set preprocessing."""
+        preprocessing = deepcopy(self.preprocessing)
+        self.preprocessing = preprocessing_func(channel_names=self.channel_names, **kwargs)
+        if preprocessing:
+            self.preprocessing.mask = preprocessing.mask
+            self.preprocessing.mask_bbox = preprocessing.mask_bbox
+            self.preprocessing.mask_polygon = preprocessing.mask_polygon
+            self.preprocessing.crop_bbox = preprocessing.crop_bbox
+            self.preprocessing.crop_polygon = preprocessing.crop_polygon
