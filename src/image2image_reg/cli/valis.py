@@ -48,6 +48,8 @@ from image2image_reg.cli._common import (
     write_merged_,
     write_not_registered_,
     write_registered_,
+    viewer_,
+    has_i2i,
 )
 from image2image_reg.enums import (
     PreprocessingOptions,
@@ -330,6 +332,7 @@ if is_installed("valis"):
         add_merge_runner(project_dir, name, modality, auto, valis=True)
 
     @overwrite_
+    @viewer_
     @parallel_mode_
     @n_parallel_
     @as_uint8_
@@ -356,6 +359,7 @@ if is_installed("valis"):
         as_uint8: bool | None,
         n_parallel: int,
         parallel_mode: str,
+        viewer: bool,
         overwrite: bool,
     ) -> None:
         """Register images."""
@@ -372,6 +376,7 @@ if is_installed("valis"):
             as_uint8=as_uint8,
             n_parallel=n_parallel,
             parallel_mode=parallel_mode,
+            viewer=viewer,
             overwrite=overwrite,
         )
 
@@ -387,11 +392,13 @@ if is_installed("valis"):
         rename: bool,
         as_uint8: bool | None,
         n_parallel: int = 1,
+        viewer: bool = False,
         overwrite: bool = False,
     ) -> PathLike:
         import os
 
         from image2image_reg.workflows import ValisReg
+        from image2image_reg.cli.elastix import open_in_viewer
 
         # limit Vips concurrency to avoid memory issues
         os.environ["VIPS_CONCURRENCY"] = "6"
@@ -412,6 +419,8 @@ if is_installed("valis"):
                 n_parallel=n_parallel,
                 overwrite=overwrite,
             )
+        if has_i2i and viewer:
+            open_in_viewer(obj.project_dir)
         return path
 
     def register_runner(
@@ -427,6 +436,7 @@ if is_installed("valis"):
         as_uint8: bool | None = False,
         n_parallel: int = 1,
         parallel_mode: str = "outer",
+        viewer: bool = False,
         overwrite: bool = False,
     ) -> None:
         """Register images."""
@@ -467,6 +477,7 @@ if is_installed("valis"):
                                 remove_merged,
                                 rename,
                                 as_uint8,
+                                viewer,
                                 overwrite,
                             )
                             for path in paths
@@ -488,6 +499,7 @@ if is_installed("valis"):
                         rename,
                         as_uint8,
                         n_parallel=n_parallel,
+                        viewer=viewer,
                         overwrite=overwrite,
                     )
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
@@ -504,6 +516,7 @@ if is_installed("valis"):
         return None
 
     @overwrite_
+    @viewer_
     @parallel_mode_
     @n_parallel_
     @as_uint8_
@@ -534,6 +547,7 @@ if is_installed("valis"):
         as_uint8: bool | None,
         n_parallel: int,
         parallel_mode: str,
+        viewer: bool,
         overwrite: bool,
     ) -> None:
         """Export images."""
@@ -552,6 +566,7 @@ if is_installed("valis"):
             as_uint8=as_uint8,
             n_parallel=n_parallel,
             parallel_mode=parallel_mode,
+            viewer=viewer,
             overwrite=overwrite,
         )
 
@@ -570,6 +585,7 @@ if is_installed("valis"):
         as_uint8: bool | None = False,
         n_parallel: int = 1,
         parallel_mode: str = "outer",
+        viewer: bool = False,
         overwrite: bool = False,
     ) -> None:
         """Register images."""
@@ -622,6 +638,7 @@ if is_installed("valis"):
                                 remove_merged,
                                 rename,
                                 as_uint8,
+                                viewer,
                                 overwrite,
                             )
                             for path in paths
@@ -643,6 +660,7 @@ if is_installed("valis"):
                         rename,
                         as_uint8,
                         n_parallel=n_parallel,
+                        viewer=viewer,
                         overwrite=overwrite,
                     )
                     logger.info(f"Finished processing {path} in {timer(since_last=True)}")
@@ -661,11 +679,13 @@ if is_installed("valis"):
         rename: bool,
         as_uint8: bool | None,
         n_parallel: int = 1,
+        viewer: bool = False,
         overwrite: bool = False,
     ) -> PathLike:
         import os
 
         from image2image_reg.workflows import ValisReg
+        from image2image_reg.cli.elastix import open_in_viewer
 
         # limit Vips concurrency to avoid memory issues
         os.environ["VIPS_CONCURRENCY"] = "6"
@@ -689,6 +709,8 @@ if is_installed("valis"):
             n_parallel=n_parallel,
             overwrite=overwrite,
         )
+        if has_i2i and viewer:
+            open_in_viewer(obj.project_dir)
         return path
 
     @click.option(

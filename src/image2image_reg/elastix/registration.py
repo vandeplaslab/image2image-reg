@@ -108,4 +108,9 @@ class Registration(dict, Enum, metaclass=_RegModelMeta):
         """Create a Registration from a name."""
         if isinstance(name, Registration):
             return name
-        return getattr(cls, name)
+        try:
+            return getattr(cls, name)
+        except AttributeError:
+            raise ValueError(
+                f"unrecognized registration parameter ({name}), please specify one of {[i.name for i in cls]}",
+            )

@@ -8,14 +8,25 @@ from pathlib import Path
 import click
 from koyo.click import cli_parse_paths_sort, cli_parse_paths_sort_auto_glob
 from koyo.typing import PathLike
+from koyo.system import is_installed
 from loguru import logger
 
 if ty.TYPE_CHECKING:
     from image2image_reg.models import Preprocessing
 
 
+has_i2i = is_installed("image2image")
+
 # declare common options
 ALLOW_EXTRA_ARGS = {"help_option_names": ["-h", "--help"], "ignore_unknown_options": True, "allow_extra_args": True}
+viewer_ = click.option(
+    "-V",
+    "--viewer",
+    help="Open results in viewer.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
 overwrite_ = click.option(
     "-O",
     "--overwrite",

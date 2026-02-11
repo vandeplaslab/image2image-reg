@@ -59,26 +59,37 @@ def print_versions() -> None:
         logger.info(f"valis version: {get_version('valis-wsi')}")
 
 
-def update_kwargs_on_channel_names(search_names: list[str], **kwargs: ty.Any) -> tuple[bool, dict]:
+def update_kwargs_on_channel_names(search_names: list[str], _exclude: bool = False, **kwargs: ty.Any) -> tuple[bool, dict]:
     """Update keyword arguments based on input."""
     if "channel_names" not in kwargs:
         return False, kwargs
     search_names = [se.lower() for se in search_names]
     channel_names_ = deepcopy(kwargs["channel_names"])
     channel_names_ = [ch.lower() for ch in channel_names_]
-    indices = []
+    indices, excluded = [], []
     # perform basic check, if search name has same name as channel name
     for ch in search_names:
         if ch in channel_names_:
-            indices.append(channel_names_.index(ch))
+            if _exclude:
+                excluded.append(channel_names_.index(ch))
+            else:
+                indices.append(channel_names_.index(ch))
+
     # alternatively, check whether search name is part of channel name - this can of course produce a number of
     # false positives...
-    if not indices:
+    if not indices and not _exclude:
         for chn in channel_names_:
             for ch in search_names:
                 if ch in chn:
                     indices.append(channel_names_.index(chn))
-    if indices:
+    if not excluded and _exclude:
+        for chn in channel_names_:
+            for ch in search_names:
+                if ch in chn:
+                    excluded.append(channel_names_.index(chn))
+    if _exclude and excluded:
+        kwargs["channel_indices"] = [i for i in range(len(channel_names_)) if i not in excluded]
+    elif indices:
         kwargs["channel_indices"] = indices
         return True, kwargs
     return False, kwargs

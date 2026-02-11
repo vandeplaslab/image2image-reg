@@ -195,6 +195,8 @@ def get_feature_detector_str(feature_detector: str) -> str:
         "svgg": "SensitiveVggFD",
         "very_sensitive_vgg": "VerySensitiveVggFD",
         "vsvgg": "VerySensitiveVggFD",
+        "disk": "DiskFD",
+        "dedode": "DeDoDeFD",
     }
     feature_detector = feature_detector.lower()
     all_available = list(available.values()) + list(available.keys())

@@ -569,6 +569,10 @@ class ElastixReg(Workflow):
         elif isinstance(preprocessing, dict):
             assert "target" in preprocessing, "Preprocessing must contain target key."
             assert "source" in preprocessing, "Preprocessing must contain source key."
+        # make sure  that registration methods are valid
+        for transform_ in transform:
+            Registration.from_name(transform_)
+        
         # check whether the (source, target) pair already exists
         if self.has_registration_path(source, target, through):
             logger.warning(f"Registration path from '{source}' to '{target}' through '{through}' already exists.")
