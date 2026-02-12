@@ -572,7 +572,7 @@ class ElastixReg(Workflow):
         # make sure  that registration methods are valid
         for transform_ in transform:
             Registration.from_name(transform_)
-        
+
         # check whether the (source, target) pair already exists
         if self.has_registration_path(source, target, through):
             logger.warning(f"Registration path from '{source}' to '{target}' through '{through}' already exists.")
@@ -1133,9 +1133,10 @@ class ElastixReg(Workflow):
         self,
         source: str,
         pyramid: int = -1,
+        max_size: int = 1000,
         overwrite: bool = False,
     ) -> tuple[list, list, list]:
-        from image2image_io.utils.utilities import get_shape_of_image
+        from image2image_io.utils.utilities import clip_shape, get_shape_of_image
         from koyo.visuals import save_rgb
 
         from image2image_reg.elastix.transform import transform_images_for_pyramid
@@ -1150,6 +1151,7 @@ class ElastixReg(Workflow):
             return images, greys, names
 
         with MeasureTimer() as timer:
+            # target modality
             target_modality = self.modalities[target]
             target_wrapper = self.get_wrapper(name=target_modality.name)
             assert target_wrapper, f"Could not find wrapper for {target_modality.name}"
@@ -1157,7 +1159,12 @@ class ElastixReg(Workflow):
             if transform_seq:
                 shape = target_wrapper.reader.pyramid[pyramid].shape
                 _, _, shape = get_shape_of_image(shape)
-                transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+                if pyramid == -1 and max_size > max(shape):
+                    scale = target_wrapper.reader.scale_for_pyramid(pyramid)
+                else:
+                    shape = clip_shape(shape, max_size)
+                    scale = target_wrapper.reader.scale_for_shape(shape)
+                transform_seq.set_output_spacing(scale, shape[::-1])
             target_image = transform_images_for_pyramid(target_wrapper, transform_seq, pyramid)
             logger.trace(f"Transformed {target} in {timer(since_last=True)}")
             _, _, shape = get_shape_of_image(target_image)
@@ -1166,6 +1173,7 @@ class ElastixReg(Workflow):
             names.append(target_modality.name)
             logger.trace(f"Previewing overview with {shape} ({pyramid})")
 
+            # through modality
             if through:
                 through_modality = self.modalities[through]
                 through_wrapper = self.get_wrapper(name=through_modality.name)
@@ -1177,6 +1185,7 @@ class ElastixReg(Workflow):
                 names.append(through_modality.name)
                 logger.trace(f"Transformed {through} in {timer(since_last=True)}")
 
+            # source modality
             source_modality = self.modalities[source]
             source_wrapper = self.get_wrapper(name=source_modality.name)
             assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
