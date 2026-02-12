@@ -595,7 +595,7 @@ class ElastixReg(Workflow):
         self.add_registration_path(source, target, transform, through, preprocessing)
 
     def find_index_of_registration_path(self, source: str, target: str, through: str | None = None) -> int | None:
-        """Remove registration path."""
+        """Remove a registration path."""
         index = None
         modalities = {"source": source, "target": through if through else target}
         for i, node in enumerate(self.registration_nodes):
@@ -607,7 +607,7 @@ class ElastixReg(Workflow):
         return None
 
     def remove_registration_path(self, source: str, target: str, through: str | None = None) -> None:
-        """Remove registration path."""
+        """Remove a registration path."""
         index = self.find_index_of_registration_path(source, target, through)
         if index is not None:
             self.registration_nodes.pop(index)
@@ -1105,7 +1105,7 @@ class ElastixReg(Workflow):
         images_from_all = []
         name_to_gray = {}
         for source, _target_pair in self.registration_paths.items():
-            images, greys, names = self._generate_overlap_image_for_modality(source, pyramid, overwrite)
+            images, greys, names = self._generate_overlap_image_for_modality(source, pyramid, overwrite=overwrite)
             images_from_all.extend(images)
             for name, grey in zip(names, greys):
                 name_to_gray[name] = grey
@@ -1133,7 +1133,7 @@ class ElastixReg(Workflow):
         self,
         source: str,
         pyramid: int = -1,
-        max_size: int = 1000,
+        max_size: int = 1024,
         overwrite: bool = False,
     ) -> tuple[list, list, list]:
         from image2image_io.utils.utilities import clip_shape, get_shape_of_image
@@ -1150,6 +1150,7 @@ class ElastixReg(Workflow):
             logger.warning(f"Overlap image already exists at '{path}'. Skipping.")
             return images, greys, names
 
+        shape = None
         with MeasureTimer() as timer:
             # target modality
             target_modality = self.modalities[target]
@@ -1168,8 +1169,9 @@ class ElastixReg(Workflow):
                 transform_seq.set_output_spacing(scale, shape[::-1])
             target_image = transform_images_for_pyramid(target_wrapper, transform_seq, pyramid)
             logger.trace(f"Transformed {target} in {timer(since_last=True)}")
-            # _, _, shape = get_shape_of_image(target_image)
-            # TODO: resample to maximum shape e.g. 1000px
+            if shape is None:
+                _, _, shape = get_shape_of_image(target_image)
+                scale = target_wrapper.reader.scale_for_shape(shape)
             images.append(target_image)
             names.append(target_modality.name)
             logger.trace(f"Previewing overview with {shape} ({pyramid})")
@@ -1181,6 +1183,7 @@ class ElastixReg(Workflow):
                 assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
                 _, transform_seq, _ = self._prepare_transform(through_modality.name)
                 assert transform_seq is not None, f"Transformation is None for {through_modality.name}"
+                print("through", shape, scale)
                 transform_seq.set_output_spacing(scale, shape[::-1])
                 images.append(transform_images_for_pyramid(through_wrapper, transform_seq, pyramid))
                 names.append(through_modality.name)
@@ -1192,6 +1195,7 @@ class ElastixReg(Workflow):
             assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
             _, transform_seq, _ = self._prepare_transform(source_modality.name)
             assert transform_seq is not None, f"Transformation is None for {source_modality.name}"
+            print("source", shape, scale)
             transform_seq.set_output_spacing(scale, shape[::-1])
             images.append(transform_images_for_pyramid(source_wrapper, transform_seq, pyramid))
             names.append(source_modality.name)
@@ -1831,6 +1835,8 @@ class ElastixReg(Workflow):
         elif preprocessing_modality.output_pixel_size:
             transform_seq.set_output_spacing(preprocessing_modality.output_pixel_size)
 
+        if transform_seq:
+            transform_seq.name = edge_key
         # handle attachment
         if attachment:  # and modality_key:
             modality = attachment_modality
@@ -1935,6 +1941,8 @@ class ElastixReg(Workflow):
             transform_seq.set_output_spacing(modality.output_pixel_size)
 
         # handle attachment
+        if transform_seq:
+            transform_seq.name = modality_key
         if attachment and attachment_modality:
             modality = attachment_modality
             filename = f"{attachment_modality.name}_registered" if rename else Path(modality.path).name

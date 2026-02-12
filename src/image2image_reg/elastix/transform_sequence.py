@@ -244,7 +244,7 @@ class TransformMixin:
         else:
             self.transforms[-1].elastix_transform["Spacing"] = [str(i) for i in spacing]
             self.transforms[-1].elastix_transform["Size"] = [str(i) for i in output_size]
-        logger.trace(f"Updated output spacing and size of {self}")
+        logger.trace(f"Updated output spacing and size of {self} with spacing={spacing} and size={output_size}")
         self._build_resampler()
 
     def as_array(

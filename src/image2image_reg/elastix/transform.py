@@ -699,6 +699,7 @@ def transform_images_for_pyramid(
     transformation_sequence: TransformSequence | None,
     pyramid: int = -1,
     channel_ids: list[int] | None = None,
+    max_size: int = 1000,
 ) -> np.ndarray:
     """Transform all images."""
     import SimpleITK as sitk
@@ -706,16 +707,19 @@ def transform_images_for_pyramid(
     reader = wrapper.reader
     channel_axis, _n_channels = reader.get_channel_axis_and_n_channels()
     channel_axis = channel_axis or 0
-    if transformation_sequence is None:
-        return np.asarray(reader.pyramid[pyramid])
+    channel_ids = channel_ids or reader.channel_ids
 
     transformed = []
-    channel_ids = channel_ids or reader.channel_ids
     for channel_index in channel_ids:
         image = np.squeeze(reader.get_channel(channel_index, pyramid, split_rgb=True))
-        image = sitk.GetImageFromArray(image)
-        image.SetSpacing(reader.scale_for_pyramid(pyramid))
-        transformed.append(sitk.GetArrayFromImage(transformation_sequence(image)))
+        if transformation_sequence is None:
+            if max(image.shape) > max_size:
+                image = resize_image(np.array(image), reader.scale_for_pyramid(pyramid)[0], max_size=max_size)[0]
+            transformed.append(image)
+        else:
+            image = sitk.GetImageFromArray(image)
+            image.SetSpacing(reader.scale_for_pyramid(pyramid))
+            transformed.append(sitk.GetArrayFromImage(transformation_sequence(image)))
     return np.stack(transformed, axis=channel_axis)
 
 
@@ -746,3 +750,31 @@ def transform_images_debug_for_pyramid(
             transformed.append(sitk.GetArrayFromImage(transform_sequence_(image)))
         transformed_[transform_index] = np.stack(transformed, axis=channel_axis)
     return transformed
+
+
+def resize_image(array: np.ndarray, resolution: float, max_size: int = 1_024) -> tuple[np.ndarray | float]:
+    """Resize the image to a maximum size.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        Image, which could be 2D, RGB or multichannel.
+    resolution : float
+        Resolution for the image in microns per pixel.
+    max_size : int
+        Maximum size in pixels. This will be applied to the longest dimension of the image.
+    """
+    import cv2
+
+    shape = array.shape
+
+    height, width = shape
+    longest_dim = max(height, width)
+    if longest_dim > max_size:
+        scale_factor = max_size / longest_dim
+        new_width = int(width * scale_factor)
+        new_height = int(height * scale_factor)
+
+        array = cv2.resize(array, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        resolution = resolution / scale_factor
+    return array, resolution
