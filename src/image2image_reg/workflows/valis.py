@@ -574,6 +574,8 @@ class ValisReg(Workflow):
         from image2image_reg.valis.transform import transform_attached_shapes
 
         paths = []
+        if not self.attachment_shapes:
+            return paths
         # export attachment modalities
         with MeasureTimer() as timer:
             for _name, attached_dict in tqdm(self.attachment_shapes.items(), desc="Exporting attachment shapes..."):
@@ -601,6 +603,8 @@ class ValisReg(Workflow):
         from image2image_reg.valis.transform import transform_attached_points
 
         paths = []
+        if not self.attachment_points:
+            return paths
         # export attachment modalities
         with MeasureTimer() as timer:
             for _name, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment shapes..."):
@@ -634,10 +638,12 @@ class ValisReg(Workflow):
     ) -> list[Path]:
         from image2image_reg.valis.transform import transform_attached_image
 
-        path_to_name_map = {Path(modality.path): modality.name for modality in self.modalities.values()}
-
         # export attached images to OME-TIFFs
         paths = []
+        if not self.attachment_images:
+            return paths
+
+        path_to_name_map = {Path(modality.path): modality.name for modality in self.modalities.values()}
         with MeasureTimer() as timer:
             attached_images_ = self.attachment_images
             # create mapping of attached_to and images that should be transformed

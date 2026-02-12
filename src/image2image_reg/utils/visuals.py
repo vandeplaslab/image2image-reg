@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 import colour
 import numba as nb
 import numpy as np
@@ -257,7 +259,9 @@ def prepare_images_for_overlap(images: list[np.ndarray]) -> list[np.ndarray]:
 
     # normalize the images
     for i in range(len(grey_images)):
-        grey_image = clip_hotspots(grey_images[i])
+        with suppress(ValueError):
+            grey_image = grey_images[i]
+            grey_image = clip_hotspots(grey_image)
         grey_images[i] = exposure.rescale_intensity(grey_image, out_range=(0, 1)) * 255
     return grey_images
 

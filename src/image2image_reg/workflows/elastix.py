@@ -572,7 +572,7 @@ class ElastixReg(Workflow):
         # make sure  that registration methods are valid
         for transform_ in transform:
             Registration.from_name(transform_)
-        
+
         # check whether the (source, target) pair already exists
         if self.has_registration_path(source, target, through):
             logger.warning(f"Registration path from '{source}' to '{target}' through '{through}' already exists.")
@@ -1566,10 +1566,13 @@ class ElastixReg(Workflow):
     ) -> list[Path]:
         from image2image_reg.elastix.transform import transform_attached_shape
 
-        errors = []
         paths = []
+        errors = []
         attached_to_modality_transform = {}
         attached_to_modality_image_shape = {}
+
+        if not self.attachment_shapes:
+            return paths
 
         # export attachment modalities
         with MeasureTimer() as timer:
@@ -1635,6 +1638,10 @@ class ElastixReg(Workflow):
         paths = []
         attached_to_modality_transform = {}
         attached_to_modality_image_shape = {}
+
+        if not self.attachment_points:
+            return paths
+
         # export attachment modalities
         with MeasureTimer() as timer:
             for _, attached_dict in tqdm(self.attachment_points.items(), desc="Exporting attachment points..."):
@@ -1700,6 +1707,9 @@ class ElastixReg(Workflow):
         errors = []
         paths = []
         to_write = []
+
+        if not self.attachment_images:
+            return paths
 
         # keys are: attached image - attached to image (the one that was registered)
         with MeasureTimer() as timer:

@@ -810,6 +810,8 @@ def preprocess_preview(
         check=False,
         spatial=spatial,
     )
+    if preprocessing.downsample:
+        resolution *= preprocessing.downsample
     return sitk.GetArrayFromImage(image), resolution  # type: ignore[return-value,arg-type]
 
 
@@ -852,7 +854,9 @@ def preprocess_preview_valis(
             check=False,
             spatial=spatial,
         )
-        return sitk.GetArrayFromImage(image)  # type: ignore[arg-type]
+        if preprocessing.downsample:
+            resolution *= preprocessing.downsample
+        return sitk.GetArrayFromImage(image), resolution  # type: ignore[arg-type]
 
     from image2image_reg.valis.utilities import get_preprocessor
 
@@ -864,4 +868,6 @@ def preprocess_preview_valis(
             image = image.compute()
         return image
     preprocessor = get_preprocessor(method)(image, "", 0, 0)
+    if preprocessing.downsample:
+        resolution *= preprocessing.downsample
     return preprocessor.process_image(**kws), resolution
