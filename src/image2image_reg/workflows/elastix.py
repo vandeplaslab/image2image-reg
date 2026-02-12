@@ -1159,6 +1159,7 @@ class ElastixReg(Workflow):
             if transform_seq:
                 shape = target_wrapper.reader.pyramid[pyramid].shape
                 _, _, shape = get_shape_of_image(shape)
+                # determine scale and shape, making sure it does not exceed the maximum size
                 if pyramid == -1 and max_size > max(shape):
                     scale = target_wrapper.reader.scale_for_pyramid(pyramid)
                 else:
@@ -1167,7 +1168,7 @@ class ElastixReg(Workflow):
                 transform_seq.set_output_spacing(scale, shape[::-1])
             target_image = transform_images_for_pyramid(target_wrapper, transform_seq, pyramid)
             logger.trace(f"Transformed {target} in {timer(since_last=True)}")
-            _, _, shape = get_shape_of_image(target_image)
+            # _, _, shape = get_shape_of_image(target_image)
             # TODO: resample to maximum shape e.g. 1000px
             images.append(target_image)
             names.append(target_modality.name)
@@ -1180,7 +1181,7 @@ class ElastixReg(Workflow):
                 assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
                 _, transform_seq, _ = self._prepare_transform(through_modality.name)
                 assert transform_seq is not None, f"Transformation is None for {through_modality.name}"
-                transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+                transform_seq.set_output_spacing(scale, shape[::-1])
                 images.append(transform_images_for_pyramid(through_wrapper, transform_seq, pyramid))
                 names.append(through_modality.name)
                 logger.trace(f"Transformed {through} in {timer(since_last=True)}")
@@ -1191,7 +1192,7 @@ class ElastixReg(Workflow):
             assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
             _, transform_seq, _ = self._prepare_transform(source_modality.name)
             assert transform_seq is not None, f"Transformation is None for {source_modality.name}"
-            transform_seq.set_output_spacing(target_wrapper.reader.scale_for_pyramid(pyramid), shape[::-1])
+            transform_seq.set_output_spacing(scale, shape[::-1])
             images.append(transform_images_for_pyramid(source_wrapper, transform_seq, pyramid))
             names.append(source_modality.name)
             logger.trace(f"Transformed {source} in {timer(since_last=True)}")
