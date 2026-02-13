@@ -1133,7 +1133,7 @@ class ElastixReg(Workflow):
         self,
         source: str,
         pyramid: int = -1,
-        max_size: int = 1024,
+        max_size: int = 2048,
         overwrite: bool = False,
     ) -> tuple[list, list, list]:
         from image2image_io.utils.utilities import clip_shape, get_shape_of_image

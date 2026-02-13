@@ -133,7 +133,7 @@ def resize_image(
     array: np.ndarray,
     resolution: float,
     is_rgb: bool | None = None,
-    max_size: int = 1_024,
+    max_size: int = 2048,
     as_sitk: bool = False,
 ) -> tuple[np.ndarray | sitk.Image, float]:
     """Resize the image to a maximum size.
