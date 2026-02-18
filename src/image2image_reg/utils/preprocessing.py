@@ -240,7 +240,7 @@ def sitk_max_int_proj(image: sitk.Image) -> sitk.Image:
         if size[2] < size[0]:
             return sitk.MaximumProjection(image, 2)[:, :, 0]
         return sitk.MaximumProjection(image, 0)[0, :, :]
-    logger.warning("Cannot perform maximum intensity project on single channel image")
+    # logger.warning("Cannot perform maximum intensity project on single channel image")
     return image
 
 
@@ -262,7 +262,7 @@ def sitk_mean_int_proj(image: sitk.Image) -> sitk.Image:
         if size[2] < size[0]:
             return sitk.MeanProjection(image, 2)[:, :, 0]
         return sitk.MeanProjection(image, 0)[0, :, :]
-    logger.warning("Cannot perform maximum intensity project on single channel image")
+    # logger.warning("Cannot perform mean intensity project on single channel image")
     return image
 
 
@@ -434,7 +434,7 @@ def preprocess_intensity(
     with MeasureTimer() as timer:
         image = convert_and_cast(image, preprocessing)
         # reduction to a single channel
-        if preprocessing.max_intensity_projection:
+        if preprocessing.max_intensity_projection and image.GetDepth() > 1:
             image = sitk_max_int_proj(image)
             logger.trace(f"Maximum intensity projection applied in {timer(since_last=True)} ({image.GetSize()})")
         if image.GetDepth() > 1:
@@ -442,20 +442,24 @@ def preprocess_intensity(
             image = sitk_mean_int_proj(image)
             logger.trace(f"Mean intensity projection applied in {timer(since_last=True)} ({image.GetSize()})")
         # background removal
-        if preprocessing.background_subtract == BackgroundSubtractType.SHARP:
-            image = remove_background_noise_sharp(image)
-            logger.trace(f"Background (sharp) removed in {timer(since_last=True)}")
-        elif preprocessing.background_subtract == BackgroundSubtractType.SMOOTH:
-            image = remove_background_noise_smooth(image)
-            logger.trace(f"Background removed (smooth) in {timer(since_last=True)}")
-        elif preprocessing.background_subtract == BackgroundSubtractType.BLACKHAT:
-            image = remove_background_blackhat(image)
-            logger.trace(f"Background removed (blackhat) in {timer(since_last=True)}")
-        elif preprocessing.background_subtract == BackgroundSubtractType.TOPHAT:
-            image = remove_background_tophat(image)
-            logger.trace(f"Background removed (whitehat) in {timer(since_last=True)}")
-        elif preprocessing.background_subtract == BackgroundSubtractType.BILATERAL:
-            image = bilateral_filter(image)
+        try:
+            if preprocessing.background_subtract == BackgroundSubtractType.SHARP:
+                image = remove_background_noise_sharp(image)
+                logger.trace(f"Background (sharp) removed in {timer(since_last=True)}")
+            elif preprocessing.background_subtract == BackgroundSubtractType.SMOOTH:
+                image = remove_background_noise_smooth(image)
+                logger.trace(f"Background removed (smooth) in {timer(since_last=True)}")
+            elif preprocessing.background_subtract == BackgroundSubtractType.BLACKHAT:
+                image = remove_background_blackhat(image)
+                logger.trace(f"Background removed (blackhat) in {timer(since_last=True)}")
+            elif preprocessing.background_subtract == BackgroundSubtractType.TOPHAT:
+                image = remove_background_tophat(image)
+                logger.trace(f"Background removed (whitehat) in {timer(since_last=True)}")
+            elif preprocessing.background_subtract == BackgroundSubtractType.BILATERAL:
+                image = bilateral_filter(image)
+                logger.trace(f"Background removed (bilateral) in {timer(since_last=True)}")
+        except cv2.error as e:
+            logger.warning(f"OpenCV error during background subtraction: {e}")
         # contrast enhancement
         if preprocessing.equalize_histogram:
             # image = equalize_histogram(image)
@@ -682,53 +686,6 @@ def preprocess_spatial(
     return image, mask, transforms, original_size_transform  # type: ignore[return-value]
 
 
-def preprocess(
-    image: sitk.Image,
-    mask: sitk.Image | None,
-    preprocessing: Preprocessing,
-    pixel_size: float,
-    is_rgb: bool,
-    transforms: list,
-    transform_mask: bool = True,
-    check: bool = False,
-    spatial: bool = True,
-) -> tuple[sitk.Image, sitk.Image, list, list]:
-    """Run full intensity and spatial preprocessing."""
-    # force invert intensity for dark images
-    if check:
-        if preprocessing.image_type == ImageType.DARK:
-            preprocessing.invert_intensity = False
-        elif preprocessing.image_type == ImageType.LIGHT:
-            preprocessing.max_intensity_projection = False
-            preprocessing.contrast_enhance = False
-            if is_rgb:
-                preprocessing.invert_intensity = True
-    # Always convert to uint8
-    preprocessing.as_uint8 = True
-
-    # intensity-based pre-processing
-    image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
-    # ensure that intensity-based pre-processing resulted in a single-channel image
-    if image.GetDepth() >= 1:  # type: ignore[no-untyped-call]
-        raise ValueError("preprocessing did not result in a single image plane\nmulti-channel or 3D image return")
-    if image.GetNumberOfComponentsPerPixel() > 1:  # type: ignore[no-untyped-call]
-        raise ValueError(
-            "preprocessing did not result in a single image plane\nmulti-component / RGB(A) image returned",
-        )
-
-    # spatial pre-processing
-    image, mask, transforms, original_size_transform = preprocess_spatial(
-        image,
-        preprocessing,
-        pixel_size,
-        mask,
-        transforms,
-        transform_mask=transform_mask,
-        spatial=spatial,
-    )
-    return image, mask, transforms, original_size_transform  # type: ignore[return-value]
-
-
 def create_thumbnail(input_image: sitk.Image, max_thumbnail_size: int = 512) -> sitk.Image:
     """
     Creates a thumbnail from a SimpleITK.Image.
@@ -769,6 +726,63 @@ def create_thumbnail(input_image: sitk.Image, max_thumbnail_size: int = 512) -> 
     resampler.SetOutputDirection(input_image.GetDirection())  # type: ignore[no-untyped-call]
     resampler.SetInterpolator(sitk.sitkLinear)  # type: ignore[no-untyped-call]
     return resampler.Execute(input_image)  # type: ignore[no-untyped-call]
+
+
+def preprocess(
+    image: sitk.Image,
+    mask: sitk.Image | None,
+    preprocessing: Preprocessing,
+    pixel_size: float,
+    is_rgb: bool,
+    transforms: list,
+    transform_mask: bool = True,
+    check: bool = False,
+    spatial: bool = True,
+) -> tuple[sitk.Image, sitk.Image, list, list]:
+    """Run full intensity and spatial preprocessing."""
+    # force invert intensity for dark images
+    if check:
+        if preprocessing.image_type == ImageType.DARK:
+            preprocessing.invert_intensity = False
+        elif preprocessing.image_type == ImageType.LIGHT:
+            preprocessing.max_intensity_projection = False
+            preprocessing.contrast_enhance = False
+            if is_rgb:
+                preprocessing.invert_intensity = True
+    # Always convert to uint8
+    preprocessing.as_uint8 = True
+
+    with MeasureTimer() as timer:
+        image = convert_and_cast(image, preprocessing)
+        # reduction to a single channel
+        if preprocessing.max_intensity_projection and image.GetDepth() > 1:
+            image = sitk_max_int_proj(image)
+            logger.trace(f"Maximum intensity projection applied in {timer(since_last=True)} ({image.GetSize()})")
+        if image.GetDepth() > 1:
+            logger.warning("Image has more than one channel, mean intensity projection will be used")
+            image = sitk_mean_int_proj(image)
+            logger.trace(f"Mean intensity projection applied in {timer(since_last=True)} ({image.GetSize()})")
+
+    # intensity-based pre-processing
+    image = preprocess_intensity(image, preprocessing, pixel_size, is_rgb)
+    # spatial pre-processing
+    image, mask, transforms, original_size_transform = preprocess_spatial(
+        image,
+        preprocessing,
+        pixel_size,
+        mask,
+        transforms,
+        transform_mask=transform_mask,
+        spatial=spatial,
+    )
+    # ensure that intensity-based pre-processing resulted in a single-channel image
+    if image.GetDepth() >= 1:  # type: ignore[no-untyped-call]
+        raise ValueError("preprocessing did not result in a single image plane\nmulti-channel or 3D image return")
+    if image.GetNumberOfComponentsPerPixel() > 1:  # type: ignore[no-untyped-call]
+        raise ValueError(
+            "preprocessing did not result in a single image plane\nmulti-component / RGB(A) image returned",
+        )
+    return image, mask, transforms, original_size_transform  # type: ignore[return-value]
 
 
 def preprocess_preview(
