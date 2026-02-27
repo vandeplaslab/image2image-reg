@@ -1293,7 +1293,7 @@ def transform_runner(
     show_default=True,
 )
 @click.option(
-    "-t/-T",
+    "-f/-F",
     "--final/--no_final",
     help="Clear final transformations.",
     is_flag=True,
