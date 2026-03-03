@@ -1285,6 +1285,14 @@ def transform_runner(
     show_default=True,
 )
 @click.option(
+    "-o/-O",
+    "--overlap/--no_overlap",
+    help="Clear overlap.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
+@click.option(
     "-r/-R",
     "--progress/--no_progress",
     help="Clear progress.",
@@ -1319,10 +1327,11 @@ def clear_cmd(
     transformations: bool,
     final: bool,
     progress: bool,
+    overlap: bool,
     all_: bool,
 ) -> None:
     """Clear project data (cache/images/transformations/etc...)."""
-    clear_runner(project_dir, cache, image, transformations, final, progress, all_)
+    clear_runner(project_dir, cache, image, transformations, final, progress, overlap, all_)
 
 
 def clear_runner(
@@ -1332,6 +1341,7 @@ def clear_runner(
     transformations: bool = False,
     final: bool = False,
     progress: bool = False,
+    overlap: bool = False,
     all_: bool = False,
 ) -> None:
     """Register images."""
@@ -1347,13 +1357,21 @@ def clear_runner(
         Parameter("Don't clear transformations", "--transformations", transformations),
         Parameter("Don't clear final transformations", "--final", final),
         Parameter("Don't clear progress", "--progress", progress),
+        Parameter("Don't clear overlap", "--overlap", overlap),
     )
 
     with MeasureTimer() as timer:
         for path in paths:
             obj = ElastixReg.from_path(path)
             obj.set_logger()
-            obj.clear(cache=cache, image=image, transformations=transformations, final=final, progress=progress)
+            obj.clear(
+                cache=cache,
+                image=image,
+                transformations=transformations,
+                final=final,
+                progress=progress,
+                overlap=overlap,
+            )
             logger.info(f"Finished clearing {path} in {timer(since_last=True)}")
     logger.info(f"Finished clearing all projects in {timer()}.")
 

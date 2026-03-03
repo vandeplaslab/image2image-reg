@@ -968,13 +968,14 @@ class ElastixReg(Workflow):
         transformations: bool = False,
         final: bool = False,
         progress: bool = False,
+        overlap: bool = False,
         clear_all: bool = False,
     ) -> None:
         """Clear existing data."""
         from image2image_reg.utils.utilities import _safe_delete
 
         if clear_all:
-            cache = image = transformations = progress = final = True
+            cache = image = transformations = progress = final = overlap = True
 
         # clear transformations, cache, images
         if cache:
@@ -987,6 +988,7 @@ class ElastixReg(Workflow):
                 _safe_delete(file)
             _safe_delete(self.progress_dir)
 
+        if overlap:
             for file in self.overlap_dir.glob("*"):
                 _safe_delete(file)
             _safe_delete(self.overlap_dir)
@@ -1113,7 +1115,7 @@ class ElastixReg(Workflow):
         # export gray-scale images
         for name, grey in name_to_gray.items():
             path = self.overlap_dir / f"grey_{name}.png"
-            if path.exists():
+            if path.exists() and not overwrite:
                 continue
             save_gray(path, grey, multiplier=1)
             logger.trace(f"Saved greyscale image to '{path}'.")
@@ -1133,10 +1135,11 @@ class ElastixReg(Workflow):
         self,
         source: str,
         pyramid: int = -1,
+        min_size: int = 1024,
         max_size: int = 2048,
         overwrite: bool = False,
     ) -> tuple[list, list, list]:
-        from image2image_io.utils.utilities import clip_shape, get_shape_of_image
+        from image2image_io.utils.utilities import clip_shape, get_shape_of_image, get_pyramid_for_min_size
         from koyo.visuals import save_rgb
 
         from image2image_reg.elastix.transform import transform_images_for_pyramid
@@ -1150,6 +1153,7 @@ class ElastixReg(Workflow):
             logger.warning(f"Overlap image already exists at '{path}'. Skipping.")
             return images, greys, names
 
+        pyramid_ = pyramid
         shape = None
         with MeasureTimer() as timer:
             # target modality
@@ -1157,6 +1161,7 @@ class ElastixReg(Workflow):
             target_wrapper = self.get_wrapper(name=target_modality.name)
             assert target_wrapper, f"Could not find wrapper for {target_modality.name}"
             _, transform_seq, _ = self._prepare_transform(target_modality.name)
+            pyramid = get_pyramid_for_min_size(target_wrapper.reader, min_size, max_size, pyramid_)
             if transform_seq:
                 shape = target_wrapper.reader.pyramid[pyramid].shape
                 _, _, shape = get_shape_of_image(shape)
@@ -1183,8 +1188,8 @@ class ElastixReg(Workflow):
                 assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
                 _, transform_seq, _ = self._prepare_transform(through_modality.name)
                 assert transform_seq is not None, f"Transformation is None for {through_modality.name}"
-                print("through", shape, scale)
                 transform_seq.set_output_spacing(scale, shape[::-1])
+                pyramid = get_pyramid_for_min_size(through_wrapper.reader, min_size, max_size, pyramid_)
                 images.append(transform_images_for_pyramid(through_wrapper, transform_seq, pyramid))
                 names.append(through_modality.name)
                 logger.trace(f"Transformed {through} in {timer(since_last=True)}")
@@ -1195,8 +1200,8 @@ class ElastixReg(Workflow):
             assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
             _, transform_seq, _ = self._prepare_transform(source_modality.name)
             assert transform_seq is not None, f"Transformation is None for {source_modality.name}"
-            print("source", shape, scale)
             transform_seq.set_output_spacing(scale, shape[::-1])
+            pyramid = get_pyramid_for_min_size(source_wrapper.reader, min_size, max_size, pyramid_)
             images.append(transform_images_for_pyramid(source_wrapper, transform_seq, pyramid))
             names.append(source_modality.name)
             logger.trace(f"Transformed {source} in {timer(since_last=True)}")
