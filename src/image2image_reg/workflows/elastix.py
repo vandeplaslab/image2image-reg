@@ -1183,7 +1183,6 @@ class ElastixReg(Workflow):
                 assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
                 _, transform_seq, _ = self._prepare_transform(through_modality.name)
                 assert transform_seq is not None, f"Transformation is None for {through_modality.name}"
-                print("through", shape, scale)
                 transform_seq.set_output_spacing(scale, shape[::-1])
                 images.append(transform_images_for_pyramid(through_wrapper, transform_seq, pyramid))
                 names.append(through_modality.name)
@@ -1195,7 +1194,6 @@ class ElastixReg(Workflow):
             assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
             _, transform_seq, _ = self._prepare_transform(source_modality.name)
             assert transform_seq is not None, f"Transformation is None for {source_modality.name}"
-            print("source", shape, scale)
             transform_seq.set_output_spacing(scale, shape[::-1])
             images.append(transform_images_for_pyramid(source_wrapper, transform_seq, pyramid))
             names.append(source_modality.name)
