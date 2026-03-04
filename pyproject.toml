@@ -64,10 +64,10 @@ dependencies = [
 ## https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
 valis = [
-    "valis-wsi>=1.2.0",
-    "opencv-contrib-python",
-    "fastcluster",
-    "scikit-learn",
+    "valis-wsi>=1.2.0; python_version < '3.13'",
+    "opencv-contrib-python; python_version < '3.13'",
+    "fastcluster; python_version < '3.13'",
+    "scikit-learn; python_version < '3.13'",
 ]
 
 [dependency-groups]
