@@ -63,6 +63,7 @@ dependencies = [
 
 ## https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
+# valis has numpy dependencies that are no compatible with python 3.13 yet, so we exclude it for now
 valis = [
     "valis-wsi>=1.2.0; python_version < '3.13'",
     "opencv-contrib-python; python_version < '3.13'",
