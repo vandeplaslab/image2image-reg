@@ -76,6 +76,7 @@ class TestImageWrapper:
         preprocessing.invert_intensity = True
         preprocessing.as_uint8 = True
         preprocessing.custom_processing = None
+        preprocessing.background_subtract = False
 
         # Should run without error
         result = preprocess_intensity(image, preprocessing, pixel_size=1.0, is_rgb=False)
