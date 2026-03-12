@@ -1329,22 +1329,7 @@ class ElastixReg(Workflow):
                     not_reg_modality_list.pop(index)
                     logger.trace(f"Removed {merge_modality} from not registered modalities as it will be merged.")
 
-        # export non-registered nodes
-        if write_not_registered and not_reg_modality_list:
-            paths.extend(
-                self._export_not_registered_images(
-                    not_reg_modality_list,
-                    fmt=fmt,
-                    to_original_size=to_original_size,
-                    tile_size=tile_size,
-                    as_uint8=as_uint8,
-                    rename=rename,
-                    n_parallel=n_parallel,
-                    overwrite=overwrite,
-                ),
-            )
-
-        # export modalities
+        # export registered modalities
         if write_registered and reg_modality_list:
             paths.extend(
                 self._export_registered_images(
@@ -1358,7 +1343,21 @@ class ElastixReg(Workflow):
                     overwrite=overwrite,
                 ),
             )
-
+        # export non-registered modalities
+        if write_not_registered and not_reg_modality_list:
+            paths.extend(
+                self._export_not_registered_images(
+                    not_reg_modality_list,
+                    fmt=fmt,
+                    to_original_size=to_original_size,
+                    tile_size=tile_size,
+                    as_uint8=as_uint8,
+                    rename=rename,
+                    n_parallel=n_parallel,
+                    overwrite=overwrite,
+                ),
+            )
+        # write attached modalities
         if write_attached_shapes:
             paths.extend(
                 self._export_attachment_shapes(n_parallel=n_parallel, clip=clip, rename=rename, overwrite=overwrite),
@@ -1609,7 +1608,6 @@ class ElastixReg(Workflow):
                         name=attached_to,
                     ).reader.image_shape
                 image_shape = attached_to_modality_image_shape[attached_to]
-
                 for file in attached_dict["files"]:
                     logger.trace(f"Exporting {file} to {attached_to} with {transform_seq}...")
                     name = Path(file).stem
@@ -1814,6 +1812,7 @@ class ElastixReg(Workflow):
         transform_seq = copy(self.transformations[edge_key]["full-transform-seq"])
 
         # modality_key = None
+        final_modality = self.modalities[final_modality_key]
         preprocessing_modality = self.modalities[edge_key]
         if attachment and attachment_modality:
             edge_key = attachment_modality.name
@@ -1839,6 +1838,12 @@ class ElastixReg(Workflow):
                 transform_seq.set_output_spacing(output_spacing_target)
         elif preprocessing_modality.output_pixel_size:
             transform_seq.set_output_spacing(preprocessing_modality.output_pixel_size)
+        elif final_modality.preprocessing and final_modality.preprocessing.downsample > 1:
+            if preprocessing_modality.output_pixel_size:
+                transform_seq.set_output_spacing(preprocessing_modality.output_pixel_size)
+            else:
+                output_spacing_target = self.preprocessed_cache["image_spacing"][final_modality_key]
+                transform_seq.set_output_spacing(output_spacing_target)
 
         if transform_seq:
             transform_seq.name = edge_key
