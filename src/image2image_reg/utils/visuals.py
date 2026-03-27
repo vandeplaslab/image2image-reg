@@ -190,7 +190,7 @@ def get_n_colors(rgb: np.ndarray, n: int) -> np.ndarray:
         all_colors = np.vstack([*[rgb] * n_full_rep, rgb[0:n_extra]])
         assert all_colors.shape[0] == n
 
-        np.random.shuffle(all_colors)
+        np.random.default_rng().shuffle(all_colors)
 
         return all_colors
 

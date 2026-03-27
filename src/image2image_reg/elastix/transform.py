@@ -341,8 +341,8 @@ def _transform_points_df(
     if replace and suffix == "_transformed":
         suffix = "_original"
 
-    x = df[x_key].values
-    y = df[y_key].values
+    x = df[x_key].to_numpy()
+    y = df[y_key].to_numpy()
     if as_image:
         height, width = image_shape
         x, y = transform_points_as_image(
@@ -361,7 +361,7 @@ def _transform_points_df(
         x, y = transform_points(seq, x, y, in_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size, silent=silent)
         x, y, mask = clip_func(x, y)
         if mask is not None:
-            df = df[mask]
+            df = df.loc[mask].copy()
     if len(df) == len(x):
         df = _replace_column(df, x, y, x_key, y_key, suffix, replace)
     return df
@@ -381,7 +381,6 @@ def transform_attached_point(
     from image2image_io.readers.points_reader import read_points
     from image2image_io.readers.shapes_reader import get_shape_columns
 
-    pd.options.mode.chained_assignment = None
     is_in_px = source_pixel_size != 1.0
 
     # read data
@@ -426,7 +425,7 @@ def transform_attached_point(
         if n_removed > 0:
             logger.warning(f"Removed {n_removed:,} groups with no points - {len(df_transformed)} were kept.")
         if df_transformed:
-            df_transformed = pd.concat(df_transformed)
+            df_transformed = pd.concat(df_transformed, copy=False)
             df_transformed = remove_invalid_points(df_transformed, group_by)
         else:
             df_transformed = pd.DataFrame()
@@ -459,7 +458,7 @@ def remove_invalid_points(df: pd.DataFrame, group_by: str) -> pd.DataFrame:
     if group_by not in df.columns:
         raise ValueError(f"Invalid columns: {df.columns}")
     # remove any groups that have fewer than two entries by using group_by
-    return df.groupby(group_by).filter(lambda x: len(x) > 2)
+    return df.groupby(group_by).filter(lambda x: len(x) > 2).copy()
 
 
 def transform_attached_shape(
@@ -538,8 +537,8 @@ def _transform_geojson_features_as_image(
     df, n_to_prop = _convert_geojson_to_df(geojson_data, is_px, source_pixel_size)
     x, y = transform_points_as_image(
         transform_sequence,
-        df.x.values,
-        df.y.values,
+        df["x"].to_numpy(),
+        df["y"].to_numpy(),
         height,
         width,
         df=df,
@@ -593,7 +592,7 @@ def _transform_geojson_features_as_df(
         logger.warning(f"Removed {counter:,} groups with no points - {len(df_transformed)} were kept.")
     n_to_prop = _renumber_props(n_to_prop, to_remove)
     if df_transformed:
-        df_transformed = pd.concat(df_transformed)
+        df_transformed = pd.concat(df_transformed, copy=False)
         df_transformed = remove_invalid_points(df_transformed, group_by)
         return _convert_df_to_geojson(df_transformed, as_px, target_pixel_size, n_to_prop=n_to_prop)
     return []

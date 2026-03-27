@@ -58,7 +58,7 @@ dependencies = [
     "networkx==3.2.0; python_version < '3.10'",
     "networkx==3.4.0; python_version >= '3.10'",  # fixed circular import problem
     "scikit-learn",
-    "setuptools; python_version >= '3.13'",  # required to build pandas==1.5.3
+    "pandas>=2",
 ]
 
 ## https://peps.python.org/pep-0621/#dependencies-optional-dependencies

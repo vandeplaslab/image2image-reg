@@ -65,7 +65,7 @@ class TestImageWrapper:
         from image2image_reg.utils.preprocessing import preprocess_intensity
 
         # Create a small random image
-        image = sitk.GetImageFromArray(np.random.randint(0, 255, (100, 100), dtype=np.uint8))
+        image = sitk.GetImageFromArray(np.random.default_rng().integers(0, 255, (100, 100), dtype=np.uint8))
         image.SetSpacing((1.0, 1.0))
 
         preprocessing = MagicMock(spec=Preprocessing)

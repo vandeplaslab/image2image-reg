@@ -101,7 +101,7 @@ def _filter_transform_coordinate_image(
         # x = x[mask]
         # y = y[mask]
         # df = df.loc[mask]
-    df.reset_index(drop=True, inplace=True)
+    df = df.reset_index(drop=True)
     return x, y, df
 
 
@@ -365,15 +365,16 @@ def _replace_column(
     suffix: str = "_transformed",
     replace: bool = False,
 ):
+    df = df.copy()
     # remove transformed columns if they exist
     if f"{x_key}{suffix}" in df.columns:
-        df.drop(columns=[f"{x_key}{suffix}"], inplace=True)
+        df = df.drop(columns=[f"{x_key}{suffix}"])
     if f"{y_key}{suffix}" in df.columns:
-        df.drop(columns=[f"{y_key}{suffix}"], inplace=True)
+        df = df.drop(columns=[f"{y_key}{suffix}"])
     # put data in place
     if replace:
-        df.insert(max(0, df.columns.get_loc(x_key)), f"{x_key}{suffix}", df[x_key])
-        df.insert(max(0, df.columns.get_loc(y_key)), f"{y_key}{suffix}", df[y_key])
+        df.insert(max(0, df.columns.get_loc(x_key)), f"{x_key}{suffix}", df[x_key].to_numpy(copy=True))
+        df.insert(max(0, df.columns.get_loc(y_key)), f"{y_key}{suffix}", df[y_key].to_numpy(copy=True))
         df[x_key] = x
         df[y_key] = y
     else:

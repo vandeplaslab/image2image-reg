@@ -205,8 +205,8 @@ def _transform_points_df(
     if replace and suffix == "_transformed":
         suffix = "_original"
 
-    x = df[x_key].values
-    y = df[y_key].values
+    x = df[x_key].to_numpy()
+    y = df[y_key].to_numpy()
     if as_image:
         x, y, df = transform_points_as_image(
             registrar,
@@ -626,10 +626,17 @@ def _transform_geojson_features_as_image(
     non_rigid: bool = True,
 ) -> list[dict]:
     df, n_to_prop = _convert_geojson_to_df(geojson_data, is_px, source_pixel_size)
-    x, y, df = _transform_points_as_image(slide_src, df.x.values, df.y.values, df, crop=crop, non_rigid=non_rigid)
+    x, y, df = _transform_points_as_image(
+        slide_src,
+        df["x"].to_numpy(),
+        df["y"].to_numpy(),
+        df,
+        crop=crop,
+        non_rigid=non_rigid,
+    )
     height, width = slide_src.slide_dimensions_wh[0][::-1]
     x, y, df = _filter_transform_coordinate_image(height, width, x, y, df)
-    return _convert_df_to_geojson(df, x, y, as_px, target_pixel_size, n_to_prop=n_to_prop)
+    return _convert_df_to_geojson(df, as_px, target_pixel_size, n_to_prop=n_to_prop)
 
 
 def _transform_geojson_features(

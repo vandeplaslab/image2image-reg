@@ -26,19 +26,19 @@ from image2image_reg.preprocessing.workflow import Workflow
 
 def single_channel_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
     """Get NumPy array."""
-    array = np.random.randint(0, 255, size=(100, 100), dtype=np.uint8)
+    array = np.random.default_rng().integers(0, 255, size=(100, 100), dtype=np.uint8)
     return numpy_to_sitk_image(array) if as_sitk else array
 
 
 def rgb_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
     """Get NumPy array."""
-    array = np.random.randint(0, 255, size=(100, 100, 3), dtype=np.uint8)
+    array = np.random.default_rng().integers(0, 255, size=(100, 100, 3), dtype=np.uint8)
     return numpy_to_sitk_image(array) if as_sitk else array
 
 
 def multi_channel_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
     """Get NumPy array."""
-    array = np.random.randint(0, 255, size=(4, 100, 100), dtype=np.uint8)
+    array = np.random.default_rng().integers(0, 255, size=(4, 100, 100), dtype=np.uint8)
     return numpy_to_sitk_image(array) if as_sitk else array
 
 
