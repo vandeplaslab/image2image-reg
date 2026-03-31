@@ -9,7 +9,7 @@ from pathlib import Path
 from koyo.json import read_json_data, write_json_data
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
-from koyo.utilities import is_installed
+from koyo.system import is_installed
 from loguru import logger
 from tqdm import tqdm
 

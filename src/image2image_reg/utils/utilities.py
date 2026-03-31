@@ -51,7 +51,7 @@ def make_new_name(
 
 def print_versions() -> None:
     """Print versions."""
-    from koyo.utilities import get_version, is_installed
+    from koyo.system import get_version, is_installed
 
     logger.info(f"image2image-io version: {get_version('image2image_io')}")
     logger.info(f"image2image-reg version: {get_version('image2image_reg')}")

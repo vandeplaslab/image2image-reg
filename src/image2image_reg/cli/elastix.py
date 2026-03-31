@@ -739,7 +739,7 @@ def register_runner(
     overwrite: bool = False,
 ) -> None:
     """Register images."""
-    from koyo.utilities import reraise_exception_if_debug
+    from koyo.system import reraise_exception_if_debug
     from mpire import WorkerPool
 
     print_parameters(

@@ -82,7 +82,7 @@ def cli(
     from koyo.faulthandler import install_segfault_handler
     from koyo.hooks import install_debugger_hook, uninstall_debugger_hook
     from koyo.system import IS_MAC
-    from koyo.utilities import running_as_pyinstaller_app
+    from koyo.system import running_as_pyinstaller_app
 
     if "-h" not in sys.argv and "--help" not in sys.argv:
         if dev:

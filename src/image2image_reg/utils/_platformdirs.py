@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from koyo.utilities import is_installed
+from koyo.system import is_installed
 
 if is_installed("platformdirs"):
     from platformdirs import user_data_dir
