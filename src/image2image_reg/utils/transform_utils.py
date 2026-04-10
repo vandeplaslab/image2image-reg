@@ -6,7 +6,7 @@ import typing as ty
 from functools import partial
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from koyo.utilities import find_nearest_index_batch
 from loguru import logger
 from tqdm import tqdm
@@ -75,15 +75,15 @@ def _filter_transform_coordinate_image(
     width: int,
     x: np.ndarray,
     y: np.ndarray,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     fraction: float = 0.15,
     x_key: str = "x",
     y_key: str = "y",
-) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+) -> tuple[np.ndarray, np.ndarray, pl.DataFrame]:
     frac_width = width * MULTIPLIER * fraction
     frac_height = height * MULTIPLIER * fraction
 
-    diff_x = np.abs(df[x_key] - x)
+    diff_x = np.abs(df[x_key].to_numpy() - x)
     max_shift_x = np.max(diff_x)
     # if point shifts by more than 50% then it's likely very fishy!
     if max_shift_x > frac_width:
@@ -93,7 +93,7 @@ def _filter_transform_coordinate_image(
         # y = y[mask]
         # df = df.loc[mask]
 
-    diff_y = np.abs(df[y_key] - y)
+    diff_y = np.abs(df[y_key].to_numpy() - y)
     max_shift_y = np.max(diff_y)
     if max_shift_y > frac_height:
         logger.error(f"Warning: y shift is more than {fraction:.1%} of the slide height - {max_shift_y:.1f}")
@@ -101,8 +101,7 @@ def _filter_transform_coordinate_image(
         # x = x[mask]
         # y = y[mask]
         # df = df.loc[mask]
-    df = df.reset_index(drop=True)
-    return x, y, df
+    return x, y, df.clone()
 
 
 def _cleanup_transform_coordinate_image(
@@ -130,7 +129,7 @@ def _convert_geojson_to_df(
     geojson_data: list[dict],
     is_px: bool,
     source_pixel_size: float = 1.0,
-) -> tuple[pd.DataFrame, dict[int, dict]]:
+) -> tuple[pl.DataFrame, dict[int, dict]]:
     """Convert GeoJSON data so that it can be transformed back to GeoJSON."""
     # types: pt = Point; pg = Polygon; mp = MultiPolygon
     data = []  # columns: x, y, unique_index, inner, outer, type
@@ -187,12 +186,24 @@ def _convert_geojson_to_df(
                         "props": feature.get("properties", {}),
                         "id": feature.get("id", None),
                     }
-    df = pd.DataFrame(data, columns=["x", "y", "unique_index", "outer", "inner", "type"])
+    if data:
+        df = pl.DataFrame(data, schema=["x", "y", "unique_index", "outer", "inner", "type"], orient="row")
+    else:
+        df = pl.DataFrame(
+            schema={
+                "x": pl.Float64,
+                "y": pl.Float64,
+                "unique_index": pl.Int64,
+                "outer": pl.Int64,
+                "inner": pl.Int64,
+                "type": pl.String,
+            }
+        )
     return df, n_to_prop
 
 
 def _convert_df_to_geojson(
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     as_px: bool,
     target_pixel_size: float,
     n_to_prop: dict[int, dict] | None = None,
@@ -204,51 +215,72 @@ def _convert_df_to_geojson(
     if n_to_prop is None:
         n_to_prop = {}
 
+    def _normalize_group_name(group: ty.Any) -> ty.Any:
+        if isinstance(group, tuple) and len(group) == 1:
+            return group[0]
+        return group
+
     failed = False
     geojson_data, geojson_data_fixed = [], []
-    for unique_index, dff in tqdm(df.groupby("unique_index"), desc="Converting to GeoJSON", leave=False):
+    for unique_index, dff in tqdm(
+        df.group_by("unique_index", maintain_order=True),
+        desc="Converting to GeoJSON",
+        leave=False,
+    ):
+        unique_index = _normalize_group_name(unique_index)
         props = n_to_prop.get(unique_index, {})
         prop = props.get("props", {})
         id_ = props.get("id", None)
         kws = {"id": id_} if id_ is not None else {}
         geometry = {}
+        geometry_type = dff.item(0, "type")
         # point
-        if dff["type"].iloc[0] == "pt":
-            x_, y_ = _transform_transformed_from_px_to_um(dff.x, dff.y, as_px, target_pixel_size)
+        if geometry_type == "pt":
+            x_, y_ = _transform_transformed_from_px_to_um(
+                dff["x"].to_numpy(),
+                dff["y"].to_numpy(),
+                as_px,
+                target_pixel_size,
+            )
             geometry["type"] = "Point"
             geometry["coordinates"] = [round(x_[0], 2), round(y_[0], 2)]
 
         # multi-point
-        elif dff["type"].iloc[0] == "mpt":
+        elif geometry_type == "mpt":
             geometry["type"] = "MultiPoint"
             geometry["coordinates"] = []
-            x_, y_ = _transform_transformed_from_px_to_um(dff.x, dff.y, as_px, target_pixel_size)
+            x_, y_ = _transform_transformed_from_px_to_um(
+                dff["x"].to_numpy(),
+                dff["y"].to_numpy(),
+                as_px,
+                target_pixel_size,
+            )
             for x, y in zip(x_, y_):
                 geometry["coordinates"].append([round(x, 2), round(y, 2)])
 
         # polygon
-        elif dff["type"].iloc[0] == "pg":
+        elif geometry_type == "pg":
             geometry["type"] = "Polygon"
             geometry["coordinates"] = []
 
-            for row in dff.itertuples():
-                x_, y_ = _transform_transformed_from_px_to_um(row.x, row.y, as_px, target_pixel_size)
+            for row in dff.iter_rows(named=True):
+                x_, y_ = _transform_transformed_from_px_to_um(row["x"], row["y"], as_px, target_pixel_size)
                 # prepare the geometry
-                if row.outer == 0 and len(geometry["coordinates"]) == 0:
+                if row["outer"] == 0 and len(geometry["coordinates"]) == 0:
                     geometry["coordinates"].append([])
-                geometry["coordinates"][row.outer].append([round(x_, 2), round(y_, 2)])
+                geometry["coordinates"][row["outer"]].append([round(x_, 2), round(y_, 2)])
 
         # multi-polygon
-        elif dff["type"].iloc[0] == "mp":
+        elif geometry_type == "mp":
             geometry["type"] = "MultiPolygon"
             geometry["coordinates"] = []
-            while len(geometry["coordinates"]) < dff.outer.max() + 1:
+            while len(geometry["coordinates"]) < int(dff["outer"].max()) + 1:
                 geometry["coordinates"].append([])
-            for row in dff.itertuples():
-                x_, y_ = _transform_transformed_from_px_to_um(row.x, row.y, as_px, target_pixel_size)
-                while len(geometry["coordinates"][row.outer]) <= row.inner:
-                    geometry["coordinates"][row.outer].append([])
-                geometry["coordinates"][row.outer][row.inner].append([round(x_, 2), round(y_, 2)])
+            for row in dff.iter_rows(named=True):
+                x_, y_ = _transform_transformed_from_px_to_um(row["x"], row["y"], as_px, target_pixel_size)
+                while len(geometry["coordinates"][row["outer"]]) <= row["inner"]:
+                    geometry["coordinates"][row["outer"]].append([])
+                geometry["coordinates"][row["outer"]][row["inner"]].append([round(x_, 2), round(y_, 2)])
 
         # skip broken geometries
         if not geometry or not geometry.get("coordinates"):
@@ -357,27 +389,26 @@ def _transform_transformed_from_px_to_um(
 
 
 def _replace_column(
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     x: np.ndarray,
     y: np.ndarray,
     x_key: str = "x",
     y_key: str = "y",
     suffix: str = "_transformed",
     replace: bool = False,
-):
-    df = df.copy()
+) -> pl.DataFrame:
+    df = df.clone()
     # remove transformed columns if they exist
     if f"{x_key}{suffix}" in df.columns:
-        df = df.drop(columns=[f"{x_key}{suffix}"])
+        df = df.drop(f"{x_key}{suffix}")
     if f"{y_key}{suffix}" in df.columns:
-        df = df.drop(columns=[f"{y_key}{suffix}"])
+        df = df.drop(f"{y_key}{suffix}")
     # put data in place
     if replace:
-        df.insert(max(0, df.columns.get_loc(x_key)), f"{x_key}{suffix}", df[x_key].to_numpy(copy=True))
-        df.insert(max(0, df.columns.get_loc(y_key)), f"{y_key}{suffix}", df[y_key].to_numpy(copy=True))
-        df[x_key] = x
-        df[y_key] = y
+        df.insert_column(max(0, df.columns.index(x_key)), pl.Series(f"{x_key}{suffix}", df[x_key].to_numpy().copy()))
+        df.insert_column(max(0, df.columns.index(y_key)), pl.Series(f"{y_key}{suffix}", df[y_key].to_numpy().copy()))
+        df = df.with_columns(pl.Series(x_key, x), pl.Series(y_key, y))
     else:
-        df.insert(df.columns.get_loc(x_key), f"{x_key}{suffix}", x)
-        df.insert(df.columns.get_loc(y_key), f"{y_key}{suffix}", y)
+        df.insert_column(df.columns.index(x_key), pl.Series(f"{x_key}{suffix}", x))
+        df.insert_column(df.columns.index(y_key), pl.Series(f"{y_key}{suffix}", y))
     return df

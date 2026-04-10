@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from koyo.typing import PathLike
 from koyo.utilities import random_chunks
 from loguru import logger
@@ -29,6 +29,13 @@ from image2image_reg.utils.transform_utils import (
 
 if ty.TYPE_CHECKING:
     from image2image_reg.wrapper import ImageWrapper
+
+
+def _normalize_group_name(group: ty.Any) -> ty.Any:
+    """Normalize a Polars group key to a scalar for single-column grouping."""
+    if isinstance(group, tuple) and len(group) == 1:
+        return group[0]
+    return group
 
 
 def transform_points(
@@ -79,7 +86,7 @@ def transform_points_as_image(
     y: np.ndarray,
     height: int,
     width: int,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     in_px: bool = False,
     as_px: bool = False,
     source_pixel_size: float = 1.0,
@@ -99,7 +106,7 @@ def transform_points_as_image(
         Height of the image
     width: int,
         Width of the image
-    df : pd.DataFrame
+    df : pl.DataFrame
         Dataframe with x and y columns
     in_px : bool, optional
         Whether input coordinates are in pixels or physical units, by default False
@@ -210,7 +217,7 @@ def _transform_coordinate_image(
 
 def transform_points_df(
     seq: TransformSequence,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     in_px: bool = False,
     as_px: bool = False,
     x_key: str = "x",
@@ -222,14 +229,14 @@ def transform_points_df(
     image_shape: tuple[int, int] = (0, 0),
     silent: bool = False,
     clip_func: ClipFunc = _clip_noop,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """Transform points in a dataframe.
 
     Parameters
     ----------
     seq : TransformSequence
         Transform sequence
-    df : pd.DataFrame
+    df : pl.DataFrame
         Dataframe with x and y columns
     in_px : bool, optional
         Whether input coordinates are in pixels or physical units, by default False
@@ -273,7 +280,7 @@ def transform_points_df(
 
 def transform_vertices_df(
     seq: TransformSequence,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     in_px: bool = False,
     as_px: bool = False,
     x_key: str = "vertex_x",
@@ -282,14 +289,14 @@ def transform_vertices_df(
     replace: bool = False,
     source_pixel_size: float = 1.0,
     silent: bool = False,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """Transform points in a dataframe.
 
     Parameters
     ----------
     seq : TransformSequence
         Transform sequence
-    df : pd.DataFrame
+    df : pl.DataFrame
         Dataframe with x and y columns
     in_px : bool, optional
         Whether input coordinates are in pixels or physical units, by default False
@@ -323,7 +330,7 @@ def transform_vertices_df(
 
 def _transform_points_df(
     seq: TransformSequence,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     x_key: str = "x",
     y_key: str = "y",
     in_px: bool = False,
@@ -335,7 +342,7 @@ def _transform_points_df(
     image_shape: tuple[int, int] = (0, 0),
     silent: bool = False,
     clip_func: ClipFunc = _clip_noop,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     if x_key not in df.columns or y_key not in df.columns:
         raise ValueError(f"Dataframe must have '{x_key}' and '{y_key}' columns.")
     if replace and suffix == "_transformed":
@@ -361,7 +368,7 @@ def _transform_points_df(
         x, y = transform_points(seq, x, y, in_px=in_px, as_px=as_px, source_pixel_size=source_pixel_size, silent=silent)
         x, y, mask = clip_func(x, y)
         if mask is not None:
-            df = df.loc[mask].copy()
+            df = df.filter(pl.Series(mask))
     if len(df) == len(x):
         df = _replace_column(df, x, y, x_key, y_key, suffix, replace)
     return df
@@ -403,10 +410,15 @@ def transform_attached_point(
     if (group_by and need_to_split) and not as_image:
         df_transformed = []
         n_removed = 0
-        for _group, df_group in tqdm(df.groupby(group_by), desc="Transforming groups", leave=False, mininterval=1):
+        for _group, df_group in tqdm(
+            df.group_by(group_by, maintain_order=True),
+            desc="Transforming groups",
+            leave=False,
+            mininterval=1,
+        ):
             df_group_transformed = transform_points_df(
                 transform_sequence,
-                df_group.copy(),
+                df_group.clone(),
                 in_px=is_in_px,
                 as_px=is_in_px,
                 x_key=x_key,
@@ -425,14 +437,14 @@ def transform_attached_point(
         if n_removed > 0:
             logger.warning(f"Removed {n_removed:,} groups with no points - {len(df_transformed)} were kept.")
         if df_transformed:
-            df_transformed = pd.concat(df_transformed, copy=False)
+            df_transformed = pl.concat(df_transformed, how="vertical")
             df_transformed = remove_invalid_points(df_transformed, group_by)
         else:
-            df_transformed = pd.DataFrame()
+            df_transformed = pl.DataFrame()
     else:
         df_transformed = transform_points_df(
             transform_sequence,
-            df.copy(),
+            df.clone(),
             in_px=is_in_px,
             as_px=is_in_px,
             x_key=x_key,
@@ -447,18 +459,23 @@ def transform_attached_point(
 
     if path.suffix in [".csv", ".txt", ".tsv"]:
         sep = {"csv": ",", "txt": "\t", "tsv": "\t"}[path.suffix[1:]]
-        df_transformed.to_csv(output_path, index=False, sep=sep)
+        df_transformed.write_csv(output_path, separator=sep)
     elif path.suffix == ".parquet":
-        df_transformed.to_parquet(output_path, index=False)
+        df_transformed.write_parquet(output_path)
     return Path(output_path)
 
 
-def remove_invalid_points(df: pd.DataFrame, group_by: str) -> pd.DataFrame:
+def remove_invalid_points(df: pl.DataFrame, group_by: str) -> pl.DataFrame:
     """Remove invalid points (e.g. have fewer than 2 points)."""
     if group_by not in df.columns:
         raise ValueError(f"Invalid columns: {df.columns}")
-    # remove any groups that have fewer than two entries by using group_by
-    return df.groupby(group_by).filter(lambda x: len(x) > 2).copy()
+    valid_groups = (
+        df.group_by(group_by, maintain_order=True)
+        .len()
+        .filter(pl.col("len") > 2)[group_by]
+        .to_list()
+    )
+    return df.filter(pl.col(group_by).is_in(valid_groups))
 
 
 def transform_attached_shape(
@@ -561,7 +578,7 @@ def _transform_geojson_features_as_df(
     target_pixel_size = transform_sequence.output_spacing[0]
 
     df, n_to_prop = _convert_geojson_to_df(geojson_data, is_px, source_pixel_size)
-    group_by = "unique_index" if df.unique_index.nunique() > 1 else "outer"
+    group_by = "unique_index" if df["unique_index"].n_unique() > 1 else "outer"
     # don't remove all points if data is not actually a shape in the form of points
     if not group_by and clip == "remove":
         clip = "part-remove"
@@ -570,11 +587,12 @@ def _transform_geojson_features_as_df(
     counter = 0
     to_remove = []
     for index, (_group, df_group) in enumerate(
-        tqdm(df.groupby(group_by), desc="Transforming groups", leave=False, mininterval=1),
+        tqdm(df.group_by(group_by, maintain_order=True), desc="Transforming groups", leave=False, mininterval=1),
     ):
+        _group = _normalize_group_name(_group)
         df_group_transformed = transform_points_df(
             transform_sequence,
-            df_group.copy(),
+            df_group.clone(),
             in_px=is_px,
             as_px=as_px,
             replace=True,
@@ -592,7 +610,7 @@ def _transform_geojson_features_as_df(
         logger.warning(f"Removed {counter:,} groups with no points - {len(df_transformed)} were kept.")
     n_to_prop = _renumber_props(n_to_prop, to_remove)
     if df_transformed:
-        df_transformed = pd.concat(df_transformed, copy=False)
+        df_transformed = pl.concat(df_transformed, how="vertical")
         df_transformed = remove_invalid_points(df_transformed, group_by)
         return _convert_df_to_geojson(df_transformed, as_px, target_pixel_size, n_to_prop=n_to_prop)
     return []

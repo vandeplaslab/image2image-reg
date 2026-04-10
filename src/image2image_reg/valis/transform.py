@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from koyo.typing import PathLike
 from loguru import logger
 from tqdm import tqdm
@@ -70,11 +70,11 @@ def transform_points_as_image(
     source_path: PathLike,
     x: np.ndarray,
     y: np.ndarray,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
     silent: bool = False,
-) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+) -> tuple[np.ndarray, np.ndarray, pl.DataFrame]:
     """Transform points."""
     from valis.valtils import get_name
 
@@ -89,11 +89,11 @@ def _transform_points_as_image(
     slide_src: Slide,
     x: np.ndarray,
     y: np.ndarray,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
     silent: bool = False,
-) -> tuple[np.ndarray, np.ndarray, pd.DataFrame]:
+) -> tuple[np.ndarray, np.ndarray, pl.DataFrame]:
     height, width = slide_src.slide_dimensions_wh[0][::-1]
     image_of_index, index_of_coords, x, y = _prepare_transform_coordinate_image(height, width, x, y)
     image_of_index_transformed, _ = _transform_coordinate_image(
@@ -135,7 +135,7 @@ def _transform_coordinate_image(
 def transform_points_df(
     registrar: Valis,
     source_path: PathLike,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
     x_key: str = "x",
@@ -144,7 +144,7 @@ def transform_points_df(
     replace: bool = False,
     as_image: bool = False,
     silent: bool = False,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """Transform points in a dataframe.
 
     Parameters
@@ -153,7 +153,7 @@ def transform_points_df(
         Valis object
     source_path : PathLike
         Path to source slide
-    df : pd.DataFrame
+    df : pl.DataFrame
         Dataframe with x and y columns
     crop : str, optional
         Crop method, by default "reference"
@@ -190,7 +190,7 @@ def transform_points_df(
 def _transform_points_df(
     registrar: Valis,
     source_path: PathLike,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     x_key: str = "x",
     y_key: str = "y",
     crop: str | bool | ValisCrop = "reference",
@@ -199,7 +199,7 @@ def _transform_points_df(
     replace: bool = False,
     as_image: bool = False,
     silent: bool = False,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     if x_key not in df.columns or y_key not in df.columns:
         raise ValueError(f"Dataframe must have '{x_key}' and '{y_key}' columns.")
     if replace and suffix == "_transformed":
@@ -226,7 +226,7 @@ def _transform_points_df(
 def transform_vertices_df(
     registrar: Valis,
     source_path: PathLike,
-    df: pd.DataFrame,
+    df: pl.DataFrame,
     crop: str | bool | ValisCrop = "reference",
     non_rigid: bool = True,
     x_key: str = "vertex_x",
@@ -234,7 +234,7 @@ def transform_vertices_df(
     suffix: str = "_transformed",
     replace: bool = False,
     silent: bool = False,
-) -> pd.DataFrame:
+) -> pl.DataFrame:
     """Transform points in a dataframe.
 
     Parameters
@@ -243,7 +243,7 @@ def transform_vertices_df(
         Valis object
     source_path : PathLike
         Path to source slide
-    df : pd.DataFrame
+    df : pl.DataFrame
         Dataframe with x and y columns
     crop : str, optional
         Crop method, by default "reference"
@@ -506,11 +506,16 @@ def transform_attached_points(
             if x_key not in df.columns or y_key not in df.columns:
                 raise ValueError(f"Invalid columns: {df.columns}")
             # change dtype to float64
-            df.loc[:, x_key] = df[x_key].astype(np.float64)
-            df.loc[:, y_key] = df[y_key].astype(np.float64)
+            df = df.with_columns(pl.col(x_key).cast(pl.Float64), pl.col(y_key).cast(pl.Float64))
 
             # Valis operates in index units, so we need to convert from physical units to index units explicitly
-            df[x_key], df[y_key] = _transform_original_from_um_to_px(df[x_key], df[y_key], is_px, source_pixel_size)
+            transformed_x, transformed_y = _transform_original_from_um_to_px(
+                df[x_key].to_numpy(),
+                df[y_key].to_numpy(),
+                is_px,
+                source_pixel_size,
+            )
+            df = df.with_columns(pl.Series(x_key, transformed_x), pl.Series(y_key, transformed_y))
 
             # transform the points
             df_transformed = transform_points_df(
@@ -525,18 +530,19 @@ def transform_attached_points(
                 non_rigid=non_rigid,
                 as_image=as_image,
             )
-            df_transformed[x_key], df_transformed[y_key] = _transform_transformed_from_px_to_um(
-                df_transformed[x_key],
-                df_transformed[y_key],
+            transformed_x, transformed_y = _transform_transformed_from_px_to_um(
+                df_transformed[x_key].to_numpy(),
+                df_transformed[y_key].to_numpy(),
                 is_px,
                 target_pixel_size,
             )
+            df_transformed = df_transformed.with_columns(pl.Series(x_key, transformed_x), pl.Series(y_key, transformed_y))
 
             if path.suffix in [".csv", ".txt", ".tsv"]:
                 sep = {"csv": ",", "txt": "\t", "tsv": "\t"}[path.suffix[1:]]
-                df_transformed.to_csv(output_path, index=False, sep=sep)
+                df_transformed.write_csv(output_path, separator=sep)
             elif path.suffix == ".parquet":
-                df_transformed.to_parquet(output_path, index=False)
+                df_transformed.write_parquet(output_path)
             else:
                 raise ValueError(f"Invalid file extension: {path.suffix}")
             paths_.append(output_path)
