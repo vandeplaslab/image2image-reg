@@ -11,8 +11,9 @@ from koyo.json import read_json_data
 from koyo.typing import PathLike
 from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 
-from image2image_reg.enums import ArrayLike, CoordinateFlip, ImageType, BackgroundSubtractType
+from image2image_reg.enums import BackgroundSubtractType, CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
+from image2image_reg.models.paths import serialize_path
 from image2image_reg.utils.utilities import update_kwargs_on_channel_names
 
 
@@ -306,15 +307,23 @@ class Preprocessing(BaseModel):
         tooltip = tooltip.removesuffix("\n")
         return text, tooltip
 
-    def to_dict(self, as_wsireg: bool = False) -> dict:
+    def to_dict(
+        self,
+        as_wsireg: bool = False,
+        project_dir: PathLike | None = None,
+        path_roots: ty.Mapping[str, PathLike] | None = None,
+    ) -> dict:
         """Return dict."""
         data = self.model_dump(exclude_none=True, exclude_defaults=True)
         if data.get("crop_bbox") and hasattr(data["crop_bbox"], "to_dict"):
             data["crop_bbox"] = data["crop_bbox"].to_dict(as_wsireg)
         if data.get("crop_polygon") and hasattr(data["crop_polygon"], "to_dict"):
             data["crop_polygon"] = data["crop_polygon"].to_dict(as_wsireg)
-        if data.get("mask") and isinstance(data["mask"], ArrayLike):
-            data["mask"] = "ArrayLike"
+        if data.get("mask"):
+            if isinstance(data["mask"], (str, Path)):
+                data["mask"] = serialize_path(data["mask"], project_dir=project_dir, path_roots=path_roots)
+            else:
+                data["mask"] = "ArrayLike"
         if data.get("mask_bbox") and hasattr(data["mask_bbox"], "to_dict"):
             data["mask_bbox"] = data["mask_bbox"].to_dict(as_wsireg)
         if data.get("mask_polygon") and hasattr(data["mask_polygon"], "to_dict"):
@@ -432,7 +441,7 @@ class Preprocessing(BaseModel):
                 kwargs["invert_intensity"] = False
                 kwargs["equalize_histogram"] = True
                 kwargs["contrast_enhance"] = False
-        if (which =="any" and not changed) or which == "exclude_brightfield":
+        if (which == "any" and not changed) or which == "exclude_brightfield":
             changed, kwargs = update_kwargs_on_channel_names(["bright", "brightfield"], _exclude=True, **kwargs)
             if changed:
                 kwargs["invert_intensity"] = False

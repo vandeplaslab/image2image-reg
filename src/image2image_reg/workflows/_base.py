@@ -16,6 +16,13 @@ from loguru import logger
 from image2image_reg._typing import AttachedShapeOrPointDict
 from image2image_reg.models import Export, Modality, Preprocessing
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
+from image2image_reg.models.paths import (
+    load_path_roots,
+    resolve_path,
+    resolve_path_list,
+    serialize_path,
+    serialize_path_list,
+)
 
 if ty.TYPE_CHECKING:
     from image2image_io.readers import BaseReader
@@ -41,6 +48,7 @@ class Workflow:
         merge: bool = False,
         log: bool = False,
         init: bool = True,
+        path_roots: dict[str, PathLike] | None = None,
         **_kwargs: ty.Any,
     ):
         # setup project directory
@@ -61,6 +69,7 @@ class Workflow:
         self.name = self.format_project_name(name)
         self.cache_images = cache
         self.merge_images = merge
+        self.path_roots = load_path_roots(path_roots)
 
         # setup modalities
         self.modalities: dict[str, Modality] = {}
@@ -113,6 +122,30 @@ class Workflow:
 
     def _get_config(self, **kwargs: ty.Any) -> dict:
         raise NotImplementedError("Must implement method")
+
+    def _serialize_path(self, path: PathLike) -> str | dict[str, str]:
+        """Serialize a workflow path using this project's path context."""
+        return serialize_path(path, project_dir=self.project_dir, path_roots=self.path_roots)
+
+    def _resolve_path(self, path: PathLike | dict[str, str]) -> Path | str:
+        """Resolve a serialized path using this project's path context."""
+        return resolve_path(path, project_dir=self.project_dir, path_roots=self.path_roots, cache_dir=self.cache_dir)
+
+    def _serialize_attachment_paths(
+        self,
+        attachments: dict[str, AttachedShapeOrPointDict] | None,
+    ) -> dict[str, AttachedShapeOrPointDict] | None:
+        """Serialize attachment file lists without mutating workflow state."""
+        if not attachments:
+            return None
+        serialized = deepcopy(attachments)
+        for attachment in serialized.values():
+            attachment["files"] = serialize_path_list(
+                attachment["files"],
+                project_dir=self.project_dir,
+                path_roots=self.path_roots,
+            )
+        return serialized
 
     def save(self, **kwargs: ty.Any) -> Path:
         """Save configuration to file."""
@@ -778,16 +811,22 @@ class Workflow:
     def _load_modalities_from_config(self, config: dict, raise_on_error: bool = True) -> None:
         with MeasureTimer() as timer:
             for name, modality in config["modalities"].items():
-                if not Path(modality["path"]).exists() and raise_on_error:
-                    raise ValueError(f"Modality path '{modality['path']}' does not exist.")
-                preprocessing = modality.get("preprocessing", {})
+                modality_path = self._resolve_path(modality["path"])
+                if not Path(modality_path).exists() and raise_on_error:
+                    raise ValueError(f"Modality path '{modality_path}' does not exist.")
+                preprocessing = deepcopy(modality.get("preprocessing", {}))
+                if preprocessing.get("mask"):
+                    preprocessing["mask"] = self._resolve_path(preprocessing["mask"])
+                mask = modality.get("mask", None)
+                if mask is not None:
+                    mask = self._resolve_path(mask)
                 self.add_modality(
                     name=name,
-                    path=modality["path"],
+                    path=modality_path,
                     preprocessing=Preprocessing(**preprocessing) if preprocessing else None,
                     channel_names=modality.get("channel_names", None),
                     channel_colors=modality.get("channel_colors", None),
-                    mask=modality.get("mask", None),
+                    mask=mask,
                     mask_bbox=modality.get("mask_bbox", None),
                     mask_polygon=modality.get("mask_polygon", None),
                     output_pixel_size=modality.get("output_pixel_size", None),
@@ -816,6 +855,12 @@ class Workflow:
                     if "attach_to_modality" in shape_dict:
                         shape_dict["attach_to"] = shape_dict.pop("attach_to_modality")
                     assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    shape_dict["files"] = resolve_path_list(
+                        shape_dict["files"],
+                        project_dir=self.project_dir,
+                        path_roots=self.path_roots,
+                        cache_dir=self.cache_dir,
+                    )
                     self.attachment_shapes[name] = shape_dict
                 logger.trace(f"Loaded attachment shapes in {timer(since_last=True)}")
 
@@ -828,6 +873,12 @@ class Workflow:
                     if "attach_to_modality" in shape_dict:
                         shape_dict["attach_to"] = shape_dict.pop("attach_to_modality")
                     assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    shape_dict["files"] = resolve_path_list(
+                        shape_dict["files"],
+                        project_dir=self.project_dir,
+                        path_roots=self.path_roots,
+                        cache_dir=self.cache_dir,
+                    )
                     self.attachment_points[name] = shape_dict
                 logger.trace(f"Loaded attachment points in {timer(since_last=True)}")
 
@@ -872,23 +923,41 @@ class Workflow:
             source_dirs = [source_dirs]
 
         source_dirs = [Path(source_dir) for source_dir in source_dirs]
+        project_dir = Path(path)
+        if project_dir.is_file():
+            project_dir = project_dir.parent
         config = cls.read_config(path)
-        config["modalities"] = cls._update_modality_paths(config["modalities"], source_dirs, recursive)
-        config["attachment_shapes"] = cls._update_attachment_paths(config["attachment_shapes"], source_dirs, recursive)
-        config["attachment_points"] = cls._update_attachment_paths(config["attachment_points"], source_dirs, recursive)
+        config["modalities"] = cls._update_modality_paths(config["modalities"], source_dirs, project_dir, recursive)
+        config["attachment_shapes"] = cls._update_attachment_paths(
+            config["attachment_shapes"],
+            source_dirs,
+            project_dir,
+            recursive,
+        )
+        config["attachment_points"] = cls._update_attachment_paths(
+            config["attachment_points"],
+            source_dirs,
+            project_dir,
+            recursive,
+        )
         cls.write_config(path, config)
 
     @staticmethod
-    def _update_modality_paths(config: dict[str, dict], source_dirs: list[Path], recursive: bool = False) -> dict:
+    def _update_modality_paths(
+        config: dict[str, dict],
+        source_dirs: list[Path],
+        project_dir: Path,
+        recursive: bool = False,
+    ) -> dict:
         for modality in config.values():
             name = modality["name"]
-            path = clean_path(modality["path"])
+            path = clean_path(resolve_path(modality["path"], project_dir=project_dir))
             if not path.exists():
                 logger.trace(f"Path '{path}' does not exist for modality={name}.")
                 for source_dir in source_dirs:
                     updated, new_path = _get_new_path(path, source_dir, recursive=recursive)
                     if updated:
-                        modality["path"] = str(new_path)
+                        modality["path"] = serialize_path(new_path, project_dir=project_dir)
                         logger.trace(f"Updated path for modality={name} to '{new_path}'.")
             else:
                 logger.success(f"Path '{path}' exists for modality={name}.")
@@ -898,19 +967,20 @@ class Workflow:
     def _update_attachment_paths(
         config: dict[str, AttachedShapeOrPointDict] | None,
         source_dirs: list[Path],
+        project_dir: Path,
         recursive: bool = False,
     ) -> AttachedShapeOrPointDict | None:
         if not config:
             return config
         for attachment in config.values():
             for i, path in enumerate(attachment["files"]):
-                path = clean_path(path)
+                path = clean_path(resolve_path(path, project_dir=project_dir))
                 if not path.exists():
                     logger.trace(f"Path '{path}' does not exist for attachment={attachment}.")
                     for source_dir in source_dirs:
                         _updated, new_path = _get_new_path(path, source_dir, recursive=recursive)
                         if new_path.exists():
-                            attachment["files"][i] = str(new_path)
+                            attachment["files"][i] = serialize_path(new_path, project_dir=project_dir)
                             logger.trace(f"Updated path for attachment={attachment} to '{new_path}'.")
                 else:
                     logger.success(f"Path '{path}' exists for attachment={attachment}.")

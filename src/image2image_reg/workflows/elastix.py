@@ -126,7 +126,13 @@ class ElastixReg(Workflow):
                 )
 
     @classmethod
-    def from_path(cls, path: PathLike, raise_on_error: bool = True, quick: bool = False) -> ElastixReg:
+    def from_path(
+        cls,
+        path: PathLike,
+        raise_on_error: bool = True,
+        quick: bool = False,
+        path_roots: dict[str, PathLike] | None = None,
+    ) -> ElastixReg:
         """Initialize based on the project path."""
         path = Path(path)
         if not path.exists():
@@ -152,7 +158,7 @@ class ElastixReg(Workflow):
             if config is None:
                 config = {}
 
-            obj = cls(project_dir=path, **config)
+            obj = cls(project_dir=path, path_roots=path_roots, **config)
             if config_path.exists():
                 obj.load_from_i2reg(raise_on_error=raise_on_error, quick=quick)
             elif list(obj.project_dir.glob("*.yaml")):
@@ -538,7 +544,7 @@ class ElastixReg(Workflow):
 
     def has_registration_path(self, source: str, target: str, through: str | None = None) -> bool:
         """Check whether registration path exists."""
-        modalities = {"source": source, "target": through if through else target}
+        modalities = {"source": source, "target": through or target}
         return any(node["modalities"] == modalities for node in self.registration_nodes)
 
     def add_registration_path(
@@ -597,7 +603,7 @@ class ElastixReg(Workflow):
     def find_index_of_registration_path(self, source: str, target: str, through: str | None = None) -> int | None:
         """Remove a registration path."""
         index = None
-        modalities = {"source": source, "target": through if through else target}
+        modalities = {"source": source, "target": through or target}
         for i, node in enumerate(self.registration_nodes):
             if node["modalities"] == modalities:
                 index = i
@@ -640,10 +646,16 @@ class ElastixReg(Workflow):
             if preprocessing.get("source"):
                 source_preprocessing = preprocessing["source"]
                 if isinstance(source_preprocessing, dict):
+                    source_preprocessing = deepcopy(source_preprocessing)
+                    if source_preprocessing.get("mask"):
+                        source_preprocessing["mask"] = self._resolve_path(source_preprocessing["mask"])
                     source_preprocessing = Preprocessing(**source_preprocessing)  # type: ignore[arg-type]
             if preprocessing.get("target"):
                 target_preprocessing = preprocessing["target"]
                 if isinstance(target_preprocessing, dict):
+                    target_preprocessing = deepcopy(target_preprocessing)
+                    if target_preprocessing.get("mask"):
+                        target_preprocessing["mask"] = self._resolve_path(target_preprocessing["mask"])
                     target_preprocessing = Preprocessing(**target_preprocessing)  # type: ignore[arg-type]
 
         # validate transform
@@ -662,7 +674,7 @@ class ElastixReg(Workflow):
         # create graph edges
         self.registration_nodes.append(
             {
-                "modalities": {"source": source, "target": through if through else target},
+                "modalities": {"source": source, "target": through or target},
                 "params": transform,
                 "registered": False,
                 "transforms": None,
@@ -1139,7 +1151,7 @@ class ElastixReg(Workflow):
         max_size: int = 2048,
         overwrite: bool = False,
     ) -> tuple[list, list, list]:
-        from image2image_io.utils.utilities import clip_shape, get_shape_of_image, get_pyramid_for_min_size
+        from image2image_io.utils.utilities import clip_shape, get_pyramid_for_min_size, get_shape_of_image
         from koyo.visuals import save_rgb
 
         from image2image_reg.elastix.transform import transform_images_for_pyramid
@@ -2107,8 +2119,16 @@ class ElastixReg(Workflow):
             source = edge["modalities"]["source"]
             target = self.registration_paths[source][-1]
             through = None if len(self.registration_paths[source]) == 1 else self.registration_paths[source][0]
-            source_preprocessing = edge["source_preprocessing"].to_dict() if edge["source_preprocessing"] else None
-            target_preprocessing = edge["target_preprocessing"].to_dict() if edge["target_preprocessing"] else None
+            source_preprocessing = (
+                edge["source_preprocessing"].to_dict(project_dir=self.project_dir, path_roots=self.path_roots)
+                if edge["source_preprocessing"]
+                else None
+            )
+            target_preprocessing = (
+                edge["target_preprocessing"].to_dict(project_dir=self.project_dir, path_roots=self.path_roots)
+                if edge["target_preprocessing"]
+                else None
+            )
             registration_paths[f"reg_path_{index}"] = {
                 "source": source,
                 "target": target,
@@ -2128,10 +2148,16 @@ class ElastixReg(Workflow):
                         "params": reg_edge["params"],
                         "registered": reg_edge["registered"],
                         "transform_tag": reg_edge["transform_tag"],
-                        "source_preprocessing": reg_edge["source_preprocessing"].to_dict()
+                        "source_preprocessing": reg_edge["source_preprocessing"].to_dict(
+                            project_dir=self.project_dir,
+                            path_roots=self.path_roots,
+                        )
                         if reg_edge["source_preprocessing"]
                         else None,
-                        "target_preprocessing": reg_edge["target_preprocessing"].to_dict()
+                        "target_preprocessing": reg_edge["target_preprocessing"].to_dict(
+                            project_dir=self.project_dir,
+                            path_roots=self.path_roots,
+                        )
                         if reg_edge["target_preprocessing"]
                         else None,
                     },
@@ -2139,11 +2165,11 @@ class ElastixReg(Workflow):
 
         modalities_out: dict[str, dict] = {}
         for modality in self.modalities.values():
-            modalities_out[modality.name] = modality.to_dict()
+            modalities_out[modality.name] = modality.to_dict(project_dir=self.project_dir, path_roots=self.path_roots)
 
         # write config
         config: ElastixRegConfig = {
-            "schema_version": "1.1",
+            "schema_version": "1.2",
             "name": self.name,
             # "output_dir": str(self.project_dir),
             "cache_images": self.cache_images,
@@ -2153,8 +2179,8 @@ class ElastixReg(Workflow):
             "registration_paths": registration_paths,
             "registration_graph_edges": reg_graph_edges if registered else None,
             "original_size_transforms": self.original_size_transforms if registered else None,
-            "attachment_shapes": self.attachment_shapes if len(self.attachment_shapes) > 0 else None,
-            "attachment_points": self.attachment_points if len(self.attachment_points) > 0 else None,
+            "attachment_shapes": self._serialize_attachment_paths(self.attachment_shapes),
+            "attachment_points": self._serialize_attachment_paths(self.attachment_points),
             "attachment_images": self.attachment_images if len(self.attachment_images) > 0 else None,
             "merge": self.merge_images,
             "merge_images": self.merge_modalities if len(self.merge_modalities) > 0 else None,

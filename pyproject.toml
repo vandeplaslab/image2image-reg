@@ -41,6 +41,7 @@ dynamic = ["version"]
 dependencies = [
     "koyo>=0.3.5",
     "pydantic>=2",
+    "pydantic-settings",
     "numpy",
 #    "itk!=5.4.4; platform_system=='MacOS'",
     "itk==5.4.0",
@@ -69,6 +70,10 @@ valis = [
     "opencv-contrib-python; python_version < '3.13'",
     "fastcluster; python_version < '3.13'",
     "scikit-learn; python_version < '3.13'",
+]
+paths = [
+    "fsspec",
+    "universal-pathlib",
 ]
 
 [dependency-groups]
