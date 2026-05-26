@@ -1,4 +1,5 @@
 """Test portable path serialization."""
+from __future__ import annotations
 
 import json
 from pathlib import Path
@@ -25,6 +26,21 @@ def test_serialize_windows_root_path(tmp_path: Path):
 
     assert data == {"path_type": "root", "root": "dataset", "path": "slides/image.tif"}
     assert resolve_path(data, path_roots={"dataset": tmp_path / "lab"}) == tmp_path / "lab" / "slides" / "image.tif"
+
+
+def test_serialize_macos_mounted_volume_as_root_path():
+    data = serialize_path(
+        "/Volumes/msrc/spraggins/projects/HPAP/2-Pancreas HE images - for training/Raw/HPAP-003-T-3-3.ome.tif",
+    )
+
+    assert data == {
+        "path_type": "root",
+        "root": "msrc",
+        "path": "spraggins/projects/HPAP/2-Pancreas HE images - for training/Raw/HPAP-003-T-3-3.ome.tif",
+    }
+    assert resolve_path(data, path_roots={"msrc": "Z:/"}) == Path(
+        "Z:/spraggins/projects/HPAP/2-Pancreas HE images - for training/Raw/HPAP-003-T-3-3.ome.tif",
+    )
 
 
 def test_load_path_roots_from_environment(monkeypatch):

@@ -13,6 +13,7 @@ from koyo.typing import PathLike
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+MACOS_VOLUME_ROOT = "/Volumes"
 PathRootMap = dict[str, str]
 SerializedPath = dict[str, str]
 PathValue = str | SerializedPath
@@ -98,6 +99,9 @@ def serialize_path(
         return {"path_type": "uri", "uri": path_text}
 
     if project_dir is None and not path_roots:
+        mounted_root = _serialize_macos_volume_root(path_text)
+        if mounted_root is not None:
+            return mounted_root
         return path_text
 
     if project_dir is not None:
@@ -110,6 +114,10 @@ def serialize_path(
         relative_path = _relative_to_base(path_text, root_path)
         if relative_path is not None:
             return {"path_type": "root", "root": root_name, "path": relative_path}
+
+    mounted_root = _serialize_macos_volume_root(path_text)
+    if mounted_root is not None:
+        return mounted_root
 
     if _is_absolute_path_text(path_text):
         return {"path_type": "absolute", "path": path_text}
@@ -184,9 +192,12 @@ def resolve_path(
     if path_type == "root":
         root_name = path.get("root")
         roots = load_path_roots(path_roots)
-        if not root_name or root_name not in roots:
+        if not root_name:
             raise MissingPathRootError(root_name)
-        return Path(roots[root_name]) / path["path"]
+        root_path = roots.get(root_name) or _local_macos_volume_root(root_name)
+        if root_path is None:
+            raise MissingPathRootError(root_name)
+        return Path(root_path) / path["path"]
     if path_type == "absolute":
         return Path(path["path"])
     if path_type == "uri":
@@ -276,6 +287,33 @@ def _relative_to_text_base(path: str, base: str) -> str | None:
     prefix = f"{base_compare}/"
     if path_compare.startswith(prefix):
         return path_text[len(base_text) + 1 :]
+    return None
+
+
+def _relative_to_macos_volume(path: str) -> tuple[str, str] | None:
+    path_text = _normalize_path_text(path).rstrip("/")
+    prefix = f"{MACOS_VOLUME_ROOT}/"
+    if not path_text.startswith(prefix):
+        return None
+    remainder = path_text[len(prefix) :]
+    root_name, _, relative_path = remainder.partition("/")
+    if not root_name:
+        return None
+    return root_name, relative_path or "."
+
+
+def _serialize_macos_volume_root(path: str) -> SerializedPath | None:
+    mounted_root = _relative_to_macos_volume(path)
+    if mounted_root is None:
+        return None
+    root_name, relative_path = mounted_root
+    return {"path_type": "root", "root": root_name, "path": relative_path}
+
+
+def _local_macos_volume_root(root_name: str) -> Path | None:
+    root_path = Path(MACOS_VOLUME_ROOT) / root_name
+    if root_path.exists():
+        return root_path
     return None
 
 
