@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import time
 import typing as ty
 from copy import deepcopy
@@ -22,6 +23,8 @@ from image2image_reg.models.paths import (
     resolve_path_list,
     serialize_path,
     serialize_path_list,
+    upgrade_path,
+    upgrade_path_list,
 )
 
 if ty.TYPE_CHECKING:
@@ -814,7 +817,7 @@ class Workflow:
                 modality_path = self._resolve_path(modality["path"])
                 if not Path(modality_path).exists() and raise_on_error:
                     raise ValueError(f"Modality path '{modality_path}' does not exist.")
-                preprocessing = deepcopy(modality.get("preprocessing", {}))
+                preprocessing = deepcopy(modality.get("preprocessing") or {})
                 if preprocessing.get("mask"):
                     preprocessing["mask"] = self._resolve_path(preprocessing["mask"])
                 mask = modality.get("mask", None)
@@ -917,7 +920,98 @@ class Workflow:
         write_json_data(path, config)
 
     @classmethod
-    def update_paths(cls, path: PathLike, source_dirs: PathLike | list[PathLike], recursive: bool = False) -> None:
+    def migrate_paths(
+        cls,
+        path: PathLike,
+        path_roots: dict[str, PathLike] | None = None,
+        backup: bool = True,
+    ) -> list[Path]:
+        """Migrate legacy config path strings to portable serialized path values."""
+        updated_paths: list[Path] = []
+        for config_path in cls._iter_config_paths(path):
+            config = cls.read_config(config_path)
+            project_dir = config_path.parent
+            migrated_config, changed = cls.migrate_config_paths(
+                config,
+                project_dir=project_dir,
+                path_roots=path_roots,
+            )
+            if not changed:
+                logger.info(f"No legacy paths found in '{config_path}'.")
+                continue
+            if backup:
+                backup_path = _backup_config_path(config_path)
+                logger.info(f"Backed up '{config_path}' to '{backup_path}'.")
+            cls.write_config(config_path, migrated_config)
+            updated_paths.append(config_path)
+            logger.success(f"Migrated paths in '{config_path}'.")
+        return updated_paths
+
+    @classmethod
+    def migrate_config_paths(
+        cls,
+        config: dict,
+        project_dir: PathLike,
+        path_roots: dict[str, PathLike] | None = None,
+    ) -> tuple[dict, bool]:
+        """Migrate path fields in a project config without loading referenced files."""
+        migrated = deepcopy(config)
+        changed = False
+
+        for modality in migrated.get("modalities", {}).values():
+            changed |= _upgrade_dict_path(modality, "path", project_dir, path_roots)
+            changed |= _upgrade_dict_path(modality, "mask", project_dir, path_roots)
+            preprocessing = modality.get("preprocessing")
+            if isinstance(preprocessing, dict):
+                changed |= _upgrade_dict_path(preprocessing, "mask", project_dir, path_roots)
+
+        for registration_path in migrated.get("registration_paths", {}).values():
+            changed |= _upgrade_preprocessing_path(registration_path, "source_preprocessing", project_dir, path_roots)
+            changed |= _upgrade_preprocessing_path(registration_path, "target_preprocessing", project_dir, path_roots)
+
+        for registration_edge in migrated.get("registration_graph_edges") or []:
+            changed |= _upgrade_preprocessing_path(registration_edge, "source_preprocessing", project_dir, path_roots)
+            changed |= _upgrade_preprocessing_path(registration_edge, "target_preprocessing", project_dir, path_roots)
+
+        changed |= _upgrade_attachment_config_paths(
+            migrated.get("attachment_shapes"),
+            legacy_key="shape_files",
+            project_dir=project_dir,
+            path_roots=path_roots,
+        )
+        changed |= _upgrade_attachment_config_paths(
+            migrated.get("attachment_points"),
+            legacy_key="point_files",
+            project_dir=project_dir,
+            path_roots=path_roots,
+        )
+        return migrated, changed
+
+    @classmethod
+    def _iter_config_paths(cls, path: PathLike) -> list[Path]:
+        """Return project config files that should be migrated."""
+        path = Path(path)
+        if path.is_file():
+            return [path]
+        if not path.exists():
+            raise ValueError(f"Path does not exist ({path}).")
+        config_names = [cls.CONFIG_NAME]
+        registered_config_name = getattr(cls, "REGISTERED_CONFIG_NAME", None)
+        if registered_config_name:
+            config_names.append(registered_config_name)
+        config_paths = [path / config_name for config_name in config_names if (path / config_name).exists()]
+        if not config_paths:
+            raise ValueError(f"Could not find config file at '{path}'.")
+        return config_paths
+
+    @classmethod
+    def update_paths(
+        cls,
+        path: PathLike,
+        source_dirs: PathLike | list[PathLike],
+        recursive: bool = False,
+        path_roots: dict[str, PathLike] | None = None,
+    ) -> None:
         """Update source paths."""
         if isinstance(source_dirs, (str, Path)):
             source_dirs = [source_dirs]
@@ -927,18 +1021,27 @@ class Workflow:
         if project_dir.is_file():
             project_dir = project_dir.parent
         config = cls.read_config(path)
-        config["modalities"] = cls._update_modality_paths(config["modalities"], source_dirs, project_dir, recursive)
+        config, _changed = cls.migrate_config_paths(config, project_dir=project_dir, path_roots=path_roots)
+        config["modalities"] = cls._update_modality_paths(
+            config["modalities"],
+            source_dirs,
+            project_dir,
+            recursive,
+            path_roots,
+        )
         config["attachment_shapes"] = cls._update_attachment_paths(
             config["attachment_shapes"],
             source_dirs,
             project_dir,
             recursive,
+            path_roots,
         )
         config["attachment_points"] = cls._update_attachment_paths(
             config["attachment_points"],
             source_dirs,
             project_dir,
             recursive,
+            path_roots,
         )
         cls.write_config(path, config)
 
@@ -948,16 +1051,17 @@ class Workflow:
         source_dirs: list[Path],
         project_dir: Path,
         recursive: bool = False,
+        path_roots: dict[str, PathLike] | None = None,
     ) -> dict:
         for modality in config.values():
             name = modality["name"]
-            path = clean_path(resolve_path(modality["path"], project_dir=project_dir))
+            path = clean_path(resolve_path(modality["path"], project_dir=project_dir, path_roots=path_roots))
             if not path.exists():
                 logger.trace(f"Path '{path}' does not exist for modality={name}.")
                 for source_dir in source_dirs:
                     updated, new_path = _get_new_path(path, source_dir, recursive=recursive)
                     if updated:
-                        modality["path"] = serialize_path(new_path, project_dir=project_dir)
+                        modality["path"] = serialize_path(new_path, project_dir=project_dir, path_roots=path_roots)
                         logger.trace(f"Updated path for modality={name} to '{new_path}'.")
             else:
                 logger.success(f"Path '{path}' exists for modality={name}.")
@@ -969,22 +1073,90 @@ class Workflow:
         source_dirs: list[Path],
         project_dir: Path,
         recursive: bool = False,
+        path_roots: dict[str, PathLike] | None = None,
     ) -> AttachedShapeOrPointDict | None:
         if not config:
             return config
         for attachment in config.values():
             for i, path in enumerate(attachment["files"]):
-                path = clean_path(resolve_path(path, project_dir=project_dir))
+                path = clean_path(resolve_path(path, project_dir=project_dir, path_roots=path_roots))
                 if not path.exists():
                     logger.trace(f"Path '{path}' does not exist for attachment={attachment}.")
                     for source_dir in source_dirs:
                         _updated, new_path = _get_new_path(path, source_dir, recursive=recursive)
                         if new_path.exists():
-                            attachment["files"][i] = serialize_path(new_path, project_dir=project_dir)
+                            attachment["files"][i] = serialize_path(
+                                new_path,
+                                project_dir=project_dir,
+                                path_roots=path_roots,
+                            )
                             logger.trace(f"Updated path for attachment={attachment} to '{new_path}'.")
                 else:
                     logger.success(f"Path '{path}' exists for attachment={attachment}.")
         return config
+
+
+def _upgrade_dict_path(
+    data: dict[str, ty.Any],
+    key: str,
+    project_dir: PathLike,
+    path_roots: dict[str, PathLike] | None,
+) -> bool:
+    """Upgrade a known path field in a config dictionary."""
+    if key not in data or data[key] is None:
+        return False
+    upgraded = upgrade_path(data[key], project_dir=project_dir, path_roots=path_roots)
+    if upgraded == data[key]:
+        return False
+    data[key] = upgraded
+    return True
+
+
+def _upgrade_preprocessing_path(
+    data: dict[str, ty.Any],
+    key: str,
+    project_dir: PathLike,
+    path_roots: dict[str, PathLike] | None,
+) -> bool:
+    """Upgrade the mask path nested under a preprocessing config field."""
+    preprocessing = data.get(key)
+    if not isinstance(preprocessing, dict):
+        return False
+    return _upgrade_dict_path(preprocessing, "mask", project_dir, path_roots)
+
+
+def _upgrade_attachment_config_paths(
+    attachments: dict[str, AttachedShapeOrPointDict] | None,
+    legacy_key: str,
+    project_dir: PathLike,
+    path_roots: dict[str, PathLike] | None,
+) -> bool:
+    """Upgrade attachment file path lists in a config dictionary."""
+    if not attachments:
+        return False
+    changed = False
+    for attachment in attachments.values():
+        if "files" not in attachment and legacy_key in attachment:
+            attachment["files"] = attachment.pop(legacy_key)
+            changed = True
+        if "files" not in attachment:
+            continue
+        upgraded_files = upgrade_path_list(attachment["files"], project_dir=project_dir, path_roots=path_roots)
+        if upgraded_files != attachment["files"]:
+            attachment["files"] = upgraded_files
+            changed = True
+    return changed
+
+
+def _backup_config_path(config_path: Path) -> Path:
+    """Create a non-overwriting backup beside a config file."""
+    backup_path = config_path.with_name(f"{config_path.name}.bak")
+    index = 1
+    while backup_path.exists():
+        backup_path = config_path.with_name(f"{config_path.name}.bak.{index}")
+        index += 1
+    shutil.copy2(config_path, backup_path)
+    return backup_path
 
 
 def _get_new_path(path: Path, source_dir: Path, recursive: bool = False) -> tuple[bool, Path]:

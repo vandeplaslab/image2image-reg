@@ -15,6 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PathRootMap = dict[str, str]
 SerializedPath = dict[str, str]
+PathValue = str | SerializedPath
 
 
 class PortablePathError(ValueError):
@@ -86,6 +87,8 @@ def serialize_path(
         serialized value stores the root name and relative path.
     """
     if isinstance(path, dict):
+        if "path_type" not in path:
+            raise UnknownPathTypeError(path.get("path_type"))
         return path
 
     path_text = _normalize_path_text(path)
@@ -113,6 +116,48 @@ def serialize_path(
     if project_dir is not None:
         return {"path_type": "relative", "base": "project", "path": path_text}
     return path_text
+
+
+def is_serialized_path(path: ty.Any) -> ty.TypeGuard[SerializedPath]:
+    """Return whether a config value already uses portable path serialization."""
+    return isinstance(path, dict) and "path_type" in path
+
+
+def upgrade_path(
+    path: PathLike | PurePath | SerializedPath | None,
+    project_dir: PathLike | None = None,
+    path_roots: ty.Mapping[str, PathLike] | None = None,
+) -> PathValue | None:
+    """Upgrade a legacy config path value to the portable format.
+
+    Already serialized path dictionaries are preserved unchanged. Empty values
+    and the historical ``ArrayLike`` sentinel are also preserved because they do
+    not represent filesystem paths.
+    """
+    if path is None:
+        return None
+    if is_serialized_path(path):
+        return path
+    if isinstance(path, dict):
+        raise UnknownPathTypeError(path.get("path_type"))
+    path_text = _normalize_path_text(path)
+    if not path_text or path_text == "ArrayLike":
+        return path_text
+    return serialize_path(path_text, project_dir=project_dir, path_roots=path_roots)
+
+
+def upgrade_path_list(
+    paths: ty.Iterable[PathLike | PurePath | SerializedPath],
+    project_dir: PathLike | None = None,
+    path_roots: ty.Mapping[str, PathLike] | None = None,
+) -> list[PathValue]:
+    """Upgrade a list of legacy config path values to the portable format."""
+    upgraded: list[PathValue] = []
+    for path in paths:
+        value = upgrade_path(path, project_dir=project_dir, path_roots=path_roots)
+        if value is not None:
+            upgraded.append(value)
+    return upgraded
 
 
 def resolve_path(
