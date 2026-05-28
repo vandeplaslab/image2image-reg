@@ -89,6 +89,28 @@ Utility:
   convert  Convert images to pyramidal OME-TIFF.
 ```
 
+## Portable project paths
+
+Project configs support portable path values. Existing configs that store old-style absolute path strings still load, and
+paths are upgraded to the portable format the next time the project is saved. To rewrite an existing project config
+without running registration, use:
+
+```bash
+i2reg elastix migrate-paths -p /path/to/project.wsireg
+i2reg valis migrate-paths -p /path/to/project.valis
+```
+
+Named roots can be configured per machine so shared configs can refer to the same dataset using local mount points:
+
+```bash
+export I2REG_PATH_ROOTS='{"dataset": "/mnt/lab-data"}'
+i2reg elastix migrate-paths -p /path/to/project.wsireg --path-root dataset=/mnt/lab-data
+```
+
+`--path-root NAME=PATH` overrides or extends `I2REG_PATH_ROOTS` for that command. Paths inside the project directory are
+stored relative to the project; paths inside named roots are stored using the root name; other absolute paths remain
+absolute for backward compatibility.
+
 ## Contributing
 
 Contributions are always welcome. Please feel free to submit PRs with new features, bug fixes, or documentation improvements.
