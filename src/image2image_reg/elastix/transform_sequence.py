@@ -799,7 +799,10 @@ def _read_final_elastix_transform(path: PathLike) -> tuple[list[dict[str, list[s
             transforms.append(tform)
             transform_sequence_index.append(index)
         return transforms, transform_sequence_index
-    raise ValueError("Cannot read final elastix transform.")
+    raise ValueError(  # noqa: TRY003
+        f"Cannot read final elastix transform. Supported file formats: '.json', '.elastix.json', '.elastix.json.gz'."
+        f"\nYou provided: {path.name}"
+    )
 
 
 # CLEANUP
