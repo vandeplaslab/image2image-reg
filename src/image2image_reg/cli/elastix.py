@@ -67,29 +67,6 @@ def is_valis(project_dir: Path) -> bool:
     return Path(project_dir).suffix in [".valis", ".i2valis"]
 
 
-def cli_parse_path_roots(ctx: click.Context, param: click.Parameter, value: tuple[str, ...]) -> dict[str, Path]:
-    """Parse named path root overrides from NAME=PATH options."""
-    path_roots: dict[str, Path] = {}
-    for item in value:
-        if "=" not in item:
-            raise click.BadParameter("Path roots must use NAME=PATH syntax.", ctx=ctx, param=param)
-        name, path = item.split("=", 1)
-        if not name or not path:
-            raise click.BadParameter("Path roots must include a non-empty name and path.", ctx=ctx, param=param)
-        path_roots[name] = Path(path).expanduser()
-    return path_roots
-
-
-path_root_ = click.option(
-    "--path-root",
-    "path_roots",
-    help="Named portable path root override in NAME=PATH format. Can be repeated.",
-    type=click.STRING,
-    multiple=True,
-    callback=cli_parse_path_roots,
-)
-
-
 @click.group("elastix", cls=GroupedGroup)
 def elastix() -> None:
     """Elastix whole-slide image registration."""
@@ -1416,32 +1393,11 @@ def clear_runner(
     required=True,
     multiple=True,
 )
-@path_root_
 @project_path_multi_
 @elastix.command("update", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-def update_cmd(
-    project_dir: list[str],
-    source_dir: list[str],
-    recursive: bool,
-    path_roots: dict[str, Path],
-) -> None:
+def update_cmd(project_dir: list[str], source_dir: list[str], recursive: bool) -> None:
     """Update project paths (e.g after folder move)."""
-    update_runner(project_dir, source_dir, recursive, valis=False, path_roots=path_roots)
-
-
-@click.option(
-    "--backup/--no-backup",
-    help="Create a backup of each config file before rewriting paths.",
-    is_flag=True,
-    default=True,
-    show_default=True,
-)
-@path_root_
-@project_path_multi_
-@elastix.command("migrate-paths", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-def migrate_paths_cmd(project_dir: list[str], path_roots: dict[str, Path], backup: bool) -> None:
-    """Migrate legacy project paths to portable path config values."""
-    migrate_paths_runner(project_dir, path_roots=path_roots, backup=backup, valis=False)
+    update_runner(project_dir, source_dir, recursive, valis=False)
 
 
 def update_runner(
@@ -1449,49 +1405,23 @@ def update_runner(
     source_dirs: list[PathLike],
     recursive: bool = False,
     valis: bool = False,
-    path_roots: dict[str, PathLike] | None = None,
 ) -> None:
-    """Update project paths."""
+    """Register images."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
         Parameter("Source directories", "--source_dirs", source_dirs),
         Parameter("Recursive", "-R/--recursive", recursive),
-        Parameter("Path roots", "--path-root", path_roots),
     )
 
     for path in paths:
         klass = ElastixReg if not valis else ValisReg
-        klass.update_paths(path, source_dirs, recursive=recursive, path_roots=path_roots)
+        klass.update_paths(path, source_dirs, recursive=recursive)
         with suppress(ValueError):
             obj = klass.from_path(path)
             obj.set_logger()
             obj.validate(allow_not_registered=True, require_paths=True)
-
-
-def migrate_paths_runner(
-    paths: list[PathLike],
-    path_roots: dict[str, PathLike] | None = None,
-    backup: bool = True,
-    valis: bool = False,
-) -> None:
-    """Migrate legacy project paths to portable path config values."""
-    from image2image_reg.workflows import ElastixReg, ValisReg
-
-    print_parameters(
-        Parameter("Project directory", "-p/--project_dir", paths),
-        Parameter("Path roots", "--path-root", path_roots),
-        Parameter("Backup", "--backup/--no-backup", backup),
-    )
-
-    klass = ElastixReg if not valis else ValisReg
-    for path in paths:
-        updated_paths = klass.migrate_paths(path, path_roots=path_roots, backup=backup)
-        if updated_paths:
-            logger.info(f"Migrated {len(updated_paths)} config file(s) in '{path}'.")
-        else:
-            logger.info(f"No path migration needed for '{path}'.")
 
 
 def open_in_viewer(project_dir: PathLike) -> None:

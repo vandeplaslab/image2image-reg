@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict, field_serializer, field_validator
 
 from image2image_reg.enums import BackgroundSubtractType, CoordinateFlip, ImageType
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
-from image2image_reg.models.paths import serialize_path
 from image2image_reg.utils.utilities import update_kwargs_on_channel_names
 
 
@@ -310,8 +309,6 @@ class Preprocessing(BaseModel):
     def to_dict(
         self,
         as_wsireg: bool = False,
-        project_dir: PathLike | None = None,
-        path_roots: ty.Mapping[str, PathLike] | None = None,
     ) -> dict:
         """Return dict."""
         data = self.model_dump(exclude_none=True, exclude_defaults=True)
@@ -320,9 +317,7 @@ class Preprocessing(BaseModel):
         if data.get("crop_polygon") and hasattr(data["crop_polygon"], "to_dict"):
             data["crop_polygon"] = data["crop_polygon"].to_dict(as_wsireg)
         if data.get("mask"):
-            if isinstance(data["mask"], (str, Path)):
-                data["mask"] = serialize_path(data["mask"], project_dir=project_dir, path_roots=path_roots)
-            else:
+            if not isinstance(data["mask"], (str, Path)):
                 data["mask"] = "ArrayLike"
         if data.get("mask_bbox") and hasattr(data["mask_bbox"], "to_dict"):
             data["mask_bbox"] = data["mask_bbox"].to_dict(as_wsireg)

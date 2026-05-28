@@ -13,7 +13,6 @@ from koyo.typing import PathLike
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from image2image_reg.models.export import Export
-from image2image_reg.models.paths import serialize_path
 from image2image_reg.models.preprocessing import Preprocessing
 
 # TODO: move mask/mask_bbox/mask_polygon/transform_mask to pre-processing
@@ -50,32 +49,20 @@ class Modality(BaseModel):
     def to_dict(
         self,
         as_wsireg: bool = False,
-        project_dir: PathLike | None = None,
-        path_roots: ty.Mapping[str, PathLike] | None = None,
     ) -> dict:
         """Convert to dict."""
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
         if data.get("preprocessing"):
             if isinstance(data["preprocessing"], Preprocessing):
-                data["preprocessing"] = data["preprocessing"].to_dict(
-                    as_wsireg,
-                    project_dir=project_dir,
-                    path_roots=path_roots,
-                )
+                data["preprocessing"] = data["preprocessing"].to_dict(as_wsireg)
             else:
                 pre = {}
                 for k, v in data["preprocessing"].items():
-                    pre[k] = (
-                        v.to_dict(as_wsireg, project_dir=project_dir, path_roots=path_roots)
-                        if hasattr(v, "to_dict")
-                        else v
-                    )
+                    pre[k] = v.to_dict(as_wsireg) if hasattr(v, "to_dict") else v
                 data["preprocessing"] = pre
         if data.get("export") and isinstance(data["export"], Export):
             data["export"] = data["export"].to_dict()
-        if isinstance(data["path"], (str, Path)):
-            data["path"] = serialize_path(data["path"], project_dir=project_dir, path_roots=path_roots)
-        else:
+        if not isinstance(data["path"], (str, Path)):
             data["path"] = "ArrayLike"
 
         # if export for wsireg, let's remove all extra components and rename few attributes

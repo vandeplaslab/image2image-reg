@@ -51,7 +51,6 @@ from image2image_reg.cli._common import (
     viewer_,
     has_i2i,
 )
-from image2image_reg.cli.elastix import path_root_
 from image2image_reg.enums import (
     PreprocessingOptions,
     ValisDetectorMethod,
@@ -869,34 +868,12 @@ if is_installed("valis"):
         required=True,
         multiple=True,
     )
-    @path_root_
     @project_path_multi_
     @valis.command("update", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-    def update_cmd(
-        project_dir: list[str],
-        source_dir: list[str],
-        recursive: bool,
-        path_roots: dict[str, Path],
-    ) -> None:
+    def update_cmd(project_dir: list[str], source_dir: list[str], recursive: bool) -> None:
         """Update project paths (e.g after folder move)."""
         from image2image_reg.cli.elastix import update_runner
 
-        update_runner(project_dir, source_dir, recursive, valis=True, path_roots=path_roots)
-
-    @click.option(
-        "--backup/--no-backup",
-        help="Create a backup of each config file before rewriting paths.",
-        is_flag=True,
-        default=True,
-        show_default=True,
-    )
-    @path_root_
-    @project_path_multi_
-    @valis.command("migrate-paths", help_group="Execute", context_settings=ALLOW_EXTRA_ARGS)
-    def migrate_paths_cmd(project_dir: list[str], path_roots: dict[str, Path], backup: bool) -> None:
-        """Migrate legacy project paths to portable path config values."""
-        from image2image_reg.cli.elastix import migrate_paths_runner
-
-        migrate_paths_runner(project_dir, path_roots=path_roots, backup=backup, valis=True)
+        update_runner(project_dir, source_dir, recursive, valis=True)
 else:
     valis = None

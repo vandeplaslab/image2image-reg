@@ -15,7 +15,6 @@ from tqdm import tqdm
 
 from image2image_reg._typing import ValisRegConfig
 from image2image_reg.enums import WriterMode
-from image2image_reg.models.paths import resolve_path, serialize_path, serialize_path_list
 from image2image_reg.workflows._base import Workflow
 
 if ty.TYPE_CHECKING:
@@ -84,7 +83,6 @@ class ValisReg(Workflow):
         cls,
         path: PathLike,
         raise_on_error: bool = True,
-        path_roots: dict[str, PathLike] | None = None,
     ) -> ValisReg:
         """Initialize based on the project path."""
         path = Path(path)
@@ -104,7 +102,7 @@ class ValisReg(Workflow):
                 config = read_json_data(config_path)
             if config and "name" not in config:
                 config["name"] = path.stem
-            obj = cls(project_dir=path, path_roots=path_roots, **config)
+            obj = cls(project_dir=path, **config)
             if config_path.exists():
                 obj.load_from_i2valis(raise_on_error=raise_on_error)
         logger.trace(f"Restored from config in {timer()}")
@@ -687,11 +685,11 @@ class ValisReg(Workflow):
         """Get configuration."""
         modalities_out: dict[str, dict] = {}
         for modality in self.modalities.values():
-            modalities_out[modality.name] = modality.to_dict(project_dir=self.project_dir, path_roots=self.path_roots)
+            modalities_out[modality.name] = modality.to_dict()
 
         # write config
         config: ValisRegConfig = {
-            "schema_version": "1.1",
+            "schema_version": "1.0",
             "name": self.name,
             "cache_images": self.cache_images,
             "reference": self.reference,
@@ -702,8 +700,8 @@ class ValisReg(Workflow):
             "feature_detector": self.feature_detector,
             "feature_matcher": self.feature_matcher,
             "modalities": modalities_out,
-            "attachment_shapes": self._serialize_attachment_paths(self.attachment_shapes),
-            "attachment_points": self._serialize_attachment_paths(self.attachment_points),
+            "attachment_shapes": self.attachment_shapes if len(self.attachment_shapes) > 0 else None,
+            "attachment_points": self.attachment_points if len(self.attachment_points) > 0 else None,
             "attachment_images": self.attachment_images if len(self.attachment_images) > 0 else None,
             "merge": self.merge_images,
             "merge_images": self.merge_modalities if len(self.merge_modalities) > 0 else None,
@@ -723,25 +721,17 @@ class ValisReg(Workflow):
 
 def get_config(
     config: dict[str, str] | PathLike,
-    project_dir: PathLike | None = None,
-    path_roots: dict[str, PathLike] | None = None,
 ) -> dict[str, str]:
     """Get configuration."""
     if isinstance(config, (str, Path)):
         config = Path(config)
-        if project_dir is None:
-            project_dir = config.parent
         assert config.exists(), f"{config} does not exist."
         config = read_json_data(config)
         assert isinstance(config, dict), f"{config} is not a dictionary."
-    return parse_config(config, project_dir=project_dir, path_roots=path_roots)
+    return parse_config(config)
 
 
-def parse_config(
-    config: dict[str, ty.Any],
-    project_dir: PathLike | None = None,
-    path_roots: dict[str, PathLike] | None = None,
-) -> dict[str, ty.Any]:
+def parse_config(config: dict[str, ty.Any]) -> dict[str, ty.Any]:
     """Parse configuration."""
     from image2image_reg.valis.utilities import get_preprocessor
 
@@ -757,18 +747,6 @@ def parse_config(
         raise ValueError("Filelist must be a list.")
     if not config["filelist"]:
         raise ValueError("Filelist is empty.")
-    cache_dir = Path(project_dir) / f"{config['project_name']}.valis" / "Cache" if project_dir is not None else None
-    config["filelist"] = [
-        resolve_path(path, project_dir=project_dir, path_roots=path_roots, cache_dir=cache_dir)
-        for path in config["filelist"]
-    ]
-    if config.get("reference"):
-        config["reference"] = resolve_path(
-            config["reference"],
-            project_dir=project_dir,
-            path_roots=path_roots,
-            cache_dir=cache_dir,
-        )
 
     # validate and reformat channel_kws
     channel_names = {}
@@ -793,7 +771,6 @@ def valis_init_configuration(
     non_rigid_reg: bool = False,
     micro_reg: bool = False,
     feature_detector: str = "sensitive_vgg",
-    path_roots: dict[str, PathLike] | None = None,
 ):
     """Create Valis configuration."""
     from natsort import natsorted, ns
@@ -836,9 +813,8 @@ def valis_init_configuration(
 
     config = {
         "project_name": project_name,
-        "path_schema_version": "1.0",
-        "filelist": serialize_path_list(filelist, project_dir=output_dir, path_roots=path_roots),
-        "reference": serialize_path(reference, project_dir=output_dir, path_roots=path_roots) if reference else None,
+        "filelist": [str(path) for path in filelist],
+        "reference": str(reference) if reference else None,
         "channel_kws": channel_kws,
         "check_for_reflections": check_for_reflections,
         "non_rigid_reg": non_rigid_reg,
@@ -857,7 +833,7 @@ def valis_init_configuration(
 
 def valis_registration_from_config(config: PathLike, output_dir: PathLike) -> None:
     """Valis registration from config."""
-    config = get_config(config, project_dir=output_dir)
+    config = get_config(config)
     return valis_registration(output_dir=output_dir, **config)
 
 

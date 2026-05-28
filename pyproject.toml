@@ -43,7 +43,6 @@ dependencies = [
 #    "koyo>=0.3.6,<0.3.5; python_version < '3.13'",
 #    "koyo>=0.3.5; python_version >= '3.13'",
     "pydantic>=2",
-    "pydantic-settings",
     "numpy>=2",
 #    "numpy<2; python_version < '3.13'",
 #    "numpy>=2; python_version >= '3.13'",
@@ -75,10 +74,6 @@ dependencies = [
 #    "fastcluster; python_version < '3.13'",
 #    "scikit-learn; python_version < '3.13'",
 #]
-paths = [
-    "fsspec",
-    "universal-pathlib",
-]
 
 [dependency-groups]
 test = [
