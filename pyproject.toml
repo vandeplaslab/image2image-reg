@@ -236,4 +236,5 @@ ignore = [
     "_version.py",
     "Makefile",
     "MANIFEST.in",
+    "uv.lock",
 ]

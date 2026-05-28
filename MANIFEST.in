@@ -8,7 +8,6 @@ recursive-exclude * *.py[co]
 # Top-level config
 include MANIFEST.in
 include LICENSE
-include uv.lock
 recursive-include tests *
 recursive-include src *.typed
 
