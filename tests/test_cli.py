@@ -2,8 +2,24 @@
 
 import os
 
+import click
+import pytest
+
+from image2image_reg.cli.merge import arg_parse_channel_ids
 from image2image_reg.utils._test import get_test_file
 from image2image_reg.workflows import ElastixReg
+
+
+def test_cli_merge_channel_ids_parser():
+    """Test merge channel id parser."""
+    command = click.Command("merge")
+    option = click.Option(["--channel_ids"])
+    ctx = click.Context(command)
+
+    assert arg_parse_channel_ids(ctx, option, ("1,2,4-6", "0")) == ((1, 2, 4, 5, 6), (0,))
+
+    with pytest.raises(click.BadParameter):
+        arg_parse_channel_ids(ctx, option, ("4-2",))
 
 
 def test_cli_entrypoint():

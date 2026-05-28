@@ -7,9 +7,65 @@ import typing as ty
 import click
 from image2image_io.cli._common import arg_split_bbox, as_uint8_, fmt_, overwrite_
 from image2image_io.enums import WriterMode
-from koyo.click import Parameter, arg_parse_int_with_range_multi, cli_parse_paths_sort, print_parameters
+from koyo.click import Parameter, cli_parse_paths_sort, print_parameters
 from koyo.timer import MeasureTimer
 from loguru import logger
+
+EMPTY_CHANNEL_ID_MESSAGE = "Channel ids cannot contain empty entries."
+INVALID_CHANNEL_RANGE_MESSAGE = "Invalid channel range: {value!r}."
+DESCENDING_CHANNEL_RANGE_MESSAGE = "Channel range must be ascending: {value!r}."
+INVALID_CHANNEL_ID_MESSAGE = "Invalid channel id: {value!r}."
+NEGATIVE_CHANNEL_ID_MESSAGE = "Channel ids must be non-negative."
+CHANNEL_ID_COUNT_MESSAGE = "Number of channel ids must match number of images."
+
+
+def arg_parse_channel_ids(
+    ctx: click.Context,
+    param: click.Parameter,
+    value: tuple[str, ...],
+) -> tuple[tuple[int, ...], ...] | None:
+    """Parse repeated channel id groups from comma-separated integers and ranges."""
+    if not value:
+        return None
+    return tuple(_parse_channel_id_group(ctx, param, channel_group) for channel_group in value)
+
+
+def _parse_channel_id_group(ctx: click.Context, param: click.Parameter, value: str) -> tuple[int, ...]:
+    channel_ids: list[int] = []
+    for item in value.split(","):
+        item = item.strip()
+        if not item:
+            raise click.BadParameter(EMPTY_CHANNEL_ID_MESSAGE, ctx=ctx, param=param)
+        if "-" in item:
+            start, stop = _parse_channel_range(ctx, param, item)
+            channel_ids.extend(range(start, stop + 1))
+        else:
+            channel_ids.append(_parse_channel_id(ctx, param, item))
+    return tuple(channel_ids)
+
+
+def _parse_channel_range(ctx: click.Context, param: click.Parameter, value: str) -> tuple[int, int]:
+    parts = value.split("-")
+    if len(parts) != 2 or not all(parts):
+        message = INVALID_CHANNEL_RANGE_MESSAGE.format(value=value)
+        raise click.BadParameter(message, ctx=ctx, param=param)
+    start = _parse_channel_id(ctx, param, parts[0])
+    stop = _parse_channel_id(ctx, param, parts[1])
+    if stop < start:
+        message = DESCENDING_CHANNEL_RANGE_MESSAGE.format(value=value)
+        raise click.BadParameter(message, ctx=ctx, param=param)
+    return start, stop
+
+
+def _parse_channel_id(ctx: click.Context, param: click.Parameter, value: str) -> int:
+    try:
+        channel_id = int(value)
+    except ValueError as exc:
+        message = INVALID_CHANNEL_ID_MESSAGE.format(value=value)
+        raise click.BadParameter(message, ctx=ctx, param=param) from exc
+    if channel_id < 0:
+        raise click.BadParameter(NEGATIVE_CHANNEL_ID_MESSAGE, ctx=ctx, param=param)
+    return channel_id
 
 
 @overwrite_
@@ -22,7 +78,7 @@ from loguru import logger
     default=None,
     help="Specify channel ids in the format: 1,2,4-6. You can provide multiple. If you are providing any, make sure to"
     " provide one for each file you are trying to merge.",
-    callback=arg_parse_int_with_range_multi,
+    callback=arg_parse_channel_ids,
     show_default=True,
     multiple=True,
     required=False,
@@ -103,7 +159,7 @@ def merge_runner(
     )
 
     if channel_ids and len(channel_ids) != len(paths):
-        raise ValueError("Number of channel ids must match number of images.")
+        raise ValueError(CHANNEL_ID_COUNT_MESSAGE)
 
     with MeasureTimer() as timer:
         merge_images(

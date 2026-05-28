@@ -126,7 +126,12 @@ class ElastixReg(Workflow):
                 )
 
     @classmethod
-    def from_path(cls, path: PathLike, raise_on_error: bool = True, quick: bool = False) -> ElastixReg:
+    def from_path(
+        cls,
+        path: PathLike,
+        raise_on_error: bool = True,
+        quick: bool = False,
+    ) -> ElastixReg:
         """Initialize based on the project path."""
         path = Path(path)
         if not path.exists():
@@ -538,7 +543,7 @@ class ElastixReg(Workflow):
 
     def has_registration_path(self, source: str, target: str, through: str | None = None) -> bool:
         """Check whether registration path exists."""
-        modalities = {"source": source, "target": through if through else target}
+        modalities = {"source": source, "target": through or target}
         return any(node["modalities"] == modalities for node in self.registration_nodes)
 
     def add_registration_path(
@@ -597,7 +602,7 @@ class ElastixReg(Workflow):
     def find_index_of_registration_path(self, source: str, target: str, through: str | None = None) -> int | None:
         """Remove a registration path."""
         index = None
-        modalities = {"source": source, "target": through if through else target}
+        modalities = {"source": source, "target": through or target}
         for i, node in enumerate(self.registration_nodes):
             if node["modalities"] == modalities:
                 index = i
@@ -662,7 +667,7 @@ class ElastixReg(Workflow):
         # create graph edges
         self.registration_nodes.append(
             {
-                "modalities": {"source": source, "target": through if through else target},
+                "modalities": {"source": source, "target": through or target},
                 "params": transform,
                 "registered": False,
                 "transforms": None,
@@ -1139,7 +1144,7 @@ class ElastixReg(Workflow):
         max_size: int = 2048,
         overwrite: bool = False,
     ) -> tuple[list, list, list]:
-        from image2image_io.utils.utilities import clip_shape, get_shape_of_image, get_pyramid_for_min_size
+        from image2image_io.utils.utilities import clip_shape, get_pyramid_for_min_size, get_shape_of_image
         from koyo.visuals import save_rgb
 
         from image2image_reg.elastix.transform import transform_images_for_pyramid
@@ -2107,8 +2112,16 @@ class ElastixReg(Workflow):
             source = edge["modalities"]["source"]
             target = self.registration_paths[source][-1]
             through = None if len(self.registration_paths[source]) == 1 else self.registration_paths[source][0]
-            source_preprocessing = edge["source_preprocessing"].to_dict() if edge["source_preprocessing"] else None
-            target_preprocessing = edge["target_preprocessing"].to_dict() if edge["target_preprocessing"] else None
+            source_preprocessing = (
+                edge["source_preprocessing"].to_dict()
+                if edge["source_preprocessing"]
+                else None
+            )
+            target_preprocessing = (
+                edge["target_preprocessing"].to_dict()
+                if edge["target_preprocessing"]
+                else None
+            )
             registration_paths[f"reg_path_{index}"] = {
                 "source": source,
                 "target": target,

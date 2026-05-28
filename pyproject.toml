@@ -39,9 +39,13 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "koyo>=0.3.5",
+    "koyo>=0.3.6",
+#    "koyo>=0.3.6,<0.3.5; python_version < '3.13'",
+#    "koyo>=0.3.5; python_version >= '3.13'",
     "pydantic>=2",
-    "numpy",
+    "numpy>=2",
+#    "numpy<2; python_version < '3.13'",
+#    "numpy>=2; python_version >= '3.13'",
 #    "itk!=5.4.4; platform_system=='MacOS'",
     "itk==5.4.0",
     "itk-elastix==0.19.2",
@@ -54,7 +58,7 @@ dependencies = [
     "colour-science>=0.4.1",
     "tabulate",
     "loguru",
-    "image2image-io>=0.3.0",
+    "image2image-io>=0.3.1",
     "networkx==3.2.0; python_version < '3.10'",
     "networkx==3.4.0; python_version >= '3.10'",  # fixed circular import problem
     "scikit-learn",
@@ -63,13 +67,13 @@ dependencies = [
 
 ## https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
-# valis has numpy dependencies that are no compatible with python 3.13 yet, so we exclude it for now
-valis = [
-    "valis-wsi>=1.2.0; python_version < '3.13'",
-    "opencv-contrib-python; python_version < '3.13'",
-    "fastcluster; python_version < '3.13'",
-    "scikit-learn; python_version < '3.13'",
-]
+# valis depends on NumPy 1.x and is not compatible with Python 3.13 yet, so we exclude it for now
+#valis = [
+#    "valis-wsi>=1.2.0; python_version < '3.13'",
+#    "opencv-contrib-python; python_version < '3.13'",
+#    "fastcluster; python_version < '3.13'",
+#    "scikit-learn; python_version < '3.13'",
+#]
 
 [dependency-groups]
 test = [
@@ -232,4 +236,5 @@ ignore = [
     "_version.py",
     "Makefile",
     "MANIFEST.in",
+    "uv.lock",
 ]

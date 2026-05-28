@@ -866,7 +866,12 @@ class Workflow:
         write_json_data(path, config)
 
     @classmethod
-    def update_paths(cls, path: PathLike, source_dirs: PathLike | list[PathLike], recursive: bool = False) -> None:
+    def update_paths(
+        cls,
+        path: PathLike,
+        source_dirs: PathLike | list[PathLike],
+        recursive: bool = False,
+    ) -> None:
         """Update source paths."""
         if isinstance(source_dirs, (str, Path)):
             source_dirs = [source_dirs]
@@ -879,7 +884,11 @@ class Workflow:
         cls.write_config(path, config)
 
     @staticmethod
-    def _update_modality_paths(config: dict[str, dict], source_dirs: list[Path], recursive: bool = False) -> dict:
+    def _update_modality_paths(
+        config: dict[str, dict],
+        source_dirs: list[Path],
+        recursive: bool = False,
+    ) -> dict:
         for modality in config.values():
             name = modality["name"]
             path = clean_path(modality["path"])
@@ -915,7 +924,6 @@ class Workflow:
                 else:
                     logger.success(f"Path '{path}' exists for attachment={attachment}.")
         return config
-
 
 def _get_new_path(path: Path, source_dir: Path, recursive: bool = False) -> tuple[bool, Path]:
     # check if the file exists in the source directory

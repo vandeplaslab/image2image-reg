@@ -7,9 +7,9 @@ from copy import deepcopy
 from pathlib import Path
 
 from koyo.json import read_json_data, write_json_data
+from koyo.system import is_installed
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
-from koyo.system import is_installed
 from loguru import logger
 from tqdm import tqdm
 
@@ -79,7 +79,11 @@ class ValisReg(Workflow):
         return registrar_path.exists()
 
     @classmethod
-    def from_path(cls, path: PathLike, raise_on_error: bool = True) -> ValisReg:
+    def from_path(
+        cls,
+        path: PathLike,
+        raise_on_error: bool = True,
+    ) -> ValisReg:
         """Initialize based on the project path."""
         path = Path(path)
         if not path.exists():
@@ -715,7 +719,9 @@ class ValisReg(Workflow):
         return path
 
 
-def get_config(config: dict[str, str] | PathLike) -> dict[str, str]:
+def get_config(
+    config: dict[str, str] | PathLike,
+) -> dict[str, str]:
     """Get configuration."""
     if isinstance(config, (str, Path)):
         config = Path(config)

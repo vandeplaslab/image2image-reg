@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import typing as ty
-from pathlib import Path
 from copy import deepcopy
+from pathlib import Path
 
 import dask.array as da
 import numpy as np
@@ -46,7 +46,10 @@ class Modality(BaseModel):
             return float(value), float(value)
         return None
 
-    def to_dict(self, as_wsireg: bool = False) -> dict:
+    def to_dict(
+        self,
+        as_wsireg: bool = False,
+    ) -> dict:
         """Convert to dict."""
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
         if data.get("preprocessing"):
