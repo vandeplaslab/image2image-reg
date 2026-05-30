@@ -176,9 +176,12 @@ class Preprocessing(BaseModel):
             if isinstance(v, (str, Path)):
                 v = read_json_data(Path(v))
             v = np.asarray(v)
-            assert v.ndim == 2, "affine must be 2D"
-            assert v.shape[0] == v.shape[1], "affine must be square"
-            assert v.shape[0] == 3, "affine must be 3x3"
+            if v.ndim != 2:
+                raise ValueError("affine must be 2D")
+            if v.shape[0] != v.shape[1]:
+                raise ValueError("affine must be square")
+            if v.shape[0] != 3:
+                raise ValueError("affine must be 3x3")
         return v
 
     @field_validator("rotate_counter_clockwise", mode="before")
@@ -316,9 +319,8 @@ class Preprocessing(BaseModel):
             data["crop_bbox"] = data["crop_bbox"].to_dict(as_wsireg)
         if data.get("crop_polygon") and hasattr(data["crop_polygon"], "to_dict"):
             data["crop_polygon"] = data["crop_polygon"].to_dict(as_wsireg)
-        if data.get("mask"):
-            if not isinstance(data["mask"], (str, Path)):
-                data["mask"] = "ArrayLike"
+        if data.get("mask") and not isinstance(data["mask"], (str, Path)):
+            data["mask"] = "ArrayLike"
         if data.get("mask_bbox") and hasattr(data["mask_bbox"], "to_dict"):
             data["mask_bbox"] = data["mask_bbox"].to_dict(as_wsireg)
         if data.get("mask_polygon") and hasattr(data["mask_polygon"], "to_dict"):

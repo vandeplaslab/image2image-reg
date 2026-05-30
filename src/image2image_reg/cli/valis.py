@@ -28,6 +28,7 @@ from image2image_reg.cli._common import (
     attach_to_,
     files_,
     fmt_,
+    has_i2i,
     modality_multi_,
     modality_single_,
     n_parallel_,
@@ -40,6 +41,7 @@ from image2image_reg.cli._common import (
     project_path_single_,
     remove_merged_,
     rename_,
+    viewer_,
     write_,
     write_attached_,
     write_attached_images_,
@@ -48,8 +50,6 @@ from image2image_reg.cli._common import (
     write_merged_,
     write_not_registered_,
     write_registered_,
-    viewer_,
-    has_i2i,
 )
 from image2image_reg.enums import (
     PreprocessingOptions,
@@ -64,7 +64,7 @@ def cli_parse_method(ctx, param, value: list[str]) -> list[str]:
     """Parse pre-processing."""
     return [
         {
-            "cs": "ColorfulStandard",
+            "cs": "ColorfulStandardizer",
             "lum": "Luminosity",
             "he": "HEPreprocessing",
             "mip": "MaxIntensityProjection",
@@ -397,8 +397,8 @@ if is_installed("valis"):
     ) -> PathLike:
         import os
 
-        from image2image_reg.workflows import ValisReg
         from image2image_reg.cli.elastix import open_in_viewer
+        from image2image_reg.workflows import ValisReg
 
         # limit Vips concurrency to avoid memory issues
         os.environ["VIPS_CONCURRENCY"] = "6"
@@ -684,8 +684,8 @@ if is_installed("valis"):
     ) -> PathLike:
         import os
 
-        from image2image_reg.workflows import ValisReg
         from image2image_reg.cli.elastix import open_in_viewer
+        from image2image_reg.workflows import ValisReg
 
         # limit Vips concurrency to avoid memory issues
         os.environ["VIPS_CONCURRENCY"] = "6"

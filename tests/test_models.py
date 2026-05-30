@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from image2image_reg.enums import CoordinateFlip, ImageType, BackgroundSubtractType
+from image2image_reg.enums import BackgroundSubtractType, CoordinateFlip, ImageType
 from image2image_reg.models import BoundingBox, Export, Modality, Polygon, Preprocessing
 
 
@@ -119,6 +119,27 @@ def test_bbox_list():
     assert image.GetSize() == (100, 100), "Size should be (100, 100)"
     assert image.GetSpacing() == (1.0, 1.0), "Spacing should be (1.0, 1.0)"
     assert image.GetPixelID() == 1, "PixelID should be 1 (uint8)"
+
+
+def test_bbox_clipping_does_not_mutate_dimensions():
+    bbox = BoundingBox(90, 90, 20, 20)
+
+    first_mask = bbox.to_mask((100, 100))
+    second_mask = bbox.to_mask((100, 100))
+
+    assert bbox.width == [20]
+    assert bbox.height == [20]
+    assert first_mask.sum() == 100
+    assert second_mask.sum() == 100
+
+
+@pytest.mark.parametrize(
+    ("x", "y", "width", "height"),
+    [(-1, 0, 10, 10), (0, -1, 10, 10), (0, 0, 0, 10), (0, 0, 10, 0)],
+)
+def test_bbox_rejects_invalid_coordinates(x, y, width, height):
+    with pytest.raises(ValueError):
+        BoundingBox(x, y, width, height)
 
 
 def test_export():

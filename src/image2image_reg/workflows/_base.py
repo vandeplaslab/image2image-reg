@@ -23,6 +23,23 @@ if ty.TYPE_CHECKING:
     from image2image_reg.wrapper import ImageWrapper
 
 
+def _require_config_keys(config: dict[str, ty.Any], keys: tuple[str, ...], description: str) -> None:
+    """Validate required keys in a loaded configuration dictionary."""
+    for key in keys:
+        if key not in config:
+            raise ValueError(f"{description} missing '{key}' key.")
+
+
+def _validate_single_mask_source(
+    mask: PathLike | np.ndarray | None = None,
+    mask_bbox: BoundingBox | tuple[int, int, int, int] | None = None,
+    mask_polygon: Polygon | np.ndarray | None = None,
+) -> None:
+    """Validate that only one mask source is configured."""
+    if sum(value is not None for value in (mask, mask_bbox, mask_polygon)) > 1:
+        raise ValueError("Mask can only be specified using one of the three options: mask, mask_bbox, mask_polygon")
+
+
 class Workflow:
     """Base class for all workflows."""
 
@@ -337,6 +354,8 @@ class Workflow:
         if name in self.modalities and not overwrite:
             raise ValueError(f"Modality name '{name}' already exists.")
         reader: BaseReader = get_simple_reader(path, init_pyramid=False)
+        preprocessing_mask_polygon = preprocessing.mask_polygon if preprocessing else None
+        _validate_single_mask_source(mask, mask_bbox, preprocessing_mask_polygon)
         if preprocessing:
             preprocessing.channel_names = reader.channel_names
             preprocessing.channel_indices = reader.channel_ids
@@ -389,8 +408,16 @@ class Workflow:
             raise ValueError("Pixel size must be greater than 0.")
         if name in self.modalities and not overwrite:
             raise ValueError(f"Modality '{name}' name already exists.")
-        if mask is not None and mask_bbox is not None and mask_polygon is not None:
-            raise ValueError("Mask can only be specified using one of the three options: mask, mask_bbox, mask_polygon")
+        if isinstance(preprocessing, dict):
+            preprocessing = Preprocessing(**preprocessing)
+        preprocessing_mask = preprocessing.mask if preprocessing else None
+        preprocessing_mask_bbox = preprocessing.mask_bbox if preprocessing else None
+        preprocessing_mask_polygon = preprocessing.mask_polygon if preprocessing else None
+        _validate_single_mask_source(
+            mask if mask is not None else preprocessing_mask,
+            mask_bbox if mask_bbox is not None else preprocessing_mask_bbox,
+            mask_polygon if mask_polygon is not None else preprocessing_mask_polygon,
+        )
         if isinstance(mask, (str, Path)):
             mask = Path(mask)
             if not mask.exists():
@@ -399,8 +426,6 @@ class Workflow:
             mask_bbox = _transform_to_bbox(mask_bbox)
         if mask_polygon is not None:
             mask_polygon = _transform_to_polygon(mask_polygon)
-        if isinstance(preprocessing, dict):
-            preprocessing = Preprocessing(**preprocessing)
         if preprocessing:
             if preprocessing.mask is None and mask is not None:
                 preprocessing.mask = mask
@@ -811,11 +836,9 @@ class Workflow:
                 for name, shape_dict in config["attachment_shapes"].items():
                     if "shape_files" in shape_dict:
                         shape_dict["files"] = shape_dict.pop("shape_files")
-                    assert "files" in shape_dict, "Shape dict missing 'files' key."
-                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
                     if "attach_to_modality" in shape_dict:
                         shape_dict["attach_to"] = shape_dict.pop("attach_to_modality")
-                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    _require_config_keys(shape_dict, ("files", "pixel_size", "attach_to"), "Shape dict")
                     self.attachment_shapes[name] = shape_dict
                 logger.trace(f"Loaded attachment shapes in {timer(since_last=True)}")
 
@@ -823,11 +846,9 @@ class Workflow:
                 for name, shape_dict in config["attachment_points"].items():
                     if "point_files" in shape_dict:
                         shape_dict["files"] = shape_dict.pop("point_files")
-                    assert "files" in shape_dict, "Shape dict missing 'files' key."
-                    assert "pixel_size" in shape_dict, "Shape dict missing 'pixel_size' key."
                     if "attach_to_modality" in shape_dict:
                         shape_dict["attach_to"] = shape_dict.pop("attach_to_modality")
-                    assert "attach_to" in shape_dict, "Shape dict missing 'attach_to' key."
+                    _require_config_keys(shape_dict, ("files", "pixel_size", "attach_to"), "Point dict")
                     self.attachment_points[name] = shape_dict
                 logger.trace(f"Loaded attachment points in {timer(since_last=True)}")
 

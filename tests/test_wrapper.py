@@ -82,3 +82,36 @@ class TestImageWrapper:
         result = preprocess_intensity(image, preprocessing, pixel_size=1.0, is_rgb=False)
         assert isinstance(result, sitk.Image)
         assert result.GetSize() == (100, 100)
+
+    def test_mask_uses_preprocessing_override(self, mock_modality):
+        mask_array = np.ones((8, 8), dtype=np.uint8)
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(
+            modality=mock_modality,
+            preprocessing=Preprocessing(use_mask=True, mask=mask_array),
+        )
+
+        mask = wrapper.mask
+
+        assert isinstance(mask, sitk.Image)
+        assert mask.GetSize() == (8, 8)
+
+    def test_preprocess_uses_override_transform_mask(self, mock_modality):
+        mask_array = np.ones((8, 8), dtype=np.uint8)
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(
+            modality=mock_modality,
+            preprocessing=Preprocessing(use_mask=True, mask=mask_array, transform_mask=True),
+        )
+        reader = MagicMock()
+        reader.pyramid = [np.ones((8, 8), dtype=np.uint8)]
+        reader.channel_names = []
+        reader.resolution = 1.0
+        reader.is_rgb = False
+        reader.image_shape = (8, 8)
+        wrapper._reader = reader
+
+        wrapper.preprocess()
+
+        assert isinstance(wrapper.image, sitk.Image)
+        assert isinstance(wrapper.mask, sitk.Image)

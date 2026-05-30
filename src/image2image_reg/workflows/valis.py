@@ -320,7 +320,8 @@ class ValisReg(Workflow):
         filelist = natsorted(filelist)
         filelist = [Path(path) for path in filelist]
         for path in filelist:
-            assert path.exists(), f"{path} does not exist."
+            if not path.exists():
+                raise ValueError(f"{path} does not exist.")
         return filelist
 
     def set_reference(self, name: str | None = None, path: str | None = None) -> None:
@@ -331,7 +332,8 @@ class ValisReg(Workflow):
             modality = self.get_modality(name, path)
             if not modality:
                 raise ValueError(f"Modality {name} not found.")
-            assert modality.path.exists(), f"Path {modality.path} does not exist."
+            if not modality.path.exists():
+                raise ValueError(f"Path {modality.path} does not exist.")
             self._reference = modality.name
         logger.trace(f"Set reference image to '{self._reference}'.")
 
@@ -343,7 +345,8 @@ class ValisReg(Workflow):
             if Path(reference).exists():
                 reference = self.get_modality(name_or_path=reference).name
             modality = self.get_modality(reference)
-            assert modality, f"Modality {reference} not found."
+            if not modality:
+                raise ValueError(f"Modality {reference} not found.")
             reference = modality.name
         return reference
 
@@ -725,9 +728,11 @@ def get_config(
     """Get configuration."""
     if isinstance(config, (str, Path)):
         config = Path(config)
-        assert config.exists(), f"{config} does not exist."
+        if not config.exists():
+            raise ValueError(f"{config} does not exist.")
         config = read_json_data(config)
-        assert isinstance(config, dict), f"{config} is not a dictionary."
+        if not isinstance(config, dict):
+            raise ValueError(f"{config} is not a dictionary.")
     return parse_config(config)
 
 
@@ -785,13 +790,16 @@ def valis_init_configuration(
     filelist = natsorted(filelist, alg=ns.IGNORECASE)
     filelist = [Path(path).resolve() for path in filelist]
     for path in filelist:
-        assert path.exists(), f"{path} does not exist."
+        if not path.exists():
+            raise ValueError(f"{path} does not exist.")
     logger.info(f"Filelist has {len(filelist)} images.")
 
     if reference:
         reference = Path(reference)
-        assert reference.exists(), f"{reference} does not exist."
-        assert reference in filelist, f"{reference} not in filelist."
+        if not reference.exists():
+            raise ValueError(f"{reference} does not exist.")
+        if reference not in filelist:
+            raise ValueError(f"{reference} not in filelist.")
     logger.info(f"Reference image: {reference}")
 
     feature_detector = get_feature_detector_str(feature_detector)
@@ -867,13 +875,16 @@ def valis_registration(
     filelist = natsorted(filelist)
     filelist = [Path(path) for path in filelist]
     for path in filelist:
-        assert path.exists(), f"{path} does not exist."
+        if not path.exists():
+            raise ValueError(f"{path} does not exist.")
     logger.info(f"Filelist has {len(filelist)} images.")
 
     if reference:
         reference = Path(reference)
-        assert reference.exists(), f"{reference} does not exist."
-        assert reference in filelist, f"{reference} not in filelist."
+        if not reference.exists():
+            raise ValueError(f"{reference} does not exist.")
+        if reference not in filelist:
+            raise ValueError(f"{reference} not in filelist.")
     logger.info(f"Reference image: {reference}")
 
     feature_detector_cls = get_feature_detector(feature_detector)
@@ -942,9 +953,11 @@ def valis_registration(
                                 reference_img_f=str(reference) if reference else None,
                                 align_to_reference=reference is not None,
                             )
+                            logger.info(f"Registered high-res images in {timer()}")
                         except Exception as exc:  # type: ignore
                             logger.exception(f"Error during non-rigid registration: {exc}")
-                    logger.info(f"Registered high-res images in {timer()}")
+                            micro_reg = False
+                            non_rigid = False
 
                 # We can also plot the high resolution matches using `Valis.draw_matches`:
                 try:

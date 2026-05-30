@@ -117,7 +117,7 @@ def get_max_image_dimensions(img_list: list[np.ndarray]) -> tuple[int, int]:
 
     """
     shapes = [img.shape[0:2] for img in img_list]
-    all_w, all_h = list(zip(*shapes))
+    all_w, all_h = list(zip(*shapes, strict=False))
     return (max(all_w), max(all_h))
 
 
@@ -198,11 +198,14 @@ def get_feature_detector_str(feature_detector: str) -> str:
         "disk": "DiskFD",
         "dedode": "DeDoDeFD",
     }
-    feature_detector = feature_detector.lower()
+    feature_detector_key = feature_detector.lower()
+    canonical_by_key = {detector.lower(): detector for detector in available.values()}
+    if feature_detector_key in available:
+        return available[feature_detector_key]
+    if feature_detector_key in canonical_by_key:
+        return canonical_by_key[feature_detector_key]
     all_available = list(available.values()) + list(available.keys())
-    if feature_detector not in all_available:
-        raise ValueError(f"Feature detector {feature_detector} not found. Please one of use: {all_available}")
-    return available.get(feature_detector, feature_detector)
+    raise ValueError(f"Feature detector {feature_detector} not found. Please one of use: {all_available}")
 
 
 def get_feature_detector(feature_detector: str) -> type:

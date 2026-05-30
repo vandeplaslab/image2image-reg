@@ -75,12 +75,12 @@ class ImageWrapper:
             preprocessing = self.modality.preprocessing
 
         if self._mask is None and preprocessing and preprocessing.use_mask:
-            if self.modality.preprocessing.mask is not None:
-                self._mask = self.read_mask(self.modality.preprocessing.mask)
-            if self.modality.preprocessing.mask_bbox is not None:
-                self._mask = self.make_bbox_mask(self.modality.preprocessing.mask_bbox)
-            elif self.modality.preprocessing.mask_polygon is not None:
-                self._mask = self.make_bbox_mask(self.modality.preprocessing.mask_polygon)
+            if preprocessing.mask is not None:
+                self._mask = self.read_mask(preprocessing.mask)
+            elif preprocessing.mask_bbox is not None:
+                self._mask = self.make_bbox_mask(preprocessing.mask_bbox)
+            elif preprocessing.mask_polygon is not None:
+                self._mask = self.make_bbox_mask(preprocessing.mask_polygon)
         return self._mask
 
     @property
@@ -220,6 +220,7 @@ class ImageWrapper:
         from image2image_reg.utils.preprocessing import convert_and_cast, preprocess, preprocess_dask_array
 
         preprocessing = self.preprocessing or self.modality.preprocessing
+        transform_mask = bool(preprocessing and preprocessing.transform_mask)
 
         # retrieve first array in the pyramid i.e. the highest resolution
         image = self.reader.pyramid[0]
@@ -235,7 +236,6 @@ class ImageWrapper:
             logger.trace(f"Converted and cast image in {timer(since_last=True)}")
 
             # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
-            transform_mask = preprocessing.transform_mask if preprocessing else False
             mask = self.mask if transform_mask else None
             # set image
             if preprocessing:

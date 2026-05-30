@@ -3,7 +3,9 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from image2image_reg.elastix.registration import _elx_lineparser
 from image2image_reg.models import Preprocessing
 from image2image_reg.utils._test import get_test_file
 from image2image_reg.workflows import ElastixReg
@@ -116,3 +118,38 @@ def test_register_with_initial_with_bbox_mask(tmp_path):
     assert obj.is_registered, "Registration failed."
     obj.write()
     assert len(list(obj.image_dir.glob("*.tiff"))) != 0, "No images written."
+
+
+def test_add_modality_rejects_mask_conflicts(tmp_path):
+    source = get_test_file("ellipse_moving.tiff")
+    mask = get_test_file("ellipse_mask.tiff")
+    obj = ElastixReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+
+    with pytest.raises(ValueError, match="Mask can only be specified"):
+        obj.add_modality("source", source, preprocessing=Preprocessing.basic(), mask=mask, mask_bbox=(0, 0, 10, 10))
+
+
+def test_auto_add_modality_rejects_preprocessing_mask_conflicts(tmp_path):
+    source = get_test_file("ellipse_moving.tiff")
+    mask = get_test_file("ellipse_mask.tiff")
+    preprocessing = Preprocessing(mask_polygon=[[0, 0], [0, 10], [10, 10], [10, 0]])
+    obj = ElastixReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+
+    with pytest.raises(ValueError, match="Mask can only be specified"):
+        obj.auto_add_modality("source", source, preprocessing=preprocessing, mask=mask)
+
+
+def test_elastix_parameter_line_parser_skips_blank_and_comment_lines():
+    assert _elx_lineparser("") == (None, None)
+    assert _elx_lineparser("# comment") == (None, None)
+    assert _elx_lineparser("// comment") == (None, None)
+
+
+def test_elastix_parameter_line_parser_parses_values():
+    assert _elx_lineparser('(Transform "EulerTransform")') == ("Transform", ["EulerTransform"])
+    assert _elx_lineparser("(NumberOfResolutions 4)") == ("NumberOfResolutions", ["4"])
+
+
+def test_elastix_parameter_line_parser_rejects_malformed_lines():
+    with pytest.raises(ValueError, match="Malformed Elastix parameter line"):
+        _elx_lineparser("(Transform)")

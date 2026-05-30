@@ -441,7 +441,7 @@ class TransformSequence(TransformMixin):
     def __repr__(self) -> str:
         """Return repr."""
         seq = " > ".join([t.name for t in self.transforms])
-        spx, spy = self.output_spacing if self.output_spacing else (None, None)
+        spx, spy = self.output_spacing or (None, None)
         spacing = f"({spx:.4f}, {spy:.4f})" if self.output_spacing else "None"
         return (
             f"{self.__class__.__name__}<name={self.name}; n={self.n_transforms}; spacing={spacing}; "

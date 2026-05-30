@@ -7,8 +7,8 @@ from pathlib import Path
 
 import click
 from koyo.click import cli_parse_paths_sort, cli_parse_paths_sort_auto_glob
-from koyo.typing import PathLike
 from koyo.system import is_installed
+from koyo.typing import PathLike
 from loguru import logger
 
 if ty.TYPE_CHECKING:
@@ -293,7 +293,8 @@ def arg_split_bbox(ctx, param, value):
     if value is None:
         return None
     args = [int(arg.strip()) for arg in value.split(",")]
-    assert len(args) == 4, "Bounding box must have 4 values"
+    if len(args) != 4:
+        raise click.BadParameter("Bounding box must have 4 values", ctx=ctx, param=param)
     return args
 
 

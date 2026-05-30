@@ -59,7 +59,6 @@ dependencies = [
     "tabulate",
     "loguru",
     "image2image-io>=0.3.1",
-    "networkx==3.2.0; python_version < '3.10'",
     "networkx==3.4.0; python_version >= '3.10'",  # fixed circular import problem
     "scikit-learn",
     "polars[pandas]",
@@ -103,7 +102,7 @@ iwsireg = "image2image_reg.cli:main"
 # https://github.com/charliermarsh/ruff
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 src = ["src"]
 fix = true
 unsafe-fixes = true

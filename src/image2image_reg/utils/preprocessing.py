@@ -22,7 +22,7 @@ from image2image_reg.elastix.transform_utils import (
     prepare_wsireg_transform_data,
     transform_plane,
 )
-from image2image_reg.enums import ImageType, BackgroundSubtractType
+from image2image_reg.enums import BackgroundSubtractType, ImageType
 from image2image_reg.models import Preprocessing
 from image2image_reg.models.bbox import BoundingBox
 
@@ -369,7 +369,7 @@ def remove_background_noise(image: sitk.Image, bg_radius: int = 51, denoise_h: i
     General background removal for a noisy 2D image.
     - bg_radius: size of structures you consider "background" (bigger -> smoother background)
     - denoise_h: strength for NLMeans denoising (bigger -> more smoothing)
-    Returns: enhanced_uint8
+    Returns: enhanced_uint8.
     """
     image, spacing = _sitk_to_numpy(image)
     # Mild speckle reduction (keeps edges)
@@ -570,7 +570,7 @@ def preprocess_spatial(
 
             if mask is not None:
                 mask.SetSpacing((pixel_size, pixel_size))
-                mask = sitk.Shrink(mask(preprocessing.downsample, preprocessing.downsample))
+                mask = sitk.Shrink(mask, (preprocessing.downsample, preprocessing.downsample))
             pixel_size = image.GetSpacing()[0]
             logger.trace(
                 f"Downsampled image (factor {preprocessing.downsample}) in {timer(since_last=True)} ({image.GetSize()})"

@@ -43,7 +43,8 @@ def _transform_to_polygon(v: np.ndarray) -> Polygon:
     if v is None:
         return None
     if isinstance(v, list):
-        assert len(v) > 0, "Polygon must have at least 1 value"
+        if not v:
+            raise ValueError("Polygon must have at least 1 value")
         v = [np.array(v_) for v_ in v] if isinstance(v[0], (list, np.ndarray)) else [np.array(v)]
         return Polygon(v)
     if isinstance(v, Polygon):
@@ -93,7 +94,13 @@ class BoundingBox(MaskMixin):
         self.y = y if isinstance(y, list) else [y]
         self.width = width if isinstance(width, list) else [width]
         self.height = height if isinstance(height, list) else [height]
-        assert len(self.x) == len(self.y) == len(self.width) == len(self.height), "Bounding box must have 4 values"
+        if not self.x or not (len(self.x) == len(self.y) == len(self.width) == len(self.height)):
+            raise ValueError("Bounding box coordinates must have matching lengths")
+        for x_value, y_value, width_value, height_value in zip(self.x, self.y, self.width, self.height, strict=False):
+            if x_value < 0 or y_value < 0:
+                raise ValueError("Bounding box coordinates must be non-negative")
+            if width_value <= 0 or height_value <= 0:
+                raise ValueError("Bounding box width and height must be greater than 0")
 
     def __repr__(self) -> str:
         """Repr."""
@@ -114,15 +121,18 @@ class BoundingBox(MaskMixin):
 
     def _draw_bbox(self, mask: np.ndarray, index: int, image_shape: tuple[int, int], value: bool | int) -> np.ndarray:
         """Draw bounding box."""
-        if self.x[index] + self.width[index] > image_shape[1]:
-            self.width[index] = image_shape[1] - self.x[index]
-            logger.trace(f"Bounding box width exceeds image width. Setting width to {self.width[index]}")
-        if self.y[index] + self.height[index] > image_shape[0]:
-            self.height[index] = image_shape[0] - self.y[index]
-            logger.trace(f"Bounding box height exceeds image height. Setting height to {self.height[index]}")
-        mask[self.y[index] : self.y[index] + self.height[index], self.x[index] : self.x[index] + self.width[index]] = (
-            value
-        )
+        x = self.x[index]
+        y = self.y[index]
+        width = min(self.width[index], image_shape[1] - x)
+        height = min(self.height[index], image_shape[0] - y)
+        if width != self.width[index]:
+            logger.trace(f"Bounding box width exceeds image width. Using clipped width {width}")
+        if height != self.height[index]:
+            logger.trace(f"Bounding box height exceeds image height. Using clipped height {height}")
+        if width <= 0 or height <= 0:
+            logger.trace("Bounding box is outside the image bounds. Skipping mask drawing.")
+            return mask
+        mask[y : y + height, x : x + width] = value
         return mask
 
     def as_str(self) -> str:
@@ -141,7 +151,8 @@ def _transform_to_bbox(v: tuple[int, int, int, int] | list[int]) -> BoundingBox:
     if isinstance(v, (list, tuple)):
         if isinstance(v, tuple):
             v = list(v)
-        assert len(v) > 0, "Bounding box must have at least 1 value"
+        if not v:
+            raise ValueError("Bounding box must have at least 1 value")
         if isinstance(v[0], (int, float)):
             return BoundingBox(*v)
         x = [v_[0] for v_ in v]

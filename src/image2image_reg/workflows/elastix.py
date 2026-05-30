@@ -572,8 +572,10 @@ class ElastixReg(Workflow):
         if preprocessing is None:
             preprocessing = {"target": None, "source": None}
         elif isinstance(preprocessing, dict):
-            assert "target" in preprocessing, "Preprocessing must contain target key."
-            assert "source" in preprocessing, "Preprocessing must contain source key."
+            if "target" not in preprocessing:
+                raise ValueError("Preprocessing must contain target key.")
+            if "source" not in preprocessing:
+                raise ValueError("Preprocessing must contain source key.")
         # make sure  that registration methods are valid
         for transform_ in transform:
             Registration.from_name(transform_)
@@ -1114,7 +1116,7 @@ class ElastixReg(Workflow):
         for source, _target_pair in self.registration_paths.items():
             images, greys, names = self._generate_overlap_image_for_modality(source, pyramid, overwrite=overwrite)
             images_from_all.extend(images)
-            for name, grey in zip(names, greys):
+            for name, grey in zip(names, greys, strict=False):
                 name_to_gray[name] = grey
 
         # export gray-scale images
@@ -1164,7 +1166,8 @@ class ElastixReg(Workflow):
             # target modality
             target_modality = self.modalities[target]
             target_wrapper = self.get_wrapper(name=target_modality.name)
-            assert target_wrapper, f"Could not find wrapper for {target_modality.name}"
+            if target_wrapper is None:
+                raise ValueError(f"Could not find wrapper for {target_modality.name}")
             _, transform_seq, _ = self._prepare_transform(target_modality.name)
             pyramid = get_pyramid_for_min_size(target_wrapper.reader, min_size, max_size, pyramid_)
             if transform_seq:
@@ -1190,9 +1193,11 @@ class ElastixReg(Workflow):
             if through:
                 through_modality = self.modalities[through]
                 through_wrapper = self.get_wrapper(name=through_modality.name)
-                assert through_wrapper, f"Could not find wrapper for {through_modality.name}"
+                if through_wrapper is None:
+                    raise ValueError(f"Could not find wrapper for {through_modality.name}")
                 _, transform_seq, _ = self._prepare_transform(through_modality.name)
-                assert transform_seq is not None, f"Transformation is None for {through_modality.name}"
+                if transform_seq is None:
+                    raise ValueError(f"Transformation is None for {through_modality.name}")
                 transform_seq.set_output_spacing(scale, shape[::-1])
                 pyramid = get_pyramid_for_min_size(through_wrapper.reader, min_size, max_size, pyramid_)
                 images.append(transform_images_for_pyramid(through_wrapper, transform_seq, pyramid))
@@ -1202,9 +1207,11 @@ class ElastixReg(Workflow):
             # source modality
             source_modality = self.modalities[source]
             source_wrapper = self.get_wrapper(name=source_modality.name)
-            assert source_wrapper, f"Could not find wrapper for {source_modality.name}"
+            if source_wrapper is None:
+                raise ValueError(f"Could not find wrapper for {source_modality.name}")
             _, transform_seq, _ = self._prepare_transform(source_modality.name)
-            assert transform_seq is not None, f"Transformation is None for {source_modality.name}"
+            if transform_seq is None:
+                raise ValueError(f"Transformation is None for {source_modality.name}")
             transform_seq.set_output_spacing(scale, shape[::-1])
             pyramid = get_pyramid_for_min_size(source_wrapper.reader, min_size, max_size, pyramid_)
             images.append(transform_images_for_pyramid(source_wrapper, transform_seq, pyramid))
