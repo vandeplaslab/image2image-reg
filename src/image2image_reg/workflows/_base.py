@@ -13,7 +13,7 @@ from koyo.typing import PathLike
 from koyo.utilities import clean_path
 from loguru import logger
 
-from image2image_reg._typing import AttachedShapeOrPointDict
+from image2image_reg._typing import AttachedShapeOrPointDict, OnError
 from image2image_reg.models import Export, Modality, Preprocessing
 from image2image_reg.models.bbox import BoundingBox, Polygon, _transform_to_bbox, _transform_to_polygon
 
@@ -88,7 +88,7 @@ class Workflow:
         raise NotImplementedError("Must implement method")
 
     @classmethod
-    def from_path(cls, path: PathLike, raise_on_error: bool = True) -> Workflow:
+    def from_path(cls, path: PathLike, on_error: OnError = "raise") -> Workflow:
         """Initialize based on the project path."""
         raise NotImplementedError("Must implement method")
 
@@ -372,7 +372,7 @@ class Workflow:
         reader_kws: dict[str, ty.Any] | None = None,
         method: str | None = None,
         overwrite: bool = False,
-        raise_on_error: bool = True,
+        on_error: OnError = "raise",
     ) -> Modality:
         """Add modality."""
         from image2image_io.readers import is_supported
@@ -381,10 +381,14 @@ class Workflow:
             raise ValueError("Sorry, the word 'initial' cannot be used in the modality name as it's reserved.")
 
         path = Path(path)
-        if not path.exists() and raise_on_error:
-            raise ValueError("Path does not exist.")
-        if not is_supported(path, raise_on_error):
-            raise ValueError("Unsupported file format.")
+        if not path.exists() and on_error != "ignore":
+            if on_error == "raise":
+                raise ValueError("Path does not exist.")
+            logger.warning(f"Path '{path}' does not exist.")
+        if not is_supported(path, raise_on_error=on_error == "raise"):
+            if on_error == "raise":
+                raise ValueError("Unsupported file format.")
+            logger.warning(f"Unsupported file format for path '{path}'.")
         if pixel_size <= 0:
             raise ValueError("Pixel size must be greater than 0.")
         if name in self.modalities and not overwrite:
@@ -418,7 +422,7 @@ class Workflow:
             output_pixel_size = (float(output_pixel_size), float(output_pixel_size))
         self.modalities[name] = Modality(
             name=name,
-            path=path.resolve() if raise_on_error else path,
+            path=path.resolve() if on_error == "raise" else path,
             pixel_size=pixel_size,
             channel_names=channel_names,
             channel_colors=channel_colors,
@@ -775,11 +779,13 @@ class Workflow:
         self.preview()
         self.write()
 
-    def _load_modalities_from_config(self, config: dict, raise_on_error: bool = True) -> None:
+    def _load_modalities_from_config(self, config: dict, on_error: OnError = "raise") -> None:
         with MeasureTimer() as timer:
             for name, modality in config["modalities"].items():
-                if not Path(modality["path"]).exists() and raise_on_error:
-                    raise ValueError(f"Modality path '{modality['path']}' does not exist.")
+                if not Path(modality["path"]).exists() and on_error != "ignore":
+                    if on_error == "raise":
+                        raise ValueError(f"Modality path '{modality['path']}' does not exist.")
+                    logger.warning(f"Modality path '{modality['path']}' does not exist.")
                 preprocessing = modality.get("preprocessing", {})
                 self.add_modality(
                     name=name,
@@ -794,7 +800,7 @@ class Workflow:
                     pixel_size=modality.get("pixel_size", 1.0),
                     transform_mask=preprocessing.get("transform_mask", False),
                     export=Export(**modality["export"]) if modality.get("export") else None,
-                    raise_on_error=raise_on_error,
+                    on_error=on_error,
                 )
             logger.trace(f"Loaded modalities in {timer()}")
 
@@ -924,6 +930,7 @@ class Workflow:
                 else:
                     logger.success(f"Path '{path}' exists for attachment={attachment}.")
         return config
+
 
 def _get_new_path(path: Path, source_dir: Path, recursive: bool = False) -> tuple[bool, Path]:
     # check if the file exists in the source directory

@@ -790,8 +790,6 @@ def _read_elastix_transform(
 def _read_final_elastix_transform(path: PathLike) -> tuple[list[dict[str, list[str]]], list[int]]:
     """Read final elastix transform."""
     path = Path(path)
-    if path.suffixes == [".json"]:
-        return _read_elastix_transform(path)
     if path.suffixes == [".elastix", ".json"] or path.suffixes == [".elastix", ".json", ".gz"]:
         transforms, transform_sequence_index = [], []
         transform_data = read_json_gzip(path) if path.suffix in [".gz", ".gzip"] else read_json(path)
@@ -799,6 +797,8 @@ def _read_final_elastix_transform(path: PathLike) -> tuple[list[dict[str, list[s
             transforms.append(tform)
             transform_sequence_index.append(index)
         return transforms, transform_sequence_index
+    # elif path.suffixes == [".json"]:
+    #     return _read_elastix_transform(path)
     raise ValueError(  # noqa: TRY003
         f"Cannot read final elastix transform. Supported file formats: '.json', '.elastix.json', '.elastix.json.gz'."
         f"\nYou provided: {path.name}"

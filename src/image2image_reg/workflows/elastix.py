@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 from image2image_reg._typing import (
     ElastixRegConfig,
+    OnError,
     RegistrationNode,
     SerializedRegisteredRegistrationNode,
     SourceTargetPair,
@@ -129,7 +130,7 @@ class ElastixReg(Workflow):
     def from_path(
         cls,
         path: PathLike,
-        raise_on_error: bool = True,
+        on_error: OnError = "raise",
         quick: bool = False,
     ) -> ElastixReg:
         """Initialize based on the project path."""
@@ -159,7 +160,7 @@ class ElastixReg(Workflow):
 
             obj = cls(project_dir=path, **config)
             if config_path.exists():
-                obj.load_from_i2reg(raise_on_error=raise_on_error, quick=quick)
+                obj.load_from_i2reg(on_error=on_error, quick=quick)
             elif list(obj.project_dir.glob("*.yaml")):
                 obj.load_from_wsireg()
         logger.trace(f"Restored from config in {timer()}")
@@ -379,7 +380,7 @@ class ElastixReg(Workflow):
             logger.success("✅ Project configuration is valid.")
         return is_valid, errors
 
-    def load_from_i2reg(self, raise_on_error: bool = True, quick: bool = False) -> None:
+    def load_from_i2reg(self, on_error: OnError = "raise", quick: bool = False) -> None:
         """Load data from image2image-reg project file."""
         config: ElastixRegConfig = read_json_data(self.project_dir / self.CONFIG_NAME)
         name = config.get("name")
@@ -394,7 +395,7 @@ class ElastixReg(Workflow):
 
         # add modality information
         with MeasureTimer() as timer:
-            self._load_modalities_from_config(config, raise_on_error)
+            self._load_modalities_from_config(config, on_error=on_error)
             # load attachment images
             self._load_attachment_from_config(config)
             # load merge
@@ -426,7 +427,7 @@ class ElastixReg(Workflow):
                     transforms_seq = self._load_registered_transform(
                         registered_edge,
                         target,
-                        raise_on_error=raise_on_error,
+                        on_error=on_error,
                     )
                     if transforms_seq:
                         transformations[source] = transforms_seq
@@ -440,7 +441,7 @@ class ElastixReg(Workflow):
         self,
         edge: SerializedRegisteredRegistrationNode,
         target: str,
-        raise_on_error: bool = True,
+        on_error: OnError = "raise",
     ) -> dict[str, TransformSequence | None] | None:
         """Load registered transform and make sure all attributes are correctly set-up."""
         from image2image_reg.wrapper import ImageWrapper
@@ -466,17 +467,13 @@ class ElastixReg(Workflow):
                 edge["target_preprocessing"],
                 quick=True,
                 quiet=True,
-                raise_on_error=raise_on_error,
+                on_error=on_error,
             )
             self.original_size_transforms[target_wrapper.name] = target_wrapper.original_size_transform
 
             source_modality = self.modalities[source]
             source_wrapper = ImageWrapper(
-                source_modality,
-                edge["source_preprocessing"],
-                quick=True,
-                quiet=True,
-                raise_on_error=raise_on_error,
+                source_modality, edge["source_preprocessing"], quick=True, quiet=True, on_error=on_error
             )
             source_wrapper.initial_transforms = source_wrapper.load_initial_transform(source_modality, self.cache_dir)
 
@@ -2112,16 +2109,8 @@ class ElastixReg(Workflow):
             source = edge["modalities"]["source"]
             target = self.registration_paths[source][-1]
             through = None if len(self.registration_paths[source]) == 1 else self.registration_paths[source][0]
-            source_preprocessing = (
-                edge["source_preprocessing"].to_dict()
-                if edge["source_preprocessing"]
-                else None
-            )
-            target_preprocessing = (
-                edge["target_preprocessing"].to_dict()
-                if edge["target_preprocessing"]
-                else None
-            )
+            source_preprocessing = edge["source_preprocessing"].to_dict() if edge["source_preprocessing"] else None
+            target_preprocessing = edge["target_preprocessing"].to_dict() if edge["target_preprocessing"] else None
             registration_paths[f"reg_path_{index}"] = {
                 "source": source,
                 "target": target,

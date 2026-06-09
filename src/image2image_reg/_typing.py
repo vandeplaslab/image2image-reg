@@ -8,6 +8,8 @@ if ty.TYPE_CHECKING:
     from image2image_reg.elastix.transform_sequence import TransformSequence
     from image2image_reg.models import Preprocessing
 
+OnError = ty.Literal["raise", "warn", "ignore"]
+
 
 class TransformPair(ty.TypedDict):
     """Transformation pair."""

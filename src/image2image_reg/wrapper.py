@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 from image2image_io.readers import BaseReader, ShapesReader, get_simple_reader
+from image2image_reg._typing import OnError
 from koyo.json import read_json_data, write_json_data
 from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
@@ -34,14 +35,14 @@ class ImageWrapper:
         preview: bool = False,
         quick: bool = False,
         quiet: bool = False,
-        raise_on_error: bool = True,
+        on_error: OnError = "raise",
     ):
         self.modality = modality
         self.preprocessing = preprocessing
         self.preview = preview
         self.quick = quick
         self.quiet = quiet
-        self.raise_on_error = raise_on_error
+        self.on_error = on_error
 
         self.image: sitk.Image | None = None
         self._mask: sitk.Image | None = None
@@ -61,9 +62,11 @@ class ImageWrapper:
                     quiet=self.quiet,
                     scene_index=reader_kws.get("scene_index", None),
                 )
-            except Exception:
-                if self.raise_on_error:
+            except Exception as exc:
+                if self.on_error == "raise":
                     raise
+                elif self.on_error == "warn":
+                    logger.warning(f"Failed to initialize reader for {self.modality.name}: {exc}")
                 self._reader = None
         return self._reader
 
