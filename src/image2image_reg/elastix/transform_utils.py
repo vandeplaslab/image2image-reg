@@ -154,7 +154,8 @@ def affine_to_itk_affine(
     """
     # TODO change the origin so that we don't have to make the image bigger
 
-    assert affine.shape == (3, 3), "affine matrix must be 3x3"
+    if affine.shape != (3, 3):
+        raise ValueError("affine matrix must be 3x3")
     if inverse:
         affine = np.linalg.inv(affine)
 
@@ -198,7 +199,8 @@ def affine_to_itk_affine2(
     """
     # TODO change the origin so that we don't have to make the image bigger
 
-    assert affine.shape == (3, 3), "affine matrix must be 3x3"
+    if affine.shape != (3, 3):
+        raise ValueError("affine matrix must be 3x3")
     if inverse:
         affine = np.linalg.inv(affine)
 
@@ -920,7 +922,8 @@ def affine_to_euler2d(affine_matrix: np.ndarray, center=(0.0, 0.0)) -> sitk.Eule
     -------
         SimpleITK.Euler2DTransform
     """
-    assert affine_matrix.shape == (3, 3), "Expected 3x3 matrix"
+    if affine_matrix.shape != (3, 3):
+        raise ValueError("Expected 3x3 matrix")
 
     a, _b, tx = affine_matrix[0]
     c, _d, ty = affine_matrix[1]
@@ -967,7 +970,8 @@ def affine_to_sitk_affine(affine_matrix: np.ndarray) -> sitk.AffineTransform:
     -------
         SimpleITK.AffineTransform
     """
-    assert affine_matrix.shape == (3, 3), "Expected a 3x3 affine matrix"
+    if affine_matrix.shape != (3, 3):
+        raise ValueError("Expected a 3x3 affine matrix")
 
     # Extract 2x2 linear part and flatten to row-major order
     matrix = affine_matrix[:2, :2].flatten()

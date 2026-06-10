@@ -63,30 +63,15 @@ Options:
   --log FILE     Write logs to file (specify log path).
   -h, --help     Show this message and exit.
 
-Project:
-  new             Create a new project.
-  about           Print information about the registration...
-  validate        Validate project configuration.
-  add-image       Add images to the project.
-  add-path        Specify the registration path between the...
-  add-attachment  Add attachment image to registered modality.
-  add-points      Add attachment points (csv/tsv/txt) to...
-  add-shape       Add attachment shape (GeoJSON) to...
-  add-merge       Specify how (if) images should be merged.
-
-Execute:
-  preprocess  Preprocess images.
-  register    Register images.
-  clear       Clear project data...
-  export      Export images.
-
-Valis:
-  valis-init      Initialize Valis configuration file.
-  valis-register  Register images using the Valis algorithm.
+Registration:
+  elastix       Elastix whole-slide image registration.
+  valis         Valis registration.
+  simple-valis  Valis registration.
 
 Utility:
-  merge    Export images.
-  convert  Convert images to pyramidal OME-TIFF.
+  convert    Convert images to pyramidal OME-TIFF or OME-Zarr.
+  merge      Export images.
+  transform  Transform command.
 ```
 
 ## Contributing
@@ -96,5 +81,9 @@ Contributions are always welcome. Please feel free to submit PRs with new featur
 ```bash
 git clone https://github.com/vandeplaslab/image2image-reg.git
 
-pip install -e .[dev]
+uv sync --group dev
+uv run pytest
 ```
+
+The project depends on `image2image-io`, which can pull geospatial packages such as `rasterio`. If your platform cannot
+use a prebuilt wheel, install GDAL development headers first so `gdal-config` is available before syncing dependencies.

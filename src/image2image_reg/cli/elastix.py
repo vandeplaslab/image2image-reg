@@ -25,6 +25,7 @@ from image2image_reg.cli._common import (
     files_,
     fmt_,
     get_preprocessing,
+    has_i2i,
     image_,
     modality_multi_,
     modality_single_,
@@ -39,6 +40,7 @@ from image2image_reg.cli._common import (
     project_path_single_,
     remove_merged_,
     rename_,
+    viewer_,
     write_attached_,
     write_attached_images_,
     write_attached_points_,
@@ -46,12 +48,9 @@ from image2image_reg.cli._common import (
     write_merged_,
     write_not_registered_,
     write_registered_,
-    viewer_,
-    has_i2i,
 )
 from image2image_reg.elastix.registration_map import AVAILABLE_REGISTRATIONS
 from image2image_reg.enums import PreprocessingOptions, PreprocessingOptionsWithNone, WriterMode
-
 
 final_ = click.option(
     "--final/--no_final",
@@ -250,38 +249,45 @@ def add_modality_runner(
     """Add images to the project."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
-    if not isinstance(names, (list, tuple)):
-        names = [names]  # type: ignore[list-item]
-    if not isinstance(paths, (list, tuple)):
-        paths = [paths]  # type: ignore[list-item]
-    if not masks:
-        masks = [None] * len(paths)  # type: ignore[list-item]
-    if not isinstance(masks, (list, tuple)):
-        masks = [masks]  # type: ignore[list-item]
-    if len(masks) != len(paths) and len(masks) > 0:
-        masks = [None] * len(paths)  # type: ignore[list-item]
-    if not affines:
-        affines = [None] * len(paths)  # type: ignore[list-item]
-    if not isinstance(affines, (list, tuple)):
-        affines = [affines]  # type: ignore[list-item]
-    if not isinstance(preprocessings, (list, tuple)):
-        preprocessings = [preprocessings]  # type: ignore[list-item]
-    if not methods:
-        methods = [methods] * len(paths)
+    def as_list(values: ty.Sequence | str | None) -> list:
+        """Return command values as a mutable list."""
+        if values is None:
+            return []
+        if isinstance(values, (list, tuple)):
+            return list(values)
+        return [values]
 
-    if len(preprocessings) == 1 and len(paths) > 1:
-        preprocessings = preprocessings * len(paths)
-        info_msg(f"Using same pre-processing for all images: {preprocessings[0]}")
-    if len(affines) == 1 and len(paths) > 1:
-        affines = affines * len(paths)
-        info_msg(f"Using same pre-processing for all images: {affines[0]}")
-    if len(methods) == 1 and len(paths) > 1:
-        methods = methods * len(paths)
-        info_msg(f"Using same method for all images: {methods[0]}")
+    def normalize_repeatable(
+        values: ty.Sequence | str | None,
+        expected_length: int,
+        label: str,
+        default: ty.Any = None,
+        repeat_single: bool = False,
+    ) -> list:
+        """Normalize a repeatable CLI option to match the number of images."""
+        values_list = as_list(values)
+        if not values_list:
+            return [default] * expected_length
+        if len(values_list) == 1 and repeat_single and expected_length > 1:
+            info_msg(f"Using same {label} for all images: {values_list[0]}")
+            return values_list * expected_length
+        if len(values_list) != expected_length:
+            raise ValueError(
+                f"Number of {label} values ({len(values_list)}) must match number of images ({expected_length}).",
+            )
+        return values_list
 
-    if len(names) != len(paths) != len(preprocessings) != len(masks):
-        raise ValueError("Number of names, paths and pre-processing must match.")
-    if masks[0] and mask_bbox:
+    names = as_list(names)
+    paths = as_list(paths)
+    if len(names) != len(paths):
+        raise ValueError(f"Number of names ({len(names)}) must match number of images ({len(paths)}).")
+
+    preprocessings = normalize_repeatable(preprocessings, len(paths), "pre-processing", repeat_single=True)
+    masks = normalize_repeatable(masks, len(paths), "mask")
+    affines = normalize_repeatable(affines, len(paths), "affine", repeat_single=True)
+    methods = normalize_repeatable(methods, len(paths), "method", repeat_single=True)
+
+    if mask_bbox and any(mask is not None for mask in masks):
         raise ValueError("Mask bounding box cannot be specified if mask is provided.")
 
     print_parameters(
@@ -297,7 +303,7 @@ def add_modality_runner(
     )
     obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.set_logger()
-    for name, path, mask, preprocessing, affine, method in zip(names, paths, masks, preprocessings, affines, methods):
+    for name, path, mask, preprocessing, affine, method in zip(names, paths, masks, preprocessings, affines, methods, strict=False):
         obj.auto_add_modality(
             name,
             path,
@@ -456,7 +462,7 @@ def add_attachment_runner(
     )
     obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.set_logger()
-    for name, path in zip(names, paths):
+    for name, path in zip(names, paths, strict=False):
         obj.auto_add_attachment_images(attach_to, name, path)
     obj.save()
 
@@ -1428,11 +1434,11 @@ def open_in_viewer(project_dir: PathLike) -> None:
     """Open registered images in i2i-viewer."""
     if not has_i2i:
         warning_msg("image2image is not installed. Cannot open viewer.")
-        return None
+        return
     from image2image.main import run
 
     image_dir = Path(project_dir) / "Images"
     if not image_dir.exists() and len(list(image_dir.glob("*.ome.iff"))) == 0:
         warning_msg(f"No images found in {image_dir}. Cannot open viewer.")
-        return None
+        return
     run(tool="viewer", image_dir=image_dir)

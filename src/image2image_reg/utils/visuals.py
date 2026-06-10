@@ -241,6 +241,7 @@ def get_shape(img: np.ndarray) -> np.ndarray:
 def prepare_images_for_overlap(images: list[np.ndarray]) -> list[np.ndarray]:
     """Prepare images for overlap."""
     from koyo.image import clip_hotspots
+
     from image2image_reg.utils.preprocessing import convert_image_to_array
 
     grey_images = []

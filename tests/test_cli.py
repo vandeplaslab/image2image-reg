@@ -5,7 +5,9 @@ import os
 import click
 import pytest
 
+from image2image_reg.cli.elastix import add_modality_runner
 from image2image_reg.cli.merge import arg_parse_channel_ids
+from image2image_reg.cli.valis import cli_parse_method
 from image2image_reg.utils._test import get_test_file
 from image2image_reg.workflows import ElastixReg
 
@@ -20,6 +22,27 @@ def test_cli_merge_channel_ids_parser():
 
     with pytest.raises(click.BadParameter):
         arg_parse_channel_ids(ctx, option, ("4-2",))
+
+
+def test_cli_valis_preprocessing_aliases():
+    """Test Valis pre-processing shortcut expansion."""
+    assert cli_parse_method(None, None, ["cs", "mip", "CustomProcessor"]) == [
+        "ColorfulStandardizer",
+        "MaxIntensityProjection",
+        "CustomProcessor",
+    ]
+
+
+def test_cli_add_image_rejects_mismatched_masks():
+    """Test repeatable add-image options reject mismatched lengths."""
+    with pytest.raises(ValueError, match="Number of mask values"):
+        add_modality_runner(
+            project_dir="unused.wsireg",
+            names=["source", "target"],
+            paths=["source.tiff", "target.tiff"],
+            masks=["mask.tiff"],
+            preprocessings=["basic"],
+        )
 
 
 def test_cli_entrypoint():

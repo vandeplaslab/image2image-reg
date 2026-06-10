@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import SimpleITK as sitk
 
+from image2image_reg.models import Preprocessing
 from image2image_reg.preprocessing.convert import numpy_to_sitk_image
 from image2image_reg.preprocessing.step import (
     PREPROCESSOR_REGISTER,
@@ -22,6 +23,7 @@ from image2image_reg.preprocessing.step import (
     get_preprocessor,
 )
 from image2image_reg.preprocessing.workflow import Workflow
+from image2image_reg.utils.preprocessing import preprocess_spatial
 
 
 def single_channel_array(as_sitk: bool = False) -> np.ndarray | sitk.Image:
@@ -236,3 +238,20 @@ def test_workflow():
     array_ = wf.run(to_array=True)
     assert isinstance(array_, np.ndarray), "Conversion to NumPy failed"
     assert array_.dtype == np.uint8, "Incorrect dtype"
+
+
+def test_preprocess_spatial_downsamples_mask():
+    image = sitk.GetImageFromArray(np.ones((8, 8), dtype=np.uint8))
+    mask = sitk.GetImageFromArray(np.ones((8, 8), dtype=np.uint8))
+    preprocessing = Preprocessing(downsample=2)
+
+    image, mask, _transforms, _original_size_transform = preprocess_spatial(
+        image,
+        preprocessing,
+        pixel_size=1.0,
+        mask=mask,
+    )
+
+    assert image.GetSize() == (4, 4)
+    assert mask is not None
+    assert mask.GetSize() == (4, 4)

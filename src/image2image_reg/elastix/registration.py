@@ -13,16 +13,16 @@ from image2image_reg.elastix.registration_map import DEFAULT_REGISTRATION_PARAME
 def _elx_lineparser(
     line: str,
 ) -> tuple[str, list[str]] | tuple[None, None]:
-    if line[0] == "(":
-        params = line.replace("(", "").replace(")", "").replace("\n", "").replace('"', "")
-        params = params.split(" ", 1)
-        k, v = params[0], params[1]
-        if " " in v:
-            v = v.split(" ")
-            v = list(filter(lambda a: a != "", v))
-        if not isinstance(v, list):
-            v = [v]
-        return k, v
+    line = line.strip()
+    if not line or line.startswith(("//", "#")):
+        return None, None
+    if line.startswith("("):
+        if not line.endswith(")"):
+            raise ValueError(f"Malformed Elastix parameter line: {line}")
+        params = line[1:-1].replace('"', "").split()
+        if len(params) < 2:
+            raise ValueError(f"Malformed Elastix parameter line: {line}")
+        return params[0], params[1:]
     return None, None
 
 
