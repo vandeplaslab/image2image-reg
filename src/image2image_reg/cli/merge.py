@@ -115,14 +115,14 @@ def merge(
     name: str,
     path: ty.Sequence[str],
     output_dir: str,
-    crop_bbox: tuple[int, int, int, int] | None,
+    bbox: tuple[int, int, int, int] | None,
     channel_ids: ty.Sequence[tuple] | None,
     fmt: WriterMode,
     as_uint8: bool | None,
     overwrite: bool,
 ) -> None:
     """Export images."""
-    merge_runner(name, path, output_dir, crop_bbox, channel_ids, fmt, as_uint8, overwrite)
+    merge_runner(name, path, output_dir, bbox, channel_ids, fmt, as_uint8, overwrite)
 
 
 def merge_runner(
