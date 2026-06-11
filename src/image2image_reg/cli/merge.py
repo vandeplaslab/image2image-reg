@@ -5,7 +5,7 @@ from __future__ import annotations
 import typing as ty
 
 import click
-from image2image_io.cli._common import arg_split_bbox, as_uint8_, fmt_, overwrite_
+from image2image_io.cli._common import as_uint8_, bbox_, fmt_, overwrite_
 from image2image_io.enums import WriterMode
 from koyo.click import Parameter, cli_parse_paths_sort, print_parameters
 from koyo.timer import MeasureTimer
@@ -83,16 +83,7 @@ def _parse_channel_id(ctx: click.Context, param: click.Parameter, value: str) ->
     multiple=True,
     required=False,
 )
-@click.option(
-    "-b",
-    "--crop_bbox",
-    help="Bound box to be used for cropping of the image(s). It must be supplied in the format: x,y,width,height and"
-    " be in PIXEL units. It will throw an error if fewer or more than 4 values are supplied.",
-    type=click.UNPROCESSED,
-    show_default=True,
-    required=False,
-    callback=arg_split_bbox,
-)
+@bbox_
 @click.option(
     "-o",
     "--output_dir",
@@ -138,7 +129,7 @@ def merge_runner(
     name: str,
     paths: ty.Sequence[str],
     output_dir: str,
-    crop_bbox: tuple[int, int, int, int] | None,
+    bbox: tuple[int, int, int, int] | None,
     channel_ids: ty.Sequence[tuple] | None,
     fmt: WriterMode = "ome-tiff",
     as_uint8: bool | None = False,
@@ -151,7 +142,7 @@ def merge_runner(
         Parameter("Name", "-n/--name", name),
         Parameter("Image paths", "-p/--path", paths),
         Parameter("Output directory", "-o/--output_dir", output_dir),
-        Parameter("Crop bounding box", "-b/--crop_bbox", crop_bbox),
+        Parameter("Crop bounding box", "-b/--bbox", bbox),
         Parameter("Channel ids", "-C/--channel_ids", channel_ids),
         Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
@@ -166,7 +157,7 @@ def merge_runner(
             name,
             list(paths),
             output_dir,
-            crop_bbox,
+            bbox,
             fmt,
             as_uint8,
             channel_ids=channel_ids,
