@@ -15,6 +15,7 @@ from loguru import logger
 from image2image_reg import __version__
 from image2image_reg.cli._common import set_logger
 from image2image_reg.cli.elastix import elastix
+from image2image_reg.cli.ims2postaf import ims2postaf
 from image2image_reg.cli.merge import merge
 from image2image_reg.cli.simple_valis import simple_valis
 from image2image_reg.cli.valis import valis
@@ -119,6 +120,7 @@ if valis:
     cli.add_command(valis, help_group="Registration")
 if simple_valis:
     cli.add_command(simple_valis, help_group="Registration")
+cli.add_command(ims2postaf, help_group="Registration")
 cli.add_command(convert, help_group="Utility")
 cli.add_command(merge, help_group="Utility")
 if transform:
