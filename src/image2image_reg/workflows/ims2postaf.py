@@ -188,6 +188,7 @@ def estimate_ims_to_postaf_affine(
         response=response,
         postaf_shape=postaf_gray.shape,
         postaf_pixel_size_yx=postaf_data.pixel_size_yx,
+        ims_footprint_corners_yx_px=source_corners_yx_px,
         ims_footprint_area_px=source_area_px,
         ims_pixel_size_yx=ims_data.pixel_size_yx,
     )
@@ -326,6 +327,7 @@ def _detect_ims_footprint(
     response: np.ndarray,
     postaf_shape: Shape2D,
     postaf_pixel_size_yx: NumberPair,
+    ims_footprint_corners_yx_px: np.ndarray,
     ims_footprint_area_px: float,
     ims_pixel_size_yx: NumberPair,
 ) -> tuple[np.ndarray, float, dict[str, ty.Any]]:
@@ -345,6 +347,7 @@ def _detect_ims_footprint(
         raise ValueError(FOOTPRINT_NOT_DETECTED_MESSAGE)
 
     expected_area = _expected_footprint_area_px(ims_footprint_area_px, ims_pixel_size_yx, postaf_pixel_size_yx)
+    expected_geometry = _footprint_geometry(ims_footprint_corners_yx_px, ims_pixel_size_yx)
     best: tuple[float, float, np.ndarray, dict[str, ty.Any]] | None = None
     for contour in contours:
         contour_mask = np.zeros(postaf_shape, dtype=np.uint8)
@@ -356,22 +359,47 @@ def _detect_ims_footprint(
         corners_yx, rect_area = _minimum_area_corners_yx(points_xy)
         if rect_area <= 0:
             continue
+        geometry = _footprint_geometry(corners_yx, postaf_pixel_size_yx)
         area_ratio = rect_area / expected_area if expected_area > 0 else 0
         area_score = min(area_ratio, 1 / area_ratio) if area_ratio > 0 else 0
+        width_score = _ratio_score(geometry["width"], expected_geometry["width"])
+        height_score = _ratio_score(geometry["height"], expected_geometry["height"])
+        aspect_score = _ratio_score(geometry["aspect"], expected_geometry["aspect"])
+        orientation_score = _orientation_score(geometry["angle"], expected_geometry["angle"])
+        axis_score = (0.35 * width_score) + (0.35 * height_score) + (0.20 * aspect_score) + (0.10 * orientation_score)
         density = len(x_coords) / max(rect_area, 1)
         density_score = min(1.0, density / 0.015)
         inside_response = float(np.mean(response[y_coords, x_coords]))
         global_response = float(np.mean(response[response > 0])) if np.any(response > 0) else 1.0
         response_score = min(1.0, inside_response / max(global_response, 1.0))
-        confidence = float(np.clip((0.55 * area_score) + (0.25 * density_score) + (0.20 * response_score), 0, 1))
+        confidence = float(
+            np.clip(
+                (0.45 * axis_score) + (0.25 * area_score) + (0.15 * density_score) + (0.15 * response_score),
+                0,
+                1,
+            )
+        )
         diagnostics = {
             "threshold": int(threshold),
             "morphology_kernel_size": int(kernel_size),
             "expected_area_px": float(expected_area),
             "detected_area_px": float(rect_area),
             "area_ratio": float(area_ratio),
+            "expected_width_um": float(expected_geometry["width"]),
+            "expected_height_um": float(expected_geometry["height"]),
+            "expected_aspect": float(expected_geometry["aspect"]),
+            "expected_angle": float(expected_geometry["angle"]),
+            "detected_width_um": float(geometry["width"]),
+            "detected_height_um": float(geometry["height"]),
+            "detected_aspect": float(geometry["aspect"]),
+            "detected_angle": float(geometry["angle"]),
             "density": float(density),
+            "axis_score": float(axis_score),
             "area_score": float(area_score),
+            "width_score": float(width_score),
+            "height_score": float(height_score),
+            "aspect_score": float(aspect_score),
+            "orientation_score": float(orientation_score),
             "density_score": float(density_score),
             "response_score": float(response_score),
             "n_contours": len(contours),
@@ -415,6 +443,32 @@ def _order_corners_xy(corners_xy: np.ndarray) -> np.ndarray:
     return ordered[[0, 3, 1, 2]]
 
 
+def _footprint_geometry(corners_yx: np.ndarray, pixel_size_yx: NumberPair) -> dict[str, float]:
+    width = _physical_distance(corners_yx[0], corners_yx[1], pixel_size_yx)
+    height = _physical_distance(corners_yx[0], corners_yx[2], pixel_size_yx)
+    aspect = width / max(height, np.finfo(float).eps)
+    vector = corners_yx[1] - corners_yx[0]
+    angle = math.degrees(math.atan2(vector[0] * pixel_size_yx[0], vector[1] * pixel_size_yx[1]))
+    return {"width": width, "height": height, "aspect": aspect, "angle": angle}
+
+
+def _physical_distance(start_yx: np.ndarray, end_yx: np.ndarray, pixel_size_yx: NumberPair) -> float:
+    delta = (end_yx - start_yx) * np.asarray(pixel_size_yx)
+    return float(np.linalg.norm(delta))
+
+
+def _ratio_score(value: float, expected: float) -> float:
+    if value <= 0 or expected <= 0:
+        return 0.0
+    ratio = value / expected
+    return float(min(ratio, 1 / ratio))
+
+
+def _orientation_score(angle: float, expected_angle: float) -> float:
+    delta = abs(((angle - expected_angle + 90) % 180) - 90)
+    return float(max(0.0, math.cos(math.radians(delta))) ** 4)
+
+
 def _detect_source_ims_footprint(ims_gray: np.ndarray) -> tuple[np.ndarray, float]:
     nonzero = ims_gray[ims_gray > 0]
     if len(nonzero) == 0:
@@ -427,8 +481,18 @@ def _detect_source_ims_footprint(ims_gray: np.ndarray) -> tuple[np.ndarray, floa
     y_coords, x_coords = np.nonzero(mask)
     if len(x_coords) < 8:
         raise ValueError(IMS_MARKERS_NOT_DETECTED_MESSAGE)
-    points_xy = np.column_stack([x_coords, y_coords]).astype(np.float32)
-    return _minimum_area_corners_yx(points_xy)
+    y_min, y_max = float(np.min(y_coords)), float(np.max(y_coords))
+    x_min, x_max = float(np.min(x_coords)), float(np.max(x_coords))
+    corners_yx = np.asarray(
+        [
+            [y_min, x_min],
+            [y_min, x_max],
+            [y_max, x_min],
+            [y_max, x_max],
+        ],
+        dtype=np.float64,
+    )
+    return corners_yx, max((y_max - y_min) * (x_max - x_min), 1.0)
 
 
 def _expected_footprint_area_px(
@@ -482,7 +546,7 @@ def _refine_with_ims_image(
         moving = _normalize_for_ecc(warped_ims)
         warp_xy = np.eye(2, 3, dtype=np.float32)
         criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 1e-5)
-        correlation, delta_xy = cv2.findTransformECC(template, moving, warp_xy, cv2.MOTION_AFFINE, criteria)
+        correlation, delta_xy = cv2.findTransformECC(template, moving, warp_xy, cv2.MOTION_TRANSLATION, criteria)
     except cv2.error as exc:
         diagnostics["refinement_error"] = str(exc)
         return matrix_yx_px, diagnostics
