@@ -717,7 +717,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
     show_default=True,
 )
 @click.option(
-    "--max-registration-pixels",
+    "-X",
     "--max_registration_pixels",
     callback=parse_max_registration_pixels,
     help="Maximum pixels per registration input. Accepts K/M/B suffixes, e.g. 100M or 1B. Use 0/off to disable.",
