@@ -365,8 +365,9 @@ def _detect_ims_footprint(
         width_score = _ratio_score(geometry["width"], expected_geometry["width"])
         height_score = _ratio_score(geometry["height"], expected_geometry["height"])
         aspect_score = _ratio_score(geometry["aspect"], expected_geometry["aspect"])
+        size_score = min(width_score, height_score)
         orientation_score = _orientation_score(geometry["angle"], expected_geometry["angle"])
-        axis_score = (0.35 * width_score) + (0.35 * height_score) + (0.20 * aspect_score) + (0.10 * orientation_score)
+        axis_score = (0.45 * size_score) + (0.25 * aspect_score) + (0.30 * orientation_score)
         density = len(x_coords) / max(rect_area, 1)
         density_score = min(1.0, density / 0.015)
         inside_response = float(np.mean(response[y_coords, x_coords]))
@@ -374,11 +375,13 @@ def _detect_ims_footprint(
         response_score = min(1.0, inside_response / max(global_response, 1.0))
         confidence = float(
             np.clip(
-                (0.45 * axis_score) + (0.25 * area_score) + (0.15 * density_score) + (0.15 * response_score),
+                (0.60 * axis_score) + (0.15 * area_score) + (0.10 * density_score) + (0.15 * response_score),
                 0,
                 1,
             )
         )
+        corrected_corners_yx = _resize_target_corners_to_expected(corners_yx, expected_geometry, postaf_pixel_size_yx)
+        corrected_geometry = _footprint_geometry(corrected_corners_yx, postaf_pixel_size_yx)
         diagnostics = {
             "threshold": int(threshold),
             "morphology_kernel_size": int(kernel_size),
@@ -393,9 +396,14 @@ def _detect_ims_footprint(
             "detected_height_um": float(geometry["height"]),
             "detected_aspect": float(geometry["aspect"]),
             "detected_angle": float(geometry["angle"]),
+            "corrected_width_um": float(corrected_geometry["width"]),
+            "corrected_height_um": float(corrected_geometry["height"]),
+            "corrected_aspect": float(corrected_geometry["aspect"]),
+            "corrected_angle": float(corrected_geometry["angle"]),
             "density": float(density),
             "axis_score": float(axis_score),
             "area_score": float(area_score),
+            "size_score": float(size_score),
             "width_score": float(width_score),
             "height_score": float(height_score),
             "aspect_score": float(aspect_score),
@@ -405,7 +413,7 @@ def _detect_ims_footprint(
             "n_contours": len(contours),
         }
         if best is None or confidence > best[0]:
-            best = confidence, rect_area, corners_yx, diagnostics
+            best = confidence, rect_area, corrected_corners_yx, diagnostics
 
     if best is None:
         raise ValueError(MARKERS_NOT_DETECTED_MESSAGE)
@@ -429,6 +437,28 @@ def _minimum_area_corners_yx(points_xy: np.ndarray) -> tuple[np.ndarray, float]:
     ordered_xy = _order_corners_xy(box_xy)
     corners_yx = ordered_xy[:, ::-1]
     return corners_yx.astype(np.float64), float(width * height)
+
+
+def _resize_target_corners_to_expected(
+    corners_yx: np.ndarray,
+    expected_geometry: dict[str, float],
+    pixel_size_yx: NumberPair,
+) -> np.ndarray:
+    center = np.mean(corners_yx, axis=0)
+    angle = math.radians(_footprint_geometry(corners_yx, pixel_size_yx)["angle"])
+    half_width_px = expected_geometry["width"] / pixel_size_yx[1] / 2
+    half_height_px = expected_geometry["height"] / pixel_size_yx[0] / 2
+    width_vector = np.asarray([math.sin(angle) * half_width_px, math.cos(angle) * half_width_px])
+    height_vector = np.asarray([math.cos(angle) * half_height_px, -math.sin(angle) * half_height_px])
+    return np.asarray(
+        [
+            center - width_vector - height_vector,
+            center + width_vector - height_vector,
+            center - width_vector + height_vector,
+            center + width_vector + height_vector,
+        ],
+        dtype=np.float64,
+    )
 
 
 def _order_corners_xy(corners_xy: np.ndarray) -> np.ndarray:

@@ -123,6 +123,28 @@ def test_estimate_ims_to_postaf_affine_prefers_ims_axis_aligned_candidate() -> N
     assert result.diagnostics["orientation_score"] > 0.9
 
 
+def test_estimate_ims_to_postaf_affine_constrains_target_size() -> None:
+    """Test oversized postAF responses do not scale the IMS footprint."""
+    ims, _postaf, expected_matrix_px = _synthetic_postaf(angle_degrees=0.0, translation_yx=(140.0, 120.0))
+    rng = np.random.default_rng(13)
+    postaf = rng.normal(28, 3, size=(520, 680)).astype(np.float32)
+    _draw_ablation_from_matrix(postaf, ims, expected_matrix_px, intensity=180)
+    y_coords, x_coords = np.nonzero(postaf > 100)
+    postaf[np.clip(y_coords + 28, 0, postaf.shape[0] - 1), x_coords] = 170
+    postaf[np.clip(y_coords - 28, 0, postaf.shape[0] - 1), x_coords] = 170
+    postaf = cv2.GaussianBlur(postaf, (3, 3), sigmaX=0)
+
+    result = estimate_ims_to_postaf_affine(
+        np.clip(postaf, 0, 255).astype(np.uint8),
+        ims,
+        postaf_pixel_size=1.0,
+        ims_pixel_size=10.0,
+    )
+
+    assert result.diagnostics["detected_height_um"] > result.diagnostics["expected_height_um"]
+    assert result.diagnostics["corrected_height_um"] == pytest.approx(result.diagnostics["expected_height_um"])
+
+
 def test_estimate_ims_to_postaf_affine_handles_cyx_ims_file(tmp_path: Path) -> None:
     """Test CYX IMS files are projected over the channel axis."""
     ims, postaf, expected_matrix_px = _synthetic_postaf()
