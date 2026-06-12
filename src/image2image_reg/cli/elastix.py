@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import typing as ty
 from contextlib import suppress
 from pathlib import Path
@@ -49,9 +50,9 @@ from image2image_reg.cli._common import (
     write_not_registered_,
     write_registered_,
 )
+from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 from image2image_reg.elastix.registration_map import AVAILABLE_REGISTRATIONS
 from image2image_reg.enums import PreprocessingOptions, PreprocessingOptionsWithNone, WriterMode
-from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 
 final_ = click.option(
     "--final/--no_final",
@@ -60,6 +61,36 @@ final_ = click.option(
     default=False,
     show_default=True,
 )
+
+
+def parse_max_registration_pixels(ctx: click.Context, param: click.Parameter, value: str | int | None) -> int:
+    """Parse a registration pixel cap from an integer or K/M/B suffix."""
+    if value is None:
+        return DEFAULT_MAX_REGISTRATION_PIXELS
+    if isinstance(value, int):
+        if value < 0:
+            raise click.BadParameter("Value must be greater than or equal to 0.", ctx=ctx, param=param)  # noqa: TRY003
+        return value
+
+    value = value.strip()
+    if value.lower() in {"none", "off", "uncapped"}:
+        return 0
+
+    match = re.fullmatch(r"(?i)(\d+(?:\.\d+)?)\s*([kmb])?(?:\s*(?:p|px|pixels?))?", value)
+    if match is None:
+        raise click.BadParameter(  # noqa: TRY003
+            "Use a non-negative integer, or a K/M/B suffix like 100M or 1B.",
+            ctx=ctx,
+            param=param,
+        )
+
+    number = float(match.group(1))
+    suffix = (match.group(2) or "").lower()
+    multiplier = {"": 1, "k": 1_000, "m": 1_000_000, "b": 1_000_000_000}[suffix]
+    pixels = int(number * multiplier)
+    if pixels < 0:
+        raise click.BadParameter("Value must be greater than or equal to 0.", ctx=ctx, param=param)  # noqa: TRY003
+    return pixels
 
 
 def is_valis(project_dir: Path) -> bool:
@@ -254,7 +285,7 @@ def add_modality_runner(
         """Return command values as a mutable list."""
         if values is None:
             return []
-        if isinstance(values, (list, tuple)):
+        if isinstance(values, list | tuple):
             return list(values)
         return [values]
 
@@ -304,7 +335,9 @@ def add_modality_runner(
     )
     obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.set_logger()
-    for name, path, mask, preprocessing, affine, method in zip(names, paths, masks, preprocessings, affines, methods, strict=False):
+    for name, path, mask, preprocessing, affine, method in zip(
+        names, paths, masks, preprocessings, affines, methods, strict=False
+    ):
         obj.auto_add_modality(
             name,
             path,
@@ -444,9 +477,9 @@ def add_attachment_runner(
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
-    if not isinstance(paths, (list, tuple)):
+    if not isinstance(paths, list | tuple):
         names = [names]
-    if not isinstance(paths, (list, tuple)):
+    if not isinstance(paths, list | tuple):
         paths = [paths]
     if len(paths) > len(names):
         raise ValueError("Number of names and paths must match.")
@@ -496,7 +529,7 @@ def add_points_runner(
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
-    if not isinstance(paths, (list, tuple)):
+    if not isinstance(paths, list | tuple):
         paths = [paths]
 
     print_parameters(
@@ -540,7 +573,7 @@ def add_shape_runner(
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
-    if not isinstance(paths, (list, tuple)):
+    if not isinstance(paths, list | tuple):
         paths = [paths]
 
     print_parameters(
@@ -684,10 +717,11 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
     show_default=True,
 )
 @click.option(
+    "--max-registration-pixels",
     "--max_registration_pixels",
-    help="Maximum pixels per registration input. Use 0 to disable automatic capping.",
-    type=click.IntRange(0),
-    default=DEFAULT_MAX_REGISTRATION_PIXELS,
+    callback=parse_max_registration_pixels,
+    help="Maximum pixels per registration input. Accepts K/M/B suffixes, e.g. 100M or 1B. Use 0/off to disable.",
+    default="100M",
     show_default=True,
 )
 @project_path_multi_
