@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import typing as ty
 from contextlib import suppress
 from pathlib import Path
@@ -49,6 +50,7 @@ from image2image_reg.cli._common import (
     write_not_registered_,
     write_registered_,
 )
+from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 from image2image_reg.elastix.registration_map import AVAILABLE_REGISTRATIONS
 from image2image_reg.enums import PreprocessingOptions, PreprocessingOptionsWithNone, WriterMode
 
@@ -59,6 +61,36 @@ final_ = click.option(
     default=False,
     show_default=True,
 )
+
+
+def parse_max_registration_pixels(ctx: click.Context, param: click.Parameter, value: str | int | None) -> int:
+    """Parse a registration pixel cap from an integer or K/M/B suffix."""
+    if value is None:
+        return DEFAULT_MAX_REGISTRATION_PIXELS
+    if isinstance(value, int):
+        if value < 0:
+            raise click.BadParameter("Value must be greater than or equal to 0.", ctx=ctx, param=param)  # noqa: TRY003
+        return value
+
+    value = value.strip()
+    if value.lower() in {"none", "off", "uncapped"}:
+        return 0
+
+    match = re.fullmatch(r"(?i)(\d+(?:\.\d+)?)\s*([kmb])?(?:\s*(?:p|px|pixels?))?", value)
+    if match is None:
+        raise click.BadParameter(  # noqa: TRY003
+            "Use a non-negative integer, or a K/M/B suffix like 100M or 1B.",
+            ctx=ctx,
+            param=param,
+        )
+
+    number = float(match.group(1))
+    suffix = (match.group(2) or "").lower()
+    multiplier = {"": 1, "k": 1_000, "m": 1_000_000, "b": 1_000_000_000}[suffix]
+    pixels = int(number * multiplier)
+    if pixels < 0:
+        raise click.BadParameter("Value must be greater than or equal to 0.", ctx=ctx, param=param)  # noqa: TRY003
+    return pixels
 
 
 def is_valis(project_dir: Path) -> bool:
@@ -253,7 +285,7 @@ def add_modality_runner(
         """Return command values as a mutable list."""
         if values is None:
             return []
-        if isinstance(values, (list, tuple)):
+        if isinstance(values, list | tuple):
             return list(values)
         return [values]
 
@@ -303,7 +335,9 @@ def add_modality_runner(
     )
     obj = ElastixReg.from_path(project_dir) if not valis else ValisReg.from_path(project_dir)
     obj.set_logger()
-    for name, path, mask, preprocessing, affine, method in zip(names, paths, masks, preprocessings, affines, methods, strict=False):
+    for name, path, mask, preprocessing, affine, method in zip(
+        names, paths, masks, preprocessings, affines, methods, strict=False
+    ):
         obj.auto_add_modality(
             name,
             path,
@@ -443,9 +477,9 @@ def add_attachment_runner(
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
-    if not isinstance(paths, (list, tuple)):
+    if not isinstance(paths, list | tuple):
         names = [names]
-    if not isinstance(paths, (list, tuple)):
+    if not isinstance(paths, list | tuple):
         paths = [paths]
     if len(paths) > len(names):
         raise ValueError("Number of names and paths must match.")
@@ -495,7 +529,7 @@ def add_points_runner(
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
-    if not isinstance(paths, (list, tuple)):
+    if not isinstance(paths, list | tuple):
         paths = [paths]
 
     print_parameters(
@@ -539,7 +573,7 @@ def add_shape_runner(
     """Add attachment modality."""
     from image2image_reg.workflows import ElastixReg, ValisReg
 
-    if not isinstance(paths, (list, tuple)):
+    if not isinstance(paths, list | tuple):
         paths = [paths]
 
     print_parameters(
@@ -682,10 +716,19 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
     default=False,
     show_default=True,
 )
+@click.option(
+    "-X",
+    "--max_registration_pixels",
+    callback=parse_max_registration_pixels,
+    help="Maximum pixels per registration input. Accepts K/M/B suffixes, e.g. 100M or 1B. Use 0/off to disable.",
+    default="100M",
+    show_default=True,
+)
 @project_path_multi_
 @elastix.command("register", help_group="Execute", aliases=["run"])
 def register_cmd(
     project_dir: ty.Sequence[str],
+    max_registration_pixels: int,
     histogram_match: bool,
     write: bool,
     fmt: WriterMode,
@@ -707,6 +750,7 @@ def register_cmd(
     register_runner(
         project_dir,
         histogram_match=histogram_match,
+        max_registration_pixels=max_registration_pixels,
         write_images=write,
         fmt=fmt,
         write_registered=write_registered,
@@ -728,6 +772,7 @@ def register_cmd(
 def register_runner(
     paths: ty.Sequence[str],
     histogram_match: bool = False,
+    max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
     write_images: bool = True,
     fmt: WriterMode = "ome-tiff",
     write_registered: bool = True,
@@ -750,6 +795,7 @@ def register_runner(
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Max registration pixels", "--max_registration_pixels", max_registration_pixels),
         Parameter("Write images", "--write/--no_write", write_images),
         Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
@@ -778,6 +824,7 @@ def register_runner(
                         (
                             path,
                             histogram_match,
+                            max_registration_pixels,
                             write_images,
                             fmt,
                             write_registered,
@@ -802,6 +849,7 @@ def register_runner(
                     _register(
                         path,
                         histogram_match,
+                        max_registration_pixels,
                         write_images,
                         fmt,
                         write_registered=write_registered,
@@ -834,6 +882,7 @@ def register_runner(
 def _register(
     path: PathLike,
     histogram_match: bool,
+    max_registration_pixels: int | None,
     write_images: bool,
     fmt: WriterMode,
     write_registered: bool,
@@ -853,7 +902,7 @@ def _register(
 
     obj = ElastixReg.from_path(path)
     obj.set_logger()
-    obj.register(histogram_match=histogram_match)
+    obj.register(histogram_match=histogram_match, max_registration_pixels=max_registration_pixels)
     obj.preview()
     if write_images:
         obj.write(

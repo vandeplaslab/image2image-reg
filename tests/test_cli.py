@@ -5,7 +5,7 @@ import os
 import click
 import pytest
 
-from image2image_reg.cli.elastix import add_modality_runner
+from image2image_reg.cli.elastix import add_modality_runner, parse_max_registration_pixels
 from image2image_reg.cli.merge import arg_parse_channel_ids
 from image2image_reg.cli.valis import cli_parse_method
 from image2image_reg.utils._test import get_test_file
@@ -31,6 +31,38 @@ def test_cli_valis_preprocessing_aliases():
         "MaxIntensityProjection",
         "CustomProcessor",
     ]
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("0", 0),
+        ("off", 0),
+        ("100000000", 100_000_000),
+        ("100M", 100_000_000),
+        ("15m", 15_000_000),
+        ("1B", 1_000_000_000),
+        ("1.5M", 1_500_000),
+        ("250 k px", 250_000),
+    ],
+)
+def test_cli_max_registration_pixels_parser(value, expected):
+    """Test compact pixel cap parser."""
+    command = click.Command("register")
+    option = click.Option(["--max-registration-pixels"])
+    ctx = click.Context(command)
+
+    assert parse_max_registration_pixels(ctx, option, value) == expected
+
+
+def test_cli_max_registration_pixels_parser_rejects_invalid_values():
+    """Test compact pixel cap parser rejects invalid values."""
+    command = click.Command("register")
+    option = click.Option(["--max-registration-pixels"])
+    ctx = click.Context(command)
+
+    with pytest.raises(click.BadParameter):
+        parse_max_registration_pixels(ctx, option, "1T")
 
 
 def test_cli_add_image_rejects_mismatched_masks():
