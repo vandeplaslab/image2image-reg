@@ -12,10 +12,11 @@ from koyo.json import read_json_data, write_json_data
 from koyo.timer import MeasureTimer
 from loguru import logger
 
+from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 from image2image_reg.elastix.registration import Registration
 from image2image_reg.preprocessing.convert import itk_image_to_sitk_image, sitk_image_to_itk_image
 from image2image_reg.wrapper import normalize_max_registration_pixels
-from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
+
 if ty.TYPE_CHECKING:
     from image2image_reg.wrapper import ImageWrapper
 
@@ -227,7 +228,7 @@ def register_2d_images(
     # Create a registration object
     with MeasureTimer() as timer:
         logger.trace("Creating Elastix registrar")
-        registrar = itk.ElastixRegistrationMethod.New(moving_image, fixed_image)
+        registrar = itk.ElastixRegistrationMethod.New(fixed_image, moving_image)
         logger.trace("Create Elastix registrar")
         registrar.SetLogToConsole(True)
         registrar.LogToConsoleOn()
