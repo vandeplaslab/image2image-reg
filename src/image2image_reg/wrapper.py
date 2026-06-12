@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import math
+import typing as ty
 from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
 from image2image_io.readers import BaseReader, ShapesReader, get_simple_reader
-from image2image_reg._typing import OnError
 from koyo.json import read_json_data, write_json_data
 from koyo.secret import hash_parameters
 from koyo.timer import MeasureTimer
 from koyo.typing import PathLike
 from loguru import logger
 
+from image2image_reg._typing import OnError
+from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 from image2image_reg.models import BoundingBox, Modality, Polygon, Preprocessing
 from image2image_reg.preprocessing.convert import sitk_image_to_itk_image
 
@@ -21,6 +24,149 @@ from image2image_reg.preprocessing.convert import sitk_image_to_itk_image
 def filename_with_suffix(filename: Path, extra: str, suffix: str) -> Path:
     """Return path that includes extra and suffix."""
     return filename.parent / f"{filename.stem.replace('.ome', '')}_{extra}{suffix}"
+
+
+def normalize_max_registration_pixels(max_registration_pixels: int | None) -> int | None:
+    """Normalize the maximum registration pixel count."""
+    if max_registration_pixels is None or max_registration_pixels <= 0:
+        return None
+    return int(max_registration_pixels)
+
+
+def registration_cache_extra(max_registration_pixels: int | None) -> str | None:
+    """Return cache suffix for a registration pixel cap."""
+    max_registration_pixels = normalize_max_registration_pixels(max_registration_pixels)
+    if max_registration_pixels is None:
+        return None
+    return f"regpx={max_registration_pixels}"
+
+
+def _reader_channel_count(reader: BaseReader) -> int | None:
+    channel_names = getattr(reader, "channel_names", None)
+    if isinstance(channel_names, list | tuple) and len(channel_names) > 1:
+        return len(channel_names)
+    n_channels = getattr(reader, "n_channels", None)
+    if isinstance(n_channels, int) and n_channels > 1:
+        return n_channels
+    return None
+
+
+def _spatial_axes_from_reader_shape(shape: tuple[int, ...], reader: BaseReader) -> tuple[int, int] | None:
+    image_shape = getattr(reader, "image_shape", None)
+    if not isinstance(image_shape, tuple | list) or len(image_shape) != 2:
+        return None
+    reference_height, reference_width = (int(image_shape[0]), int(image_shape[1]))
+    if reference_height <= 0 or reference_width <= 0:
+        return None
+
+    best_axes: tuple[int, int] | None = None
+    best_score = float("inf")
+    for first_axis in range(len(shape)):
+        for second_axis in range(first_axis + 1, len(shape)):
+            height, width = shape[first_axis], shape[second_axis]
+            if height <= 0 or width <= 0:
+                continue
+            height_scale = height / reference_height
+            width_scale = width / reference_width
+            score = abs(math.log(height_scale / width_scale))
+            if height > reference_height * 1.1:
+                score += 1.0
+            if width > reference_width * 1.1:
+                score += 1.0
+            if score < best_score:
+                best_axes = (first_axis, second_axis)
+                best_score = score
+    return best_axes if best_score < 0.25 else None
+
+
+def _spatial_axes(array: ty.Any, reader: BaseReader) -> tuple[int, int]:
+    shape = tuple(int(i) for i in array.shape)
+    if len(shape) < 2:
+        raise ValueError(f"Expected at least two image dimensions, got {shape}.")  # noqa: TRY003
+    if len(shape) == 2:
+        return 0, 1
+
+    if len(shape) == 3:
+        is_rgb = bool(reader.is_rgb)
+        if is_rgb and shape[0] in (3, 4) and shape[-1] not in (3, 4):
+            return 1, 2
+        if is_rgb and shape[-1] in (3, 4) and shape[0] not in (3, 4):
+            return 0, 1
+
+        n_channels = _reader_channel_count(reader)
+        if n_channels is not None:
+            channel_axes = [idx for idx, size in enumerate(shape) if size == n_channels]
+            if len(channel_axes) == 1:
+                channel_axis = channel_axes[0]
+                return tuple(idx for idx in range(3) if idx != channel_axis)  # type: ignore[return-value]
+
+    reader_axes = _spatial_axes_from_reader_shape(shape, reader)
+    if reader_axes is not None:
+        return reader_axes
+
+    if len(shape) == 3:
+        if shape[-1] in (3, 4):
+            return 0, 1
+        return 1, 2
+    return len(shape) - 2, len(shape) - 1
+
+
+def _spatial_shape(array: ty.Any, reader: BaseReader) -> tuple[int, int]:
+    shape = tuple(int(i) for i in array.shape)
+    first_axis, second_axis = _spatial_axes(array, reader)
+    return shape[first_axis], shape[second_axis]
+
+
+def _scale_for_pyramid(reader: BaseReader, pyramid_index: int, shape: tuple[int, int]) -> float:
+    if hasattr(reader, "scale_for_pyramid"):
+        scale = reader.scale_for_pyramid(pyramid_index)
+        if isinstance(scale, tuple | list):
+            return float(scale[0])
+        return float(scale)
+    image_shape = tuple(int(i) for i in reader.image_shape)
+    if not image_shape:
+        return float(reader.resolution or 1.0)
+    reference_height = image_shape[0]
+    scale_factor = reference_height / shape[0]
+    return float(reader.resolution or 1.0) * scale_factor
+
+
+def _slice_spatial_axes(array: ty.Any, factor: int, reader: BaseReader) -> ty.Any:
+    if factor <= 1:
+        return array
+    slices: list[slice] = [slice(None)] * array.ndim
+    for axis in _spatial_axes(array, reader):
+        slices[axis] = slice(None, None, factor)
+    return array[tuple(slices)]
+
+
+def _normalize_channel_axis_for_preprocessing(array: ty.Any, reader: BaseReader) -> ty.Any:
+    if array.ndim != 3:
+        return array
+    spatial_axes = _spatial_axes(array, reader)
+    channel_axes = [axis for axis in range(array.ndim) if axis not in spatial_axes]
+    if len(channel_axes) != 1:
+        return array
+    channel_axis = channel_axes[0]
+    target_axis = 2 if reader.is_rgb else 0
+    if channel_axis == target_axis:
+        return array
+    return np.moveaxis(array, channel_axis, target_axis)
+
+
+def _resample_mask_to_image(mask: sitk.Image | None, image: sitk.Image) -> sitk.Image | None:
+    if mask is None or mask.GetSize() == image.GetSize():
+        return mask
+    transform = sitk.Transform(image.GetDimension(), sitk.sitkIdentity)
+    return sitk.Resample(mask, image, transform, sitk.sitkNearestNeighbor, 0, mask.GetPixelID())
+
+
+def _set_registration_spacing(image: sitk.Image, pixel_size: float) -> None:
+    """Set registration spacing while preserving non-spatial stack spacing."""
+    spacing = [float(pixel_size)] * image.GetDimension()
+    if image.GetDimension() > 2:
+        spacing[2:] = [1.0] * (image.GetDimension() - 2)
+    image.SetSpacing(spacing)  # type: ignore[no-untyped-call]
 
 
 class ImageWrapper:
@@ -65,7 +211,7 @@ class ImageWrapper:
             except Exception as exc:
                 if self.on_error == "raise":
                     raise
-                elif self.on_error == "warn":
+                if self.on_error == "warn":
                     logger.warning(f"Failed to initialize reader for {self.modality.name}: {exc}")
                 self._reader = None
         return self._reader
@@ -99,6 +245,53 @@ class ImageWrapper:
             self.image = image
             self._mask = mask
         return image, mask
+
+    def release_image_data(self) -> None:
+        """Release loaded image and mask data held by the wrapper."""
+        self.image = None
+        self._mask = None
+
+    def _get_capped_image(self, max_registration_pixels: int | None) -> tuple[ty.Any, float]:
+        """Return a registration image array and matching pixel size."""
+        if self.reader is None:
+            raise ValueError(f"Could not initialize reader for {self.modality.name}.")
+        max_registration_pixels = normalize_max_registration_pixels(max_registration_pixels)
+
+        image = self.reader.pyramid[0]
+        image_shape = _spatial_shape(image, self.reader)
+        pixel_size = float(self.reader.resolution or self.modality.pixel_size or 1.0)
+        if max_registration_pixels is None:
+            return image, pixel_size
+
+        selected_index = 0
+        selected_shape = image_shape
+        for idx, candidate in enumerate(self.reader.pyramid):
+            candidate_shape = _spatial_shape(candidate, self.reader)
+            if candidate_shape[0] * candidate_shape[1] <= max_registration_pixels:
+                image = candidate
+                selected_index = idx
+                selected_shape = candidate_shape
+                pixel_size = _scale_for_pyramid(self.reader, idx, candidate_shape)
+                break
+        else:
+            image = self.reader.pyramid[-1]
+            selected_index = len(self.reader.pyramid) - 1
+            selected_shape = _spatial_shape(image, self.reader)
+            pixel_size = _scale_for_pyramid(self.reader, selected_index, selected_shape)
+
+        n_pixels = selected_shape[0] * selected_shape[1]
+        if n_pixels > max_registration_pixels:
+            factor = math.ceil(math.sqrt(n_pixels / max_registration_pixels))
+            image = _slice_spatial_axes(image, factor, self.reader)
+            selected_shape = _spatial_shape(image, self.reader)
+            pixel_size *= factor
+
+        if selected_index != 0 or selected_shape != image_shape:
+            logger.info(
+                f"Capped registration image for {self.modality.name} to {selected_shape} "
+                f"at {pixel_size:.4f} pixel size.",
+            )
+        return image, pixel_size
 
     @staticmethod
     def preprocessing_hash(modality: Modality, preprocessing: Preprocessing | None = None) -> str:
@@ -218,35 +411,43 @@ class ImageWrapper:
                 transforms.extend(data)
         return transforms or None
 
-    def preprocess(self) -> None:
+    def preprocess(self, max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS) -> None:
         """Pre-process image."""
         from image2image_reg.utils.preprocessing import convert_and_cast, preprocess, preprocess_dask_array
 
         preprocessing = self.preprocessing or self.modality.preprocessing
         transform_mask = bool(preprocessing and preprocessing.transform_mask)
 
-        # retrieve first array in the pyramid i.e. the highest resolution
-        image = self.reader.pyramid[0]
+        # retrieve the best registration image before materializing the array
+        image, pixel_size = self._get_capped_image(max_registration_pixels)
         channel_names = self.reader.channel_names
 
         # pre-process image
         with MeasureTimer() as timer:
             logger.trace(f"Pre-processing image {self.modality.name} with {preprocessing}...")
-            image = preprocess_dask_array(image, channel_names, preprocessing=preprocessing)
+            image = _normalize_channel_axis_for_preprocessing(image, self.reader)
+            image = preprocess_dask_array(
+                image,
+                channel_names,
+                is_rgb=self.reader.is_rgb,
+                preprocessing=preprocessing,
+            )
             logger.trace(f"Initialized from dask array in {timer()}")
             # convert and cast
             image = convert_and_cast(image, preprocessing)
             logger.trace(f"Converted and cast image in {timer(since_last=True)}")
+            _set_registration_spacing(image, pixel_size)
 
             # if mask is not going to be transformed, then we don't need to retrieve it at this moment in time
-            mask = self.mask if transform_mask else None
+            self.image = image
+            mask = _resample_mask_to_image(self.mask, image) if transform_mask else None
             # set image
             if preprocessing:
                 self.image, mask, self.initial_transforms, self.original_size_transform = preprocess(
                     image,
                     mask,
                     preprocessing,
-                    self.reader.resolution,
+                    pixel_size,
                     self.reader.is_rgb,
                     self.initial_transforms,
                     transform_mask=transform_mask,
@@ -255,7 +456,7 @@ class ImageWrapper:
                 self.image, mask, self.original_size_transform = image, mask, None
             # mask was not transformed so let's now retrieve it if it actually exists
             if not transform_mask:
-                mask = self.mask
+                mask = _resample_mask_to_image(self.mask, self.image) if self.image is not None else self.mask
             # overwrite existing mask
             self._mask = mask
             logger.trace(f"Pre-processed image in {timer(since_last=True)}")
@@ -278,7 +479,7 @@ class ImageWrapper:
         if isinstance(mask, np.ndarray):
             mask = sitk.GetImageFromArray(mask)
             logger.trace(f"Loaded mask from array for {self.modality.name}")
-        elif isinstance(mask, (str, Path)):
+        elif isinstance(mask, str | Path):
             if Path(mask).suffix.lower() == ".geojson":
                 image_shape = self.reader.image_shape
                 # pixel_size = self.reader.resolution
@@ -313,6 +514,7 @@ class ImageWrapper:
         mask.SetSpacing((pixel_size, pixel_size))  # type: ignore[no-untyped-call]
         kind = "bbox" if isinstance(bbox, BoundingBox) else "polygon"
         logger.trace(
-            f"Loaded mask from {kind} for {self.modality.name} with shape: {image_shape} and pixel size: {pixel_size:.2f}",
+            f"Loaded mask from {kind} for {self.modality.name} with shape: {image_shape} "
+            f"and pixel size: {pixel_size:.2f}",
         )
         return mask

@@ -1,14 +1,18 @@
 """Test registration."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+import SimpleITK as sitk
 
 from image2image_reg.elastix.registration import _elx_lineparser
+from image2image_reg.elastix.registration_utils import register_2d_images
 from image2image_reg.models import Preprocessing
 from image2image_reg.utils._test import get_test_file
 from image2image_reg.workflows import ElastixReg
+from image2image_reg.wrapper import ImageWrapper
 
 
 def _make_ellipse_project(
@@ -62,6 +66,15 @@ def test_register(tmp_path):
     assert obj.is_registered, "Registration failed."
     obj.write()
     assert len(list(obj.image_dir.glob("*.tiff"))) != 0, "No images written."
+
+
+def test_register_with_registration_pixel_cap(tmp_path):
+    obj = _make_ellipse_project(tmp_path)
+    obj.register(max_registration_pixels=1_000_000)
+    assert obj.is_registered, "Registration failed."
+    width, height = obj.preprocessed_cache["image_sizes"]["source"]
+    assert width * height <= 1_000_000
+    assert (width, height) != (2048, 2048)
 
 
 def test_register_through(tmp_path):
@@ -153,3 +166,43 @@ def test_elastix_parameter_line_parser_parses_values():
 def test_elastix_parameter_line_parser_rejects_malformed_lines():
     with pytest.raises(ValueError, match="Malformed Elastix parameter line"):
         _elx_lineparser("(Transform)")
+
+
+def test_register_2d_images_releases_wrapper_image_data(tmp_path):
+    source = MagicMock(spec=ImageWrapper)
+    source.name = "source"
+    source.image = sitk.GetImageFromArray(np.ones((8, 8), dtype=np.uint8))
+    source.mask = None
+    target = MagicMock(spec=ImageWrapper)
+    target.name = "target"
+    target.image = sitk.GetImageFromArray(np.ones((8, 8), dtype=np.uint8))
+    target.mask = None
+
+    transform_parameters = MagicMock()
+    transform_parameters.GetNumberOfParameterMaps.return_value = 1
+    transform_parameters.GetParameterMap.return_value = {"Transform": ["EulerTransform"]}
+    registrar = MagicMock()
+    registrar.GetTransformParameterObject.return_value = transform_parameters
+    parameter_object = MagicMock()
+
+    with (
+        patch("image2image_reg.elastix.registration_utils.sitk_image_to_itk_image", side_effect=["moving", "fixed"]),
+        patch("image2image_reg.elastix.registration_utils.itk") as itk_mock,
+    ):
+        itk_mock.ElastixRegistrationMethod.New.return_value = registrar
+        itk_mock.ParameterObject.New.return_value = parameter_object
+
+        transforms = register_2d_images(
+            source,
+            target,
+            [{"Transform": ["EulerTransform"]}],
+            tmp_path,
+            max_registration_pixels=100,
+        )
+
+    assert transforms == [{"Transform": ["EulerTransform"]}]
+    source.release_image_data.assert_called_once_with()
+    target.release_image_data.assert_called_once_with()
+    itk_mock.ElastixRegistrationMethod.New.assert_called_once_with("moving", "fixed")
+    registrar.SetMovingImage.assert_not_called()
+    registrar.SetFixedImage.assert_not_called()

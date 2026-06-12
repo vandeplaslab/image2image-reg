@@ -51,6 +51,7 @@ from image2image_reg.cli._common import (
 )
 from image2image_reg.elastix.registration_map import AVAILABLE_REGISTRATIONS
 from image2image_reg.enums import PreprocessingOptions, PreprocessingOptionsWithNone, WriterMode
+from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 
 final_ = click.option(
     "--final/--no_final",
@@ -682,10 +683,18 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
     default=False,
     show_default=True,
 )
+@click.option(
+    "--max_registration_pixels",
+    help="Maximum pixels per registration input. Use 0 to disable automatic capping.",
+    type=click.IntRange(0),
+    default=DEFAULT_MAX_REGISTRATION_PIXELS,
+    show_default=True,
+)
 @project_path_multi_
 @elastix.command("register", help_group="Execute", aliases=["run"])
 def register_cmd(
     project_dir: ty.Sequence[str],
+    max_registration_pixels: int,
     histogram_match: bool,
     write: bool,
     fmt: WriterMode,
@@ -707,6 +716,7 @@ def register_cmd(
     register_runner(
         project_dir,
         histogram_match=histogram_match,
+        max_registration_pixels=max_registration_pixels,
         write_images=write,
         fmt=fmt,
         write_registered=write_registered,
@@ -728,6 +738,7 @@ def register_cmd(
 def register_runner(
     paths: ty.Sequence[str],
     histogram_match: bool = False,
+    max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
     write_images: bool = True,
     fmt: WriterMode = "ome-tiff",
     write_registered: bool = True,
@@ -750,6 +761,7 @@ def register_runner(
 
     print_parameters(
         Parameter("Project directory", "-p/--project_dir", paths),
+        Parameter("Max registration pixels", "--max_registration_pixels", max_registration_pixels),
         Parameter("Write images", "--write/--no_write", write_images),
         Parameter("Output format", "-f/--fmt", fmt),
         Parameter("Write registered images", "--write_registered/--no_write_registered", write_registered),
@@ -778,6 +790,7 @@ def register_runner(
                         (
                             path,
                             histogram_match,
+                            max_registration_pixels,
                             write_images,
                             fmt,
                             write_registered,
@@ -802,6 +815,7 @@ def register_runner(
                     _register(
                         path,
                         histogram_match,
+                        max_registration_pixels,
                         write_images,
                         fmt,
                         write_registered=write_registered,
@@ -834,6 +848,7 @@ def register_runner(
 def _register(
     path: PathLike,
     histogram_match: bool,
+    max_registration_pixels: int | None,
     write_images: bool,
     fmt: WriterMode,
     write_registered: bool,
@@ -853,7 +868,7 @@ def _register(
 
     obj = ElastixReg.from_path(path)
     obj.set_logger()
-    obj.register(histogram_match=histogram_match)
+    obj.register(histogram_match=histogram_match, max_registration_pixels=max_registration_pixels)
     obj.preview()
     if write_images:
         obj.write(

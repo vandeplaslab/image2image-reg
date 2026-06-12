@@ -5,6 +5,9 @@ import typing as ty
 import numpy as np
 import SimpleITK as sitk
 
+# Maximum number of pixels used for registration to prevent excessive memory usage and long computation times.
+DEFAULT_MAX_REGISTRATION_PIXELS = 0  # 1_000_000_000
+
 SITK_TO_NP_DTYPE = {
     0: np.int8,
     1: np.uint8,

@@ -115,3 +115,169 @@ class TestImageWrapper:
 
         assert isinstance(wrapper.image, sitk.Image)
         assert isinstance(wrapper.mask, sitk.Image)
+
+    def test_preprocess_uses_capped_pyramid_level(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [
+            np.ones((20, 20), dtype=np.uint8),
+            np.ones((8, 8), dtype=np.uint8),
+        ]
+        reader.channel_names = []
+        reader.resolution = 1.0
+        reader.is_rgb = False
+        reader.image_shape = (20, 20)
+        reader.scale_for_pyramid.return_value = (2.5, 2.5)
+        wrapper._reader = reader
+
+        wrapper.preprocess(max_registration_pixels=100)
+
+        assert isinstance(wrapper.image, sitk.Image)
+        assert wrapper.image.GetSize() == (8, 8)
+        assert wrapper.image.GetSpacing() == (2.5, 2.5)
+
+    def test_preprocess_strides_when_pyramid_level_exceeds_cap(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [np.ones((20, 20), dtype=np.uint8)]
+        reader.channel_names = []
+        reader.resolution = 1.0
+        reader.is_rgb = False
+        reader.image_shape = (20, 20)
+        reader.scale_for_pyramid.return_value = (1.0, 1.0)
+        wrapper._reader = reader
+
+        wrapper.preprocess(max_registration_pixels=25)
+
+        assert isinstance(wrapper.image, sitk.Image)
+        assert wrapper.image.GetSize() == (5, 5)
+        assert wrapper.image.GetSpacing() == (4.0, 4.0)
+
+    def test_preprocess_disabled_cap_keeps_base_level(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [
+            np.ones((20, 20), dtype=np.uint8),
+            np.ones((8, 8), dtype=np.uint8),
+        ]
+        reader.channel_names = []
+        reader.resolution = 1.0
+        reader.is_rgb = False
+        reader.image_shape = (20, 20)
+        wrapper._reader = reader
+
+        wrapper.preprocess(max_registration_pixels=0)
+
+        assert isinstance(wrapper.image, sitk.Image)
+        assert wrapper.image.GetSize() == (20, 20)
+        assert wrapper.image.GetSpacing() == (1.0, 1.0)
+
+    def test_preprocess_sets_stack_spacing_for_channel_first_image(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [np.ones((3, 20, 20), dtype=np.uint8)]
+        reader.channel_names = []
+        reader.resolution = 2.0
+        reader.is_rgb = False
+        reader.image_shape = (20, 20)
+        wrapper._reader = reader
+
+        wrapper.preprocess(max_registration_pixels=0)
+
+        assert isinstance(wrapper.image, sitk.Image)
+        assert wrapper.image.GetDimension() == 3
+        assert wrapper.image.GetSpacing() == (2.0, 2.0, 1.0)
+
+    def test_get_capped_image_preserves_rgb_channel_axis(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [np.ones((20, 20, 3), dtype=np.uint8)]
+        reader.channel_names = ["R", "G", "B"]
+        reader.resolution = 1.0
+        reader.is_rgb = True
+        reader.image_shape = (20, 20)
+        reader.scale_for_pyramid.return_value = (1.0, 1.0)
+        wrapper._reader = reader
+
+        image, pixel_size = wrapper._get_capped_image(max_registration_pixels=25)
+
+        assert image.shape == (5, 5, 3)
+        assert pixel_size == 4.0
+
+    def test_preprocess_handles_rgb_channel_first_image(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [np.ones((3, 20, 20), dtype=np.uint8)]
+        reader.channel_names = ["R", "G", "B"]
+        reader.resolution = 1.0
+        reader.is_rgb = True
+        reader.image_shape = (20, 20)
+        reader.scale_for_pyramid.return_value = (1.0, 1.0)
+        wrapper._reader = reader
+
+        wrapper.preprocess(max_registration_pixels=25)
+
+        assert isinstance(wrapper.image, sitk.Image)
+        assert wrapper.image.GetDimension() == 2
+        assert wrapper.image.GetNumberOfComponentsPerPixel() == 3
+        assert wrapper.image.GetSize() == (5, 5)
+        assert wrapper.image.GetSpacing() == (4.0, 4.0)
+
+    def test_get_capped_image_preserves_channel_first_axis(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [np.ones((3, 20, 20), dtype=np.uint8)]
+        reader.channel_names = ["C1", "C2", "C3"]
+        reader.resolution = 1.0
+        reader.is_rgb = False
+        reader.image_shape = (20, 20)
+        reader.scale_for_pyramid.return_value = (1.0, 1.0)
+        wrapper._reader = reader
+
+        image, pixel_size = wrapper._get_capped_image(max_registration_pixels=25)
+
+        assert image.shape == (3, 5, 5)
+        assert pixel_size == 4.0
+
+    def test_get_capped_image_preserves_channel_last_axis(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [np.ones((20, 16, 5), dtype=np.uint8)]
+        reader.channel_names = ["C1", "C2", "C3", "C4", "C5"]
+        reader.resolution = 1.0
+        reader.is_rgb = False
+        reader.image_shape = (20, 16)
+        reader.scale_for_pyramid.return_value = (1.0, 1.0)
+        wrapper._reader = reader
+
+        image, pixel_size = wrapper._get_capped_image(max_registration_pixels=20)
+
+        assert image.shape == (5, 4, 5)
+        assert pixel_size == 4.0
+
+    def test_preprocess_handles_channel_last_image(self, mock_modality):
+        mock_modality.preprocessing = None
+        wrapper = ImageWrapper(modality=mock_modality)
+        reader = MagicMock()
+        reader.pyramid = [np.ones((20, 16, 5), dtype=np.uint8)]
+        reader.channel_names = ["C1", "C2", "C3", "C4", "C5"]
+        reader.resolution = 1.0
+        reader.is_rgb = False
+        reader.image_shape = (20, 16)
+        reader.scale_for_pyramid.return_value = (1.0, 1.0)
+        wrapper._reader = reader
+
+        wrapper.preprocess(max_registration_pixels=20)
+
+        assert isinstance(wrapper.image, sitk.Image)
+        assert wrapper.image.GetDimension() == 3
+        assert wrapper.image.GetSize() == (4, 5, 5)
+        assert wrapper.image.GetSpacing() == (4.0, 4.0, 1.0)

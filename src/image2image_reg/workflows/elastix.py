@@ -31,7 +31,7 @@ from image2image_reg.enums import WriterMode
 from image2image_reg.models import Modality, Preprocessing
 from image2image_reg.utils.utilities import make_new_name
 from image2image_reg.workflows._base import Workflow
-
+from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 if ty.TYPE_CHECKING:
     from image2image_reg.workflows.valis import ValisReg
     from image2image_reg.wrapper import ImageWrapper
@@ -718,20 +718,22 @@ class ElastixReg(Workflow):
         preprocessing: Preprocessing | None = None,
         overwrite: bool = False,
         quick: bool = False,
+        max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
     ) -> ImageWrapper:
         """Pre-process images."""
-        from image2image_reg.wrapper import ImageWrapper
+        from image2image_reg.wrapper import ImageWrapper, registration_cache_extra
 
         wrapper = ImageWrapper(modality, preprocessing, quick=True)
-        cached = wrapper.check_cache(self.cache_dir, self.cache_images) if not overwrite else False
+        cache_extra = registration_cache_extra(max_registration_pixels)
+        cached = wrapper.check_cache(self.cache_dir, self.cache_images, extra=cache_extra) if not overwrite else False
         if not cached:
             logger.trace(f"'{modality.name}' is not cached - pre-processing...")
-            wrapper.preprocess()
-            wrapper.save_cache(self.cache_dir, self.cache_images)
+            wrapper.preprocess(max_registration_pixels=max_registration_pixels)
+            wrapper.save_cache(self.cache_dir, self.cache_images, extra=cache_extra)
         else:
             if not quick:
                 logger.trace(f"Loading cached '{modality.name}' image.")
-                wrapper.load_cache(self.cache_dir, self.cache_images)
+                wrapper.load_cache(self.cache_dir, self.cache_images, extra=cache_extra)
         if not quick:
             if wrapper.image is None:
                 raise ValueError(f"'{modality.name}' image has not been pre-processed.")
@@ -748,17 +750,19 @@ class ElastixReg(Workflow):
         cache_images: bool,
         modality: Modality,
         preprocessing: Preprocessing | None = None,
+        max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
     ) -> ImageWrapper:
         """Pre-process image."""
-        from image2image_reg.wrapper import ImageWrapper
+        from image2image_reg.wrapper import ImageWrapper, registration_cache_extra
 
         wrapper = ImageWrapper(modality, preprocessing)
-        cached = wrapper.check_cache(cache_dir, cache_images)
+        cache_extra = registration_cache_extra(max_registration_pixels)
+        cached = wrapper.check_cache(cache_dir, cache_images, extra=cache_extra)
         if not cached:
-            wrapper.preprocess()
-            wrapper.save_cache(cache_dir, cache_images)
+            wrapper.preprocess(max_registration_pixels=max_registration_pixels)
+            wrapper.save_cache(cache_dir, cache_images, extra=cache_extra)
         else:
-            wrapper.load_cache(cache_dir, cache_images)
+            wrapper.load_cache(cache_dir, cache_images, extra=cache_extra)
         if wrapper.image is None:
             raise ValueError(f"The '{modality.name}' image has not been pre-processed.")
         return wrapper
@@ -770,6 +774,7 @@ class ElastixReg(Workflow):
         parameters: list[str],
         output_dir: Path,
         histogram_match: bool = False,
+        max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
     ) -> tuple[TransformSequence, TransformSequence | None]:
         """Co-register images."""
         from image2image_reg.elastix.registration_utils import (
@@ -787,6 +792,7 @@ class ElastixReg(Workflow):
                 _prepare_reg_models(parameters),
                 output_dir,
                 histogram_match=histogram_match,
+                max_registration_pixels=max_registration_pixels,
             )
             # convert transformation to something readable
             transforms = [sitk_pmap_to_dict(tf) for tf in transform]
@@ -880,7 +886,13 @@ class ElastixReg(Workflow):
             self.registration_paths.pop(source)
             logger.warning(f"Removed registration path from {source}.")
 
-    def preprocess(self, n_parallel: int = 1, overwrite: bool = False, quick: bool = False) -> None:
+    def preprocess(
+        self,
+        n_parallel: int = 1,
+        overwrite: bool = False,
+        quick: bool = False,
+        max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
+    ) -> None:
         """Pre-process all images."""
         # TODO: add multi-core support
         self.set_logger()
@@ -899,10 +911,22 @@ class ElastixReg(Workflow):
                     continue
                 logger.trace(f"Pre-processing {modality.name}.")
                 # TODO: allow extra pre-processing specification
-                self._preprocess_image(modality, None, overwrite=overwrite, quick=quick)
+                self._preprocess_image(
+                    modality,
+                    None,
+                    overwrite=overwrite,
+                    quick=quick,
+                    max_registration_pixels=max_registration_pixels,
+                )
         logger.info(f"Pre-processing of all images took {timer(since_last=True)}.")
 
-    def register(self, n_parallel: int = 1, preprocess_first: bool = True, histogram_match: bool = False) -> None:
+    def register(
+        self,
+        n_parallel: int = 1,
+        preprocess_first: bool = True,
+        histogram_match: bool = False,
+        max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
+    ) -> None:
         """Co-register images."""
         # TODO: add multi-core support
         self.set_logger()
@@ -915,7 +939,7 @@ class ElastixReg(Workflow):
         if not self.registration_nodes:
             raise ValueError("No registration paths have been defined.")
         if preprocess_first:
-            self.preprocess(n_parallel=n_parallel)
+            self.preprocess(n_parallel=n_parallel, max_registration_pixels=max_registration_pixels)
 
         # compute transformation information
         for edge in tqdm(
@@ -937,8 +961,16 @@ class ElastixReg(Workflow):
             target_modality = deepcopy(self.modalities[target])
             target_preprocessing = edge["target_preprocessing"]
 
-            source_wrapper = self._preprocess_image(source_modality, source_preprocessing)
-            target_wrapper = self._preprocess_image(target_modality, target_preprocessing)
+            source_wrapper = self._preprocess_image(
+                source_modality,
+                source_preprocessing,
+                max_registration_pixels=max_registration_pixels,
+            )
+            target_wrapper = self._preprocess_image(
+                target_modality,
+                target_preprocessing,
+                max_registration_pixels=max_registration_pixels,
+            )
 
             # create registration directory
             registration_dir = self.progress_dir / f"{source}-{target}_reg_output"
@@ -951,6 +983,7 @@ class ElastixReg(Workflow):
                 edge["params"],
                 registration_dir,
                 histogram_match=histogram_match,
+                max_registration_pixels=max_registration_pixels,
             )
             edge["transforms"] = {"registration": registration, "initial": initial}
             edge["registered"] = True

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import typing as ty
 from pathlib import Path
 
@@ -12,8 +13,9 @@ from koyo.timer import MeasureTimer
 from loguru import logger
 
 from image2image_reg.elastix.registration import Registration
-from image2image_reg.preprocessing.convert import itk_image_to_sitk_image
-
+from image2image_reg.preprocessing.convert import itk_image_to_sitk_image, sitk_image_to_itk_image
+from image2image_reg.wrapper import normalize_max_registration_pixels
+from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 if ty.TYPE_CHECKING:
     from image2image_reg.wrapper import ImageWrapper
 
@@ -122,6 +124,30 @@ def parameter_to_itk_pobj(reg_param_map: dict[str, list[str]]) -> itk.ParameterO
     return itk_param_map
 
 
+def _cap_sitk_image(image: sitk.Image, max_registration_pixels: int | None) -> tuple[sitk.Image, int]:
+    """Cap a SimpleITK image by integer shrinking."""
+    max_registration_pixels = normalize_max_registration_pixels(max_registration_pixels)
+    if max_registration_pixels is None:
+        return image, 1
+
+    size = image.GetSize()
+    n_pixels = int(size[0]) * int(size[1])
+    if n_pixels <= max_registration_pixels:
+        return image, 1
+
+    factor = math.ceil(math.sqrt(n_pixels / max_registration_pixels))
+    shrink_factors = [factor, factor, *([1] * (image.GetDimension() - 2))]
+    return sitk.Shrink(image, shrink_factors), factor  # type: ignore[no-untyped-call]
+
+
+def _resample_mask_to_image(mask: sitk.Image | None, image: sitk.Image) -> sitk.Image | None:
+    """Resample a mask onto an image grid."""
+    if mask is None or mask.GetSize() == image.GetSize():
+        return mask
+    transform = sitk.Transform(image.GetDimension(), sitk.sitkIdentity)
+    return sitk.Resample(mask, image, transform, sitk.sitkNearestNeighbor, 0, mask.GetPixelID())
+
+
 def register_2d_images(
     source: ImageWrapper,
     target: ImageWrapper,
@@ -129,7 +155,8 @@ def register_2d_images(
     output_dir: str | Path,
     histogram_match: bool = False,
     return_image: bool = False,
-):
+    max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
+) -> list[dict[str, list[str]]] | tuple[list[dict[str, list[str]]], sitk.Image]:
     """Register 2D images with multiple models and return a list of elastix transformation maps.
 
     Parameters
@@ -147,6 +174,8 @@ def register_2d_images(
         whether to attempt histogram matching to improve registration
     return_image : bool
         whether to return the registered image
+    max_registration_pixels : int, optional
+        Maximum pixels per registration input. Values less than one disable this cap.
 
     Returns
     -------
@@ -160,19 +189,35 @@ def register_2d_images(
     if target.image is None:
         raise ValueError("Target image is None")
 
+    source_image, source_factor = _cap_sitk_image(source.image, max_registration_pixels)
+    target_image, target_factor = _cap_sitk_image(target.image, max_registration_pixels)
+    source_mask = source.mask
+    target_mask = target.mask
+    if source_factor > 1 and source_mask is not None:
+        source_mask = sitk.Shrink(source_mask, [source_factor, source_factor])  # type: ignore[no-untyped-call]
+    if target_factor > 1 and target_mask is not None:
+        target_mask = sitk.Shrink(target_mask, [target_factor, target_factor])  # type: ignore[no-untyped-call]
+    source_mask = _resample_mask_to_image(source_mask, source_image)
+    target_mask = _resample_mask_to_image(target_mask, target_image)
+
     if histogram_match:
         with MeasureTimer() as timer:
             matcher = sitk.HistogramMatchingImageFilter()  # type: ignore[no-untyped-call]
             matcher.SetNumberOfHistogramLevels(64)  # type: ignore[no-untyped-call]
             matcher.SetNumberOfMatchPoints(7)  # type: ignore[no-untyped-call]
             matcher.ThresholdAtMeanIntensityOn()  # type: ignore[no-untyped-call]
-            source.image = matcher.Execute(source.image, target.image)  # type: ignore[no-untyped-call]
+            source_image = matcher.Execute(source_image, target_image)  # type: ignore[no-untyped-call]
         logger.info(f"Histogram matching took {timer()}")
 
-    pixel_id = source.image.GetPixelID()  # type: ignore[union-attr]
+    pixel_id = source_image.GetPixelID()  # type: ignore[union-attr]
     with MeasureTimer() as timer:
-        source.sitk_to_itk(inplace=True)
-        target.sitk_to_itk(inplace=True)
+        moving_image = sitk_image_to_itk_image(source_image)
+        fixed_image = sitk_image_to_itk_image(target_image)
+        moving_mask = sitk_image_to_itk_image(source_mask) if source_mask is not None else None
+        fixed_mask = sitk_image_to_itk_image(target_mask) if target_mask is not None else None
+        source.release_image_data()
+        target.release_image_data()
+        del source_image, target_image, source_mask, target_mask
     logger.info(f"Converting images to ITK took {timer()}")
 
     output_dir = Path(output_dir)
@@ -182,27 +227,26 @@ def register_2d_images(
     # Create a registration object
     with MeasureTimer() as timer:
         logger.trace("Creating Elastix registrar")
-        registrar = itk.ElastixRegistrationMethod.New(source.image, target.image)
+        registrar = itk.ElastixRegistrationMethod.New(moving_image, fixed_image)
         logger.trace("Create Elastix registrar")
         registrar.SetLogToConsole(True)
         registrar.LogToConsoleOn()
         registrar.SetLogToFile(True)
         registrar.SetOutputDirectory(str(output_dir))
         logger.trace("Setup registrar parameters")
-        if source.mask is not None:
-            registrar.SetMovingMask(source.mask)
-        if target.mask is not None:
-            registrar.SetFixedMask(target.mask)
-        registrar.SetMovingImage(source.image)
-        registrar.SetFixedImage(target.image)
+        if moving_mask is not None:
+            registrar.SetMovingMask(moving_mask)
+        if fixed_mask is not None:
+            registrar.SetFixedMask(fixed_mask)
         logger.trace("Setup registrar images")
 
         # Set registration parameters
         parameter_object_registration = itk.ParameterObject.New()
         for idx, pmap in enumerate(reg_params):
+            pmap = dict(pmap)
             if idx == 0:
                 pmap["WriteResultImage"] = ["true"] if return_image else ["false"]
-                if target.mask is not None:
+                if fixed_mask is not None:
                     pmap["AutomaticTransformInitialization"] = ["false"]
                 else:
                     pmap["AutomaticTransformInitialization"] = ["true"]
@@ -237,5 +281,7 @@ def register_2d_images(
         image = registrar.GetOutput()
         image = itk_image_to_sitk_image(image)
         image = sitk.Cast(image, pixel_id)  # type: ignore[no-untyped-call]
+        del registrar, moving_image, fixed_image, moving_mask, fixed_mask
         return tform_list, image
+    del registrar, moving_image, fixed_image, moving_mask, fixed_mask
     return tform_list
