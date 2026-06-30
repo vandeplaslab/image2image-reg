@@ -91,6 +91,9 @@ class ElastixRegConfig(ty.TypedDict):
     attachment_points: dict[str, AttachedShapeOrPointDict]
     merge: bool
     merge_images: dict[str, list[str]]
+    registration_image_spacing: dict[str, tuple[float, ...]] | None
+    registration_image_sizes: dict[str, tuple[int, ...]] | None
+    registration_pixel_cap_factors: dict[str, float] | None
 
 
 class ValisRegConfig(ty.TypedDict):

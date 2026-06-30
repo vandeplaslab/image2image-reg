@@ -194,6 +194,7 @@ class ImageWrapper:
         self._mask: sitk.Image | None = None
         self.initial_transforms: list[dict] = []
         self.original_size_transform: dict | None = None
+        self.registration_pixel_cap_factor: float = 1.0
 
     @property
     def reader(self) -> BaseReader | None:
@@ -260,6 +261,8 @@ class ImageWrapper:
         image = self.reader.pyramid[0]
         image_shape = _spatial_shape(image, self.reader)
         pixel_size = float(self.reader.resolution or self.modality.pixel_size or 1.0)
+        original_pixel_size = pixel_size
+        self.registration_pixel_cap_factor = 1.0
         if max_registration_pixels is None:
             return image, pixel_size
 
@@ -287,6 +290,7 @@ class ImageWrapper:
             pixel_size *= factor
 
         if selected_index != 0 or selected_shape != image_shape:
+            self.registration_pixel_cap_factor = pixel_size / original_pixel_size
             logger.info(
                 f"Capped registration image for {self.modality.name} to {selected_shape} "
                 f"at {pixel_size:.4f} pixel size.",
@@ -349,6 +353,10 @@ class ImageWrapper:
                     filename_with_suffix(filename, "original_size_transform", ".json"),
                     self.original_size_transform,
                 )
+            write_json_data(
+                filename_with_suffix(filename, "registration_pixel_cap", ".json"),
+                {"factor": self.registration_pixel_cap_factor},
+            )
             # write mask
             if self.mask is not None:
                 sitk.WriteImage(self.mask, str(filename_with_suffix(filename, "mask", ".tiff")), useCompression=True)
@@ -381,6 +389,9 @@ class ImageWrapper:
                 self.original_size_transform = read_json_data(
                     filename_with_suffix(filename, "original_size_transform", ".json"),
                 )
+            if filename_with_suffix(filename, "registration_pixel_cap", ".json").exists():
+                data = read_json_data(filename_with_suffix(filename, "registration_pixel_cap", ".json"))
+                self.registration_pixel_cap_factor = float(data.get("factor", 1.0) or 1.0)
             if filename_with_suffix(filename, "mask", ".tiff").exists():
                 self._mask = sitk.ReadImage(str(filename_with_suffix(filename, "mask", ".tiff")))
         logger.trace(f"Loaded data from cache in {timer()}")

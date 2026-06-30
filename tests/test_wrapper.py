@@ -136,6 +136,7 @@ class TestImageWrapper:
         assert isinstance(wrapper.image, sitk.Image)
         assert wrapper.image.GetSize() == (8, 8)
         assert wrapper.image.GetSpacing() == (2.5, 2.5)
+        assert wrapper.registration_pixel_cap_factor == 2.5
 
     def test_preprocess_strides_when_pyramid_level_exceeds_cap(self, mock_modality):
         mock_modality.preprocessing = None
@@ -154,6 +155,7 @@ class TestImageWrapper:
         assert isinstance(wrapper.image, sitk.Image)
         assert wrapper.image.GetSize() == (5, 5)
         assert wrapper.image.GetSpacing() == (4.0, 4.0)
+        assert wrapper.registration_pixel_cap_factor == 4.0
 
     def test_preprocess_disabled_cap_keeps_base_level(self, mock_modality):
         mock_modality.preprocessing = None
@@ -174,6 +176,7 @@ class TestImageWrapper:
         assert isinstance(wrapper.image, sitk.Image)
         assert wrapper.image.GetSize() == (20, 20)
         assert wrapper.image.GetSpacing() == (1.0, 1.0)
+        assert wrapper.registration_pixel_cap_factor == 1.0
 
     def test_preprocess_sets_stack_spacing_for_channel_first_image(self, mock_modality):
         mock_modality.preprocessing = None

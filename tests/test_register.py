@@ -11,8 +11,9 @@ import SimpleITK as sitk
 
 from image2image_reg.elastix.registration import _elx_lineparser
 from image2image_reg.elastix.registration_utils import register_2d_images
+from image2image_reg.elastix.transform_sequence import Transform, TransformSequence
 from image2image_reg.elastix.transformation_map import BASE_TRANSLATION_TRANSFORM
-from image2image_reg.models import Preprocessing
+from image2image_reg.models import Modality, Preprocessing
 from image2image_reg.utils._test import get_test_file
 from image2image_reg.workflows import ElastixReg
 from image2image_reg.wrapper import ImageWrapper
@@ -136,6 +137,72 @@ def test_register_with_registration_pixel_cap(tmp_path):
     width, height = obj.preprocessed_cache["image_sizes"]["source"]
     assert width * height <= 1_000_000
     assert (width, height) != (2048, 2048)
+    config = obj._get_config(registered=True)
+    assert config["registration_image_sizes"]["source"] == obj.preprocessed_cache["image_sizes"]["source"]
+    assert config["registration_pixel_cap_factors"]["source"] > 1
+
+
+def _make_transform_sequence(spacing: float = 4.0, size: int = 5) -> TransformSequence:
+    transform = deepcopy(BASE_TRANSLATION_TRANSFORM)
+    transform["TransformParameters"] = ["8", "-5"]
+    transform["Spacing"] = [str(spacing), str(spacing)]
+    transform["Size"] = [str(size), str(size)]
+    return TransformSequence([Transform(transform)], transform_sequence_index=[0])
+
+
+def test_prepare_registered_transform_removes_registration_pixel_cap(tmp_path):
+    obj = ElastixReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+    obj.modalities = {
+        "source": Modality(name="source", path="source.tiff"),
+        "target": Modality(name="target", path="target.tiff"),
+    }
+    obj.registration_paths = {"source": ["target"]}
+    obj.transformations = {"source": {"full-transform-seq": _make_transform_sequence()}}
+    obj.preprocessed_cache["image_spacing"]["target"] = (4.0, 4.0)
+    obj.preprocessed_cache["image_sizes"]["target"] = (5, 5)
+    obj.preprocessed_cache["registration_pixel_cap_factors"]["target"] = 4.0
+
+    _, transform_seq, _ = obj._prepare_registered_transform("source")
+    transform = transform_seq.transforms[-1].elastix_transform
+
+    assert transform["Spacing"] == ["1.0", "1.0"]
+    assert transform["Size"] == ["20", "20"]
+    assert transform["TransformParameters"] == ["8", "-5"]
+
+
+def test_prepare_registered_transform_keeps_output_pixel_size_precedence(tmp_path):
+    obj = ElastixReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+    obj.modalities = {
+        "source": Modality(name="source", path="source.tiff", output_pixel_size=(2.0, 2.0)),
+        "target": Modality(name="target", path="target.tiff"),
+    }
+    obj.registration_paths = {"source": ["target"]}
+    obj.transformations = {"source": {"full-transform-seq": _make_transform_sequence()}}
+    obj.preprocessed_cache["image_spacing"]["target"] = (4.0, 4.0)
+    obj.preprocessed_cache["image_sizes"]["target"] = (5, 5)
+    obj.preprocessed_cache["registration_pixel_cap_factors"]["target"] = 4.0
+
+    _, transform_seq, _ = obj._prepare_registered_transform("source")
+    transform = transform_seq.transforms[-1].elastix_transform
+
+    assert transform["Spacing"] == ["2.0", "2.0"]
+    assert transform["Size"] == ["10", "10"]
+    assert transform["TransformParameters"] == ["8", "-5"]
+
+
+def test_prepare_not_registered_transform_creates_uncapped_identity_grid(tmp_path):
+    obj = ElastixReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+    obj.modalities = {"target": Modality(name="target", path="target.tiff")}
+    obj.preprocessed_cache["image_spacing"]["target"] = (4.0, 4.0)
+    obj.preprocessed_cache["image_sizes"]["target"] = (5, 5)
+    obj.preprocessed_cache["registration_pixel_cap_factors"]["target"] = 4.0
+
+    _, transform_seq, _ = obj._prepare_not_registered_transform("target")
+    assert transform_seq is not None
+    transform = transform_seq.transforms[-1].elastix_transform
+
+    assert transform["Spacing"] == ["1.0", "1.0"]
+    assert transform["Size"] == ["20", "20"]
 
 
 def test_register_through(tmp_path):
@@ -316,7 +383,7 @@ def test_coregister_images_keeps_source_as_moving_and_target_as_fixed(tmp_path):
             ["rigid"],
             tmp_path,
             max_registration_pixels=1_000,
-        )
+    )
 
     assert register.call_args.args[:2] == (source, target)
-    assert register.call_args.kwargs["max_registration_pixels"] == 1_000
+    assert register.call_args.kwargs["max_registration_pixels"] is None
