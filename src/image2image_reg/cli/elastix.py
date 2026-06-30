@@ -723,6 +723,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
     help="Maximum pixels per registration input. Accepts K/M/B suffixes, e.g. 100M or 1B. Use 0/off to disable.",
     default="100M",
     show_default=True,
+    type=click.STRING,
 )
 @project_path_multi_
 @elastix.command("register", help_group="Execute", aliases=["run"])
