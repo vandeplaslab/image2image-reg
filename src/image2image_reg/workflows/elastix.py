@@ -25,13 +25,13 @@ from image2image_reg._typing import (
     SourceTargetPair,
     TransformPair,
 )
+from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 from image2image_reg.elastix.registration import Registration
 from image2image_reg.elastix.transform_sequence import Transform, TransformSequence
 from image2image_reg.enums import WriterMode
 from image2image_reg.models import Modality, Preprocessing
 from image2image_reg.utils.utilities import make_new_name
 from image2image_reg.workflows._base import Workflow
-from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
 
 if ty.TYPE_CHECKING:
     from image2image_reg.workflows.valis import ValisReg
@@ -89,6 +89,7 @@ class ElastixReg(Workflow):
             "image_spacing": {},
             "image_sizes": {},
             "iterations": {},
+            "registration_pixel_cap_factors": {},
             "transformations": {},
         }
 
@@ -436,6 +437,14 @@ class ElastixReg(Workflow):
                     self.transformations = transformations
                 else:
                     self.transformations = self._collate_transformations()
+                self.preprocessed_cache["registration_pixel_cap_factors"] = registered_config.get(
+                    "registration_pixel_cap_factors",
+                    {},
+                ) or {}
+                self.preprocessed_cache["image_spacing"].update(
+                    registered_config.get("registration_image_spacing") or {},
+                )
+                self.preprocessed_cache["image_sizes"].update(registered_config.get("registration_image_sizes") or {})
                 logger.trace(f"Loaded registered transformations in {timer(since_last=True)}")
 
     def _load_registered_transform(
@@ -743,6 +752,9 @@ class ElastixReg(Workflow):
             self.preprocessed_cache["image_spacing"][modality.name] = spacing
             size = wrapper.image.GetSize()  # type:ignore[no-untyped-call]
             self.preprocessed_cache["image_sizes"][modality.name] = size
+            self.preprocessed_cache["registration_pixel_cap_factors"][modality.name] = (
+                wrapper.registration_pixel_cap_factor
+            )
         return wrapper
 
     @staticmethod
@@ -793,7 +805,7 @@ class ElastixReg(Workflow):
                 _prepare_reg_models(parameters),
                 output_dir,
                 histogram_match=histogram_match,
-                max_registration_pixels=max_registration_pixels,
+                max_registration_pixels=None,
             )
             # convert transformation to something readable
             transforms = [sitk_pmap_to_dict(tf) for tf in transform]
@@ -1843,6 +1855,34 @@ class ElastixReg(Workflow):
                 attachment_modality=attachment_modality,
             )
 
+    def _get_registration_pixel_cap_factor(self, modality_key: str) -> float:
+        """Return registration-only pixel cap factor for a modality."""
+        factors = self.preprocessed_cache.get("registration_pixel_cap_factors", {})
+        return float(factors.get(modality_key, 1.0) or 1.0)
+
+    def _get_output_grid_for_modality(self, modality_key: str) -> tuple[tuple[float, float], tuple[int, int]]:
+        """Return output spacing and size after removing registration-only capping."""
+        spacing = self.preprocessed_cache["image_spacing"][modality_key]
+        size = self.preprocessed_cache["image_sizes"][modality_key]
+        cap_factor = self._get_registration_pixel_cap_factor(modality_key)
+        output_spacing = (float(spacing[0]) / cap_factor, float(spacing[1]) / cap_factor)
+        output_size = (
+            max(1, round(float(size[0]) * cap_factor)),
+            max(1, round(float(size[1]) * cap_factor)),
+        )
+        return output_spacing, output_size
+
+    def _apply_output_grid_for_modality(self, transform_seq: TransformSequence, modality_key: str) -> None:
+        """Set transform output grid while ignoring registration-only capping."""
+        output_spacing, output_size = self._get_output_grid_for_modality(modality_key)
+        transform_seq.set_output_spacing(output_spacing, output_size)
+
+    def _needs_output_grid_reset(self, modality: Modality) -> bool:
+        """Return whether output grid differs from the raw elastix registration grid."""
+        if modality.preprocessing and modality.preprocessing.downsample > 1:
+            return True
+        return self._get_registration_pixel_cap_factor(modality.name) != 1.0
+
     def _prepare_registered_transform(
         self,
         edge_key: str,
@@ -1877,16 +1917,11 @@ class ElastixReg(Workflow):
             if preprocessing_modality.output_pixel_size:
                 transform_seq.set_output_spacing(preprocessing_modality.output_pixel_size)
             else:
-                output_spacing_target = self.preprocessed_cache["image_spacing"][final_modality_key]
-                transform_seq.set_output_spacing(output_spacing_target)
+                self._apply_output_grid_for_modality(transform_seq, final_modality_key)
         elif preprocessing_modality.output_pixel_size:
             transform_seq.set_output_spacing(preprocessing_modality.output_pixel_size)
-        elif final_modality.preprocessing and final_modality.preprocessing.downsample > 1:
-            if preprocessing_modality.output_pixel_size:
-                transform_seq.set_output_spacing(preprocessing_modality.output_pixel_size)
-            else:
-                output_spacing_target = self.preprocessed_cache["image_spacing"][final_modality_key]
-                transform_seq.set_output_spacing(output_spacing_target)
+        elif self._needs_output_grid_reset(final_modality):
+            self._apply_output_grid_for_modality(transform_seq, final_modality_key)
 
         if transform_seq:
             transform_seq.name = edge_key
@@ -1956,8 +1991,7 @@ class ElastixReg(Workflow):
         # handle down-sampling
         if modality.preprocessing and modality.preprocessing.downsample > 1 and transform_seq:
             if not modality.output_pixel_size:
-                output_spacing_target = self.preprocessed_cache["image_spacing"][modality.name]
-                transform_seq.set_output_spacing(output_spacing_target)
+                self._apply_output_grid_for_modality(transform_seq, modality.name)
             else:
                 transform_seq.set_output_spacing(modality.output_pixel_size)
         elif modality.preprocessing and modality.preprocessing.downsample > 1 and not transform_seq:
@@ -1973,11 +2007,14 @@ class ElastixReg(Workflow):
                 transform_sequence_index=[0],
             )
             output_pixel_size = (
-                self.preprocessed_cache["image_spacing"][modality.name]
+                self._get_output_grid_for_modality(modality.name)[0]
                 if not modality.output_pixel_size
                 else modality.output_pixel_size
             )
-            transform_seq.set_output_spacing(output_pixel_size)
+            if modality.output_pixel_size:
+                transform_seq.set_output_spacing(output_pixel_size)
+            else:
+                self._apply_output_grid_for_modality(transform_seq, modality.name)
         # handle resampling
         if not transform_seq and modality.output_pixel_size:
             transform_seq = TransformSequence(
@@ -1992,6 +2029,25 @@ class ElastixReg(Workflow):
                 transform_sequence_index=[0],
             )
             transform_seq.set_output_spacing(modality.output_pixel_size)
+        elif not transform_seq and self._get_registration_pixel_cap_factor(modality.name) != 1.0:
+            transform_seq = TransformSequence(
+                [
+                    Transform(
+                        identity_elx_transform(
+                            self.preprocessed_cache["image_sizes"][modality_key],
+                            self.preprocessed_cache["image_spacing"][modality_key],
+                        ),
+                    ),
+                ],
+                transform_sequence_index=[0],
+            )
+            self._apply_output_grid_for_modality(transform_seq, modality.name)
+        elif (
+            transform_seq
+            and not modality.output_pixel_size
+            and self._get_registration_pixel_cap_factor(modality.name) != 1.0
+        ):
+            self._apply_output_grid_for_modality(transform_seq, modality.name)
 
         # handle attachment
         if transform_seq:
@@ -2196,6 +2252,11 @@ class ElastixReg(Workflow):
             "registration_paths": registration_paths,
             "registration_graph_edges": reg_graph_edges if registered else None,
             "original_size_transforms": self.original_size_transforms if registered else None,
+            "registration_image_spacing": self.preprocessed_cache["image_spacing"] if registered else None,
+            "registration_image_sizes": self.preprocessed_cache["image_sizes"] if registered else None,
+            "registration_pixel_cap_factors": self.preprocessed_cache["registration_pixel_cap_factors"]
+            if registered
+            else None,
             "attachment_shapes": self.attachment_shapes if len(self.attachment_shapes) > 0 else None,
             "attachment_points": self.attachment_points if len(self.attachment_points) > 0 else None,
             "attachment_images": self.attachment_images if len(self.attachment_images) > 0 else None,
