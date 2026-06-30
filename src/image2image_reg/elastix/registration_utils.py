@@ -191,14 +191,15 @@ def register_2d_images(
         raise ValueError("Target image is None")
 
     source_image, source_factor = _cap_sitk_image(source.image, max_registration_pixels)
-    target_image, target_factor = _cap_sitk_image(target.image, max_registration_pixels)
     source_mask = source.mask
-    target_mask = target.mask
     if source_factor > 1 and source_mask is not None:
         source_mask = sitk.Shrink(source_mask, [source_factor, source_factor])  # type: ignore[no-untyped-call]
+    source_mask = _resample_mask_to_image(source_mask, source_image)
+
+    target_image, target_factor = _cap_sitk_image(target.image, max_registration_pixels)
+    target_mask = target.mask
     if target_factor > 1 and target_mask is not None:
         target_mask = sitk.Shrink(target_mask, [target_factor, target_factor])  # type: ignore[no-untyped-call]
-    source_mask = _resample_mask_to_image(source_mask, source_image)
     target_mask = _resample_mask_to_image(target_mask, target_image)
 
     if histogram_match:

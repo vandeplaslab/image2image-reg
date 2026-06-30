@@ -32,6 +32,7 @@ from image2image_reg.models import Modality, Preprocessing
 from image2image_reg.utils.utilities import make_new_name
 from image2image_reg.workflows._base import Workflow
 from image2image_reg.constants import DEFAULT_MAX_REGISTRATION_PIXELS
+
 if ty.TYPE_CHECKING:
     from image2image_reg.workflows.valis import ValisReg
     from image2image_reg.wrapper import ImageWrapper

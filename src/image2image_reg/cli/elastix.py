@@ -721,7 +721,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
     "--max_registration_pixels",
     callback=parse_max_registration_pixels,
     help="Maximum pixels per registration input. Accepts K/M/B suffixes, e.g. 100M or 1B. Use 0/off to disable.",
-    default="100M",
+    default=DEFAULT_MAX_REGISTRATION_PIXELS,
     show_default=True,
 )
 @project_path_multi_
