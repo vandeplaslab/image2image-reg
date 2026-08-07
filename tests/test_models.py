@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import zarr
 from pydantic import ValidationError
 
 from image2image_reg.enums import BackgroundSubtractType, CoordinateFlip, ImageType
@@ -24,6 +25,22 @@ def test_modality():
     assert data["name"] == "test", "Name should be test"
     assert data["pixel_size"] == 0.5, "Pixel size should be 0.5"
     assert data["output_pixel_size"] == (1.0, 1.0), "Output pixel size should be (1.0, 1.0)"
+
+
+def test_modality_accepts_path_and_zarr_array():
+    assert Modality.__pydantic_complete__
+
+    path_modality = Modality(name="path", path="image.tiff")
+    zarr_array = zarr.zeros((2, 2))
+    array_modality = Modality(name="zarr", path=zarr_array)
+
+    assert path_modality.path == "image.tiff"
+    assert array_modality.path is zarr_array
+
+
+def test_modality_rejects_unsupported_path_type():
+    with pytest.raises(ValidationError, match="unsupported path type"):
+        Modality(name="invalid", path=object())
 
 
 def test_polygon():

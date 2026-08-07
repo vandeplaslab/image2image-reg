@@ -19,6 +19,13 @@ from image2image_reg.models.preprocessing import Preprocessing
 if ty.TYPE_CHECKING:
     from image2image_reg.wrapper import ImageWrapper
 
+    ZarrArray: ty.TypeAlias = zarr.Array
+else:
+    # Zarr 3 exposes unresolved internal type variables through ``zarr.Array``.
+    # Keep the concrete type for static analysis, but prevent Pydantic from
+    # attempting to generate a schema for Zarr's generic runtime class.
+    ZarrArray: ty.TypeAlias = object
+
 
 class Modality(BaseModel):
     """Modality."""
@@ -26,7 +33,7 @@ class Modality(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     name: str
-    path: PathLike | np.ndarray | da.Array | zarr.Array
+    path: PathLike | np.ndarray | da.Array | ZarrArray
     preprocessing: Preprocessing | None = None
     export: Export | None = None
     channel_names: list[str] | None = None
@@ -34,6 +41,14 @@ class Modality(BaseModel):
     pixel_size: float = 1.0
     output_pixel_size: tuple[float, float] | None = None
     reader_kws: dict[str, ty.Any] | None = Field(None)
+
+    @field_validator("path")
+    @classmethod
+    def _validate_path(cls, value: object) -> object:
+        """Validate that path is a supported filesystem path or array type."""
+        if isinstance(value, (str, Path, np.ndarray, da.Array, zarr.Array)):
+            return value
+        raise ValueError("unsupported path type")
 
     @field_validator("output_pixel_size", mode="before")
     @classmethod
