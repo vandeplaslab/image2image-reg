@@ -21,12 +21,13 @@ MAGIC_MAX_REGISTRATION_PIXELS = 1_000_000
 MAGIC_MIN_PHASE_RESPONSE = 0.1
 """Minimum phase-correlation response accepted for an automatic overlap."""
 
-_ERROR_NOT_2D = "Magic translation estimation requires two-dimensional images."
-_ERROR_NO_DATA = "Magic could not read usable image data."
-_ERROR_NO_DETAIL = "Magic could not find enough image detail to estimate an overlap."
-_ERROR_PREPROCESS = "Magic could not preprocess both images."
+_ERROR_NOT_2D = "Auto-translation estimation requires two-dimensional images."
+_ERROR_NO_DATA = "Auto-translation estimation could not read usable image data."
+_ERROR_NO_DETAIL = "Auto-translation estimation could not find enough image detail to estimate an overlap."
+_ERROR_PREPROCESS = "Auto-translation estimation could not preprocess both images."
 _ERROR_LOW_CONFIDENCE = (
-    "Magic could not confidently estimate an overlap. Try different preprocessing or align manually."
+    "Auto-translation estimation could not confidently estimate an overlap. Try different"
+    " preprocessing or align manually."
 )
 
 
@@ -34,11 +35,7 @@ def _physical_bounds(image: sitk.Image) -> tuple[np.ndarray, np.ndarray]:
     """Return the physical lower and upper image bounds."""
     size_x, size_y = image.GetSize()
     corners = np.asarray(
-        [
-            image.TransformIndexToPhysicalPoint((x, y))
-            for x in (0, size_x - 1)
-            for y in (0, size_y - 1)
-        ],
+        [image.TransformIndexToPhysicalPoint((x, y)) for x in (0, size_x - 1) for y in (0, size_y - 1)],
         dtype=float,
     )
     return corners.min(axis=0), corners.max(axis=0)
