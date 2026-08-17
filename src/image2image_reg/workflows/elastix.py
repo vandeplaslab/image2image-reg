@@ -2434,6 +2434,6 @@ def _get_with_suffix(p: Path, fmt: str) -> Path:
 
 
 def _get_native_resolution_path(path: Path) -> Path:
-    """Return a filename with the native-resolution suffix."""
+    """Return a filename with the native suffix."""
     name = path.stem.replace(".ome", "")
-    return path.with_name(f"{name}_native-resolution")
+    return path.with_name(f"{name}_native")

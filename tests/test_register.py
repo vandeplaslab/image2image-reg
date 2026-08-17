@@ -256,7 +256,7 @@ def test_export_registered_images_writes_standard_and_native_variants(tmp_path):
     ):
         paths = obj._export_registered_images(["HE"], write_native_resolution=True)
 
-    assert paths == [output_path, obj.image_dir / "HE_native-resolution"]
+    assert paths == [output_path, obj.image_dir / "HE_native"]
     assert write_image.call_count == 2
     assert write_image.call_args_list[0].args[1] is standard_transform
     assert write_image.call_args_list[1].args[1] is native_transform
@@ -279,7 +279,7 @@ def test_export_registered_images_checks_variant_outputs_independently(tmp_path)
     ):
         paths = obj._export_registered_images(["HE"], write_native_resolution=True)
 
-    assert paths == [obj.image_dir / "HE_native-resolution"]
+    assert paths == [obj.image_dir / "HE_native"]
     write_image.assert_called_once()
 
 
