@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing as ty
+from copy import deepcopy
 from pathlib import Path
 from warnings import warn
 
@@ -447,6 +448,17 @@ class TransformSequence(TransformMixin):
             f"{self.__class__.__name__}<name={self.name}; n={self.n_transforms}; spacing={spacing}; "
             f"size={self.output_size}; seq={seq}>"
         )
+
+    def copy(self) -> TransformSequence:
+        """Return an independent copy of the transformation sequence."""
+        copied = TransformSequence(
+            [Transform(deepcopy(transform.elastix_transform)) for transform in self.transforms],
+            self.transform_sequence_index.copy(),
+        )
+        copied.name = self.name
+        if self.inverse:
+            copied.set_inverse(True)
+        return copied
 
     def extract_to_ts(self, index: int) -> TransformSequence:
         """Separates a single transform from the sequence and returns it as a new TransformSequence object."""

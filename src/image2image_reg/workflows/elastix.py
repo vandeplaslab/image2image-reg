@@ -5,7 +5,8 @@ from __future__ import annotations
 import time
 import typing as ty
 from contextlib import suppress
-from copy import copy, deepcopy
+from copy import deepcopy
+from math import isclose
 from pathlib import Path
 from warnings import warn
 
@@ -1356,6 +1357,7 @@ class ElastixReg(Workflow):
         rename: bool = False,
         n_parallel: int = 1,
         overwrite: bool = False,
+        write_native_resolution: bool = False,
     ) -> list[Path] | None:
         """Export images after applying transformation."""
         self.set_logger()
@@ -1390,6 +1392,7 @@ class ElastixReg(Workflow):
                 self._export_registered_images(
                     reg_modality_list,
                     fmt=fmt,
+                    write_native_resolution=write_native_resolution,
                     to_original_size=to_original_size,
                     tile_size=tile_size,
                     as_uint8=as_uint8,
@@ -1540,6 +1543,7 @@ class ElastixReg(Workflow):
         self,
         modalities: list[str],
         fmt: str | WriterMode = "ome-tiff",
+        write_native_resolution: bool = False,
         to_original_size: bool = True,
         tile_size: int = 512,
         as_uint8: bool | None = None,
@@ -1558,19 +1562,42 @@ class ElastixReg(Workflow):
 
             if _get_with_suffix(output_path, fmt).exists() and not overwrite:
                 logger.trace(f"Skipping {name} as it already exists. ({output_path})")
-                continue
-            logger.trace(f"Exporting {name} to {output_path}... (registered)")
-            to_write.append(
-                (
-                    modality.name,
-                    transform_seq,
-                    output_path,
-                    fmt,
-                    tile_size,
-                    as_uint8,
-                    # lambda: (False, None, to_original_size),
-                ),
-            )
+            else:
+                logger.trace(f"Exporting {name} to {output_path}... (registered)")
+                to_write.append(
+                    (
+                        modality.name,
+                        transform_seq,
+                        output_path,
+                        fmt,
+                        tile_size,
+                        as_uint8,
+                    ),
+                )
+
+            if write_native_resolution:
+                if transform_seq is None:
+                    logger.warning(f"Cannot export {name} at native resolution without a transformation.")
+                    continue
+                native_transform = self._prepare_native_resolution_transform(modality, transform_seq)
+                if native_transform is None:
+                    logger.trace(f"Skipping redundant native-resolution export for {name}; output grids match.")
+                    continue
+                native_output_path = _get_native_resolution_path(output_path)
+                if _get_with_suffix(native_output_path, fmt).exists() and not overwrite:
+                    logger.trace(f"Skipping native-resolution export for {name} as it already exists.")
+                    continue
+                logger.trace(f"Exporting {name} to {native_output_path}... (native resolution)")
+                to_write.append(
+                    (
+                        modality.name,
+                        native_transform,
+                        native_output_path,
+                        fmt,
+                        tile_size,
+                        as_uint8,
+                    ),
+                )
         if to_write:
             if n_parallel > 1:
                 with WorkerPool(n_jobs=n_parallel, use_dill=True) as pool:
@@ -1581,6 +1608,35 @@ class ElastixReg(Workflow):
                     path = self._transform_write_image(*args)
                     paths.append(path)
         return paths
+
+    @staticmethod
+    def _prepare_native_resolution_transform(
+        modality: Modality,
+        transform_seq: TransformSequence,
+    ) -> TransformSequence | None:
+        """Copy a transform sequence and set its output grid to the source image resolution."""
+        from image2image_reg.wrapper import ImageWrapper
+
+        reader = ImageWrapper(modality, quick=True).reader
+        if reader is None:
+            raise ValueError(f"Could not initialize reader for {modality.name}.")  # noqa: TRY003
+        native_pixel_size = float(reader.resolution or modality.pixel_size or 1.0)
+        if native_pixel_size <= 0:
+            raise ValueError(f"Native pixel size for {modality.name} must be greater than zero.")  # noqa: TRY003
+        native_spacing = (native_pixel_size, native_pixel_size)
+        if all(
+            isclose(current, native, rel_tol=1e-9, abs_tol=1e-12)
+            for current, native in zip(
+                transform_seq.output_spacing,
+                native_spacing,
+                strict=True,
+            )
+        ):
+            return None
+
+        native_transform = transform_seq.copy()
+        native_transform.set_output_spacing(native_spacing)
+        return native_transform
 
     def _export_not_registered_images(
         self,
@@ -1892,7 +1948,7 @@ class ElastixReg(Workflow):
         rename: bool = False,
     ) -> tuple[Modality, TransformSequence, Path]:
         final_modality_key = self.registration_paths[edge_key][-1]
-        transform_seq = copy(self.transformations[edge_key]["full-transform-seq"])
+        transform_seq = self.transformations[edge_key]["full-transform-seq"].copy()
 
         # modality_key = None
         final_modality = self.modalities[final_modality_key]
@@ -2375,3 +2431,9 @@ def _get_with_suffix(p: Path, fmt: str) -> Path:
     if fmt in ["csv", "tsv", "txt", "geojson"]:
         return p.parent / (name + "." + fmt)
     raise ValueError(f"Writer {fmt} is not supported.")
+
+
+def _get_native_resolution_path(path: Path) -> Path:
+    """Return a filename with the native-resolution suffix."""
+    name = path.stem.replace(".ome", "")
+    return path.with_name(f"{name}_native-resolution")

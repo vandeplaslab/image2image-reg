@@ -1,7 +1,28 @@
 """Test models/transform_sequence.py."""
 
-from image2image_reg.elastix.transform_sequence import TransformSequence
+from copy import deepcopy
+
+from image2image_reg.elastix.transform_sequence import Transform, TransformSequence
+from image2image_reg.elastix.transformation_map import BASE_TRANSLATION_TRANSFORM
 from image2image_reg.utils._test import get_test_files
+
+
+def test_transform_sequence_copy_is_independent():
+    transform = deepcopy(BASE_TRANSLATION_TRANSFORM)
+    transform["Spacing"] = ["0.65", "0.65"]
+    transform["Size"] = ["100", "50"]
+    original = TransformSequence([Transform(transform)], transform_sequence_index=[0])
+
+    copied = original.copy()
+    copied.set_output_spacing((0.22, 0.22))
+
+    assert copied is not original
+    assert copied.transforms[0] is not original.transforms[0]
+    assert original.output_spacing == [0.65, 0.65]
+    assert original.output_size == [100, 50]
+    assert original.transforms[-1].elastix_transform["Spacing"] == ["0.65", "0.65"]
+    assert copied.output_spacing == (0.22, 0.22)
+    assert copied.output_size == (296, 148)
 
 
 def test_transform_sequence_one_dataset_no_initial():

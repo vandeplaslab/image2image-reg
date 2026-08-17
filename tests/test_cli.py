@@ -1,11 +1,20 @@
 """Test CLI."""
 
 import os
+from unittest.mock import MagicMock, patch
 
 import click
 import pytest
+from click.testing import CliRunner
 
-from image2image_reg.cli.elastix import add_modality_runner, parse_max_registration_pixels
+from image2image_reg.cli.elastix import (
+    _export,
+    _register,
+    add_modality_runner,
+    export_cmd,
+    parse_max_registration_pixels,
+    register_cmd,
+)
 from image2image_reg.cli.merge import arg_parse_channel_ids
 from image2image_reg.cli.valis import cli_parse_method
 from image2image_reg.utils._test import get_test_file
@@ -81,6 +90,55 @@ def test_cli_entrypoint():
     """Test CLI entrypoint."""
     exit_status = os.system("i2reg --help")
     assert exit_status == 0
+
+
+@pytest.mark.parametrize("command", [register_cmd, export_cmd])
+def test_cli_elastix_export_commands_expose_native_resolution(command):
+    result = CliRunner().invoke(command, ["--help"])
+
+    assert result.exit_code == 0
+    assert "--native_resolution" in result.output
+
+
+@pytest.mark.parametrize("runner", [_register, _export])
+def test_cli_elastix_export_commands_propagate_native_resolution(runner):
+    obj = MagicMock()
+    obj.is_registered = True
+
+    with patch("image2image_reg.workflows.elastix.ElastixReg.from_path", return_value=obj):
+        if runner is _register:
+            runner(
+                "project.wsireg",
+                histogram_match=False,
+                max_registration_pixels=None,
+                write_images=True,
+                fmt="ome-tiff",
+                write_registered=True,
+                write_not_registered=False,
+                write_attached=False,
+                write_merged=False,
+                remove_merged=False,
+                original_size=True,
+                as_uint8=False,
+                native_resolution=True,
+            )
+        else:
+            runner(
+                "project.wsireg",
+                fmt="ome-tiff",
+                write_registered=True,
+                write_not_registered=False,
+                write_attached_images=False,
+                write_attached_shapes=False,
+                write_attached_points=False,
+                write_merged=False,
+                remove_merged=False,
+                original_size=True,
+                as_uint8=False,
+                native_resolution=True,
+            )
+
+    assert obj.write.call_args.kwargs["write_native_resolution"] is True
 
 
 def test_cli_init(tmp_path):

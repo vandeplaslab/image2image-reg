@@ -61,6 +61,13 @@ final_ = click.option(
     default=False,
     show_default=True,
 )
+native_resolution_ = click.option(
+    "--native_resolution/--no_native_resolution",
+    help="Also write registered source images at their native resolution.",
+    is_flag=True,
+    default=False,
+    show_default=True,
+)
 
 
 def parse_max_registration_pixels(ctx: click.Context, param: click.Parameter, value: str | int | None) -> int:
@@ -694,6 +701,7 @@ def _preprocess(path: PathLike, n_parallel: int, overwrite: bool = False) -> Pat
 @clip_
 @rename_
 @as_uint8_
+@native_resolution_
 @original_size_
 @remove_merged_
 @write_merged_
@@ -739,6 +747,7 @@ def register_cmd(
     write_merged: bool,
     remove_merged: bool,
     original_size: bool,
+    native_resolution: bool,
     as_uint8: bool | None,
     rename: bool,
     clip: str,
@@ -760,6 +769,7 @@ def register_cmd(
         write_merged=write_merged,
         remove_merged=remove_merged,
         original_size=original_size,
+        native_resolution=native_resolution,
         as_uint8=as_uint8,
         rename=rename,
         clip=clip,
@@ -789,6 +799,7 @@ def register_runner(
     parallel_mode: str = "outer",
     viewer: bool = False,
     overwrite: bool = False,
+    native_resolution: bool = False,
 ) -> None:
     """Register images."""
     from koyo.system import reraise_exception_if_debug
@@ -808,6 +819,7 @@ def register_runner(
         Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
+        Parameter("Write native-resolution images", "--native_resolution/--no_native_resolution", native_resolution),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
         Parameter("Rename", "-rename/--no_rename", rename),
         Parameter("Number of parallel actions", "-n/--n_parallel", n_parallel),
@@ -837,8 +849,10 @@ def register_runner(
                             as_uint8,
                             rename,
                             clip,
+                            1,
                             viewer,
                             overwrite,
+                            native_resolution,
                         )
                         for path in paths
                     ],
@@ -859,6 +873,7 @@ def register_runner(
                         write_merged=write_merged,
                         remove_merged=remove_merged,
                         original_size=original_size,
+                        native_resolution=native_resolution,
                         as_uint8=as_uint8,
                         rename=rename,
                         clip=clip,
@@ -898,6 +913,7 @@ def _register(
     n_parallel: int = 1,
     viewer: bool = False,
     overwrite: bool = False,
+    native_resolution: bool = False,
 ) -> PathLike:
     from image2image_reg.workflows.elastix import ElastixReg
 
@@ -914,6 +930,7 @@ def _register(
             write_merged=write_merged,
             remove_merged=remove_merged,
             to_original_size=original_size,
+            write_native_resolution=native_resolution,
             as_uint8=as_uint8,
             n_parallel=n_parallel,
             overwrite=overwrite,
@@ -966,6 +983,7 @@ def preview_runner(paths: ty.Sequence[str], pyramid: int, overwrite: bool = Fals
 @clip_
 @rename_
 @as_uint8_
+@native_resolution_
 @original_size_
 @remove_merged_
 @write_merged_
@@ -990,6 +1008,7 @@ def export_cmd(
     write_attached_points: bool | None,
     remove_merged: bool,
     original_size: bool,
+    native_resolution: bool,
     as_uint8: bool | None,
     rename: bool,
     clip: str,
@@ -1012,6 +1031,7 @@ def export_cmd(
         write_attached_images=write_attached_images,
         remove_merged=remove_merged,
         original_size=original_size,
+        native_resolution=native_resolution,
         as_uint8=as_uint8,
         rename=rename,
         clip=clip,
@@ -1043,6 +1063,7 @@ def export_runner(
     parallel_mode: str = "outer",
     viewer: bool = False,
     overwrite: bool = False,
+    native_resolution: bool = False,
 ) -> None:
     """Register images."""
     from mpire import WorkerPool
@@ -1069,6 +1090,7 @@ def export_runner(
         Parameter("Write merged images", "--write_merged/--no_write_merged", write_merged),
         Parameter("Remove merged images", "--remove_merged/--no_remove_merged", remove_merged),
         Parameter("Write images in original size", "--original_size/--no_original_size", original_size),
+        Parameter("Write native-resolution images", "--native_resolution/--no_native_resolution", native_resolution),
         Parameter("Write images as uint8", "--as_uint8/--no_as_uint8", as_uint8),
         Parameter("Rename", "-rename/--no_rename", rename),
         Parameter("Overwrite", "-W/--overwrite", overwrite),
@@ -1099,6 +1121,7 @@ def export_runner(
                             1,
                             viewer,
                             overwrite,
+                            native_resolution,
                         )
                         for path in paths
                     ],
@@ -1120,6 +1143,7 @@ def export_runner(
                     write_merged,
                     remove_merged,
                     original_size=original_size,
+                    native_resolution=native_resolution,
                     as_uint8=as_uint8,
                     rename=rename,
                     clip=clip,
@@ -1158,6 +1182,7 @@ def _export(
     n_parallel: int = 1,
     viewer: bool = False,
     overwrite: bool = False,
+    native_resolution: bool = False,
 ) -> tuple[PathLike, bool]:
     from image2image_reg.workflows.elastix import ElastixReg
 
@@ -1178,6 +1203,7 @@ def _export(
             write_merged=write_merged,
             remove_merged=remove_merged,
             to_original_size=original_size,
+            write_native_resolution=native_resolution,
             as_uint8=as_uint8,
             rename=rename,
             clip=clip,

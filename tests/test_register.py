@@ -168,6 +168,9 @@ def test_prepare_registered_transform_removes_registration_pixel_cap(tmp_path):
     assert transform["Spacing"] == ["1.0", "1.0"]
     assert transform["Size"] == ["20", "20"]
     assert transform["TransformParameters"] == ["8", "-5"]
+    cached_transform = obj.transformations["source"]["full-transform-seq"].transforms[-1].elastix_transform
+    assert cached_transform["Spacing"] == ["4.0", "4.0"]
+    assert cached_transform["Size"] == ["5", "5"]
 
 
 def test_prepare_registered_transform_keeps_output_pixel_size_precedence(tmp_path):
@@ -203,6 +206,81 @@ def test_prepare_not_registered_transform_creates_uncapped_identity_grid(tmp_pat
 
     assert transform["Spacing"] == ["1.0", "1.0"]
     assert transform["Size"] == ["20", "20"]
+
+
+def test_prepare_native_resolution_transform_preserves_target_extent():
+    modality = Modality(name="HE", path="HE.ome.tiff", pixel_size=0.22)
+    transform_seq = _make_transform_sequence(spacing=0.65, size=100)
+    reader = MagicMock()
+    reader.resolution = 0.22
+
+    with patch("image2image_reg.wrapper.ImageWrapper") as wrapper_cls:
+        wrapper_cls.return_value.reader = reader
+        native_transform = ElastixReg._prepare_native_resolution_transform(modality, transform_seq)
+
+    assert native_transform is not None
+    assert native_transform.output_spacing == (0.22, 0.22)
+    assert native_transform.output_size == (296, 296)
+    assert transform_seq.output_spacing == [0.65, 0.65]
+    assert transform_seq.output_size == [100, 100]
+    original_extent = transform_seq.output_size[0] * transform_seq.output_spacing[0]
+    native_extent = native_transform.output_size[0] * native_transform.output_spacing[0]
+    assert original_extent <= native_extent < original_extent + native_transform.output_spacing[0]
+
+
+def test_prepare_native_resolution_transform_skips_matching_grid():
+    modality = Modality(name="HE", path="HE.ome.tiff", pixel_size=0.65)
+    transform_seq = _make_transform_sequence(spacing=0.65, size=100)
+    reader = MagicMock()
+    reader.resolution = 0.65
+
+    with patch("image2image_reg.wrapper.ImageWrapper") as wrapper_cls:
+        wrapper_cls.return_value.reader = reader
+        native_transform = ElastixReg._prepare_native_resolution_transform(modality, transform_seq)
+
+    assert native_transform is None
+
+
+def test_export_registered_images_writes_standard_and_native_variants(tmp_path):
+    obj = ElastixReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+    modality = Modality(name="HE", path="HE.ome.tiff", pixel_size=0.22)
+    standard_transform = _make_transform_sequence(spacing=0.65, size=100)
+    native_transform = standard_transform.copy()
+    native_transform.set_output_spacing((0.22, 0.22))
+    output_path = obj.image_dir / "HE.ome.tiff"
+
+    with (
+        patch.object(obj, "_prepare_transform", return_value=(modality, standard_transform, output_path)),
+        patch.object(obj, "_prepare_native_resolution_transform", return_value=native_transform),
+        patch.object(obj, "_transform_write_image", side_effect=lambda *args: args[2]) as write_image,
+    ):
+        paths = obj._export_registered_images(["HE"], write_native_resolution=True)
+
+    assert paths == [output_path, obj.image_dir / "HE_native-resolution"]
+    assert write_image.call_count == 2
+    assert write_image.call_args_list[0].args[1] is standard_transform
+    assert write_image.call_args_list[1].args[1] is native_transform
+
+
+def test_export_registered_images_checks_variant_outputs_independently(tmp_path):
+    obj = ElastixReg(name="test.wsireg", output_dir=tmp_path, cache=True, merge=True)
+    modality = Modality(name="HE", path="HE.ome.tiff", pixel_size=0.22)
+    standard_transform = _make_transform_sequence(spacing=0.65, size=100)
+    native_transform = standard_transform.copy()
+    native_transform.set_output_spacing((0.22, 0.22))
+    output_path = obj.image_dir / "HE.ome.tiff"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(b"existing")
+
+    with (
+        patch.object(obj, "_prepare_transform", return_value=(modality, standard_transform, output_path)),
+        patch.object(obj, "_prepare_native_resolution_transform", return_value=native_transform),
+        patch.object(obj, "_transform_write_image", side_effect=lambda *args: args[2]) as write_image,
+    ):
+        paths = obj._export_registered_images(["HE"], write_native_resolution=True)
+
+    assert paths == [obj.image_dir / "HE_native-resolution"]
+    write_image.assert_called_once()
 
 
 def test_register_through(tmp_path):
