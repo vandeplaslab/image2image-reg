@@ -35,6 +35,8 @@ from image2image_reg.utils.utilities import make_new_name
 from image2image_reg.workflows._base import Workflow
 
 if ty.TYPE_CHECKING:
+    import SimpleITK as sitk
+
     from image2image_reg.workflows.valis import ValisReg
     from image2image_reg.wrapper import ImageWrapper
 
@@ -789,6 +791,7 @@ class ElastixReg(Workflow):
         output_dir: Path,
         histogram_match: bool = False,
         max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
+        minimum_pyramid_size: int | None = None,
     ) -> tuple[TransformSequence, TransformSequence | None]:
         """Co-register images."""
         from image2image_reg.elastix.registration_utils import (
@@ -807,6 +810,7 @@ class ElastixReg(Workflow):
                 output_dir,
                 histogram_match=histogram_match,
                 max_registration_pixels=None,
+                minimum_pyramid_size=minimum_pyramid_size,
             )
             # convert transformation to something readable
             transforms = [sitk_pmap_to_dict(tf) for tf in transform]
@@ -940,8 +944,9 @@ class ElastixReg(Workflow):
         preprocess_first: bool = True,
         histogram_match: bool = False,
         max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
+        minimum_pyramid_size: int | None = None,
     ) -> None:
-        """Co-register images."""
+        """Co-register images, optionally limiting coarse levels for small inputs."""
         # TODO: add multi-core support
         self.set_logger()
         if self.is_registered:
@@ -998,6 +1003,7 @@ class ElastixReg(Workflow):
                 registration_dir,
                 histogram_match=histogram_match,
                 max_registration_pixels=max_registration_pixels,
+                minimum_pyramid_size=minimum_pyramid_size,
             )
             edge["transforms"] = {"registration": registration, "initial": initial}
             edge["registered"] = True
@@ -1886,6 +1892,33 @@ class ElastixReg(Workflow):
             logger.info(f"Exporting attachment images took {timer()}.")
         return paths
 
+    def get_resampling_transform(
+        self, modality: str, max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS
+    ) -> sitk.Transform:
+        """Return a physical output-to-source transform for independent tiled resampling.
+
+        Uses the same original-reference geometry as registered image export.
+        Registration must be complete; an untransformed reference uses identity.
+        The pixel cap must match the registration run to locate preparation metadata.
+        """
+        import SimpleITK as sitk
+
+        from image2image_reg.wrapper import registration_cache_extra
+
+        if modality not in self.modalities or not self.is_registered:
+            message = "A known modality and completed registration are required."
+            raise ValueError(message)
+        self.load_preprocessed_cache()
+        if modality in self.transformations:
+            _, sequence, _ = self._prepare_registered_transform(modality, to_original_size=True)
+        else:
+            _, sequence, _ = self._prepare_not_registered_transform(
+                modality, to_original_size=True, cache_extra=registration_cache_extra(max_registration_pixels)
+            )
+        if sequence is None:
+            return sitk.Transform(2, sitk.sitkIdentity)
+        return sitk.Transform(sequence.final_transform)
+
     def _prepare_transform(
         self,
         edge_key: str,
@@ -1993,6 +2026,7 @@ class ElastixReg(Workflow):
         attachment_modality: Modality | None = None,
         to_original_size: bool = True,
         rename: bool = False,
+        cache_extra: str | None = None,
     ) -> tuple[Modality, TransformSequence | None, Path]:
         from image2image_reg.elastix.transform_utils import identity_elx_transform
         from image2image_reg.wrapper import ImageWrapper
@@ -2012,10 +2046,15 @@ class ElastixReg(Workflow):
             or modality.preprocessing.affine is not None
             or modality.is_cropped()
         ):
-            initial_transform = ImageWrapper.load_initial_transform(modality, self.cache_dir)
+            initial_transform = ImageWrapper.load_initial_transform(modality, self.cache_dir, extra=cache_extra)
+            if cache_extra is not None and not initial_transform:
+                message = f"Preparation transforms are missing for {modality_key}."
+                raise ValueError(message)
             original_size_transform = None
             if to_original_size:
-                original_size_transform = ImageWrapper.load_original_size_transform(modality, self.cache_dir)
+                original_size_transform = ImageWrapper.load_original_size_transform(
+                    modality, self.cache_dir, extra=cache_extra
+                )
                 self.original_size_transforms[modality_key] = original_size_transform
 
             if initial_transform:

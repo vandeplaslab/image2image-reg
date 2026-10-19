@@ -157,6 +157,7 @@ def register_2d_images(
     histogram_match: bool = False,
     return_image: bool = False,
     max_registration_pixels: int | None = DEFAULT_MAX_REGISTRATION_PIXELS,
+    minimum_pyramid_size: int | None = None,
 ) -> list[dict[str, list[str]]] | tuple[list[dict[str, list[str]]], sitk.Image]:
     """Register 2D images with multiple models and return a list of elastix transformation maps.
 
@@ -177,6 +178,8 @@ def register_2d_images(
         whether to return the registered image
     max_registration_pixels : int, optional
         Maximum pixels per registration input. Values less than one disable this cap.
+    minimum_pyramid_size : int, optional
+        Limit coarse pyramid levels to this minimum side length for small inputs.
 
     Returns
     -------
@@ -212,6 +215,7 @@ def register_2d_images(
         logger.info(f"Histogram matching took {timer()}")
 
     pixel_id = source_image.GetPixelID()  # type: ignore[union-attr]
+    smallest_side = min(*source_image.GetSize(), *target_image.GetSize())
     with MeasureTimer() as timer:
         moving_image = sitk_image_to_itk_image(source_image)
         fixed_image = sitk_image_to_itk_image(target_image)
@@ -246,6 +250,22 @@ def register_2d_images(
         parameter_object_registration = itk.ParameterObject.New()
         for idx, pmap in enumerate(reg_params):
             pmap = dict(pmap)
+            if minimum_pyramid_size is not None:
+                levels = max(1, 1 + math.floor(math.log2(smallest_side / max(1, minimum_pyramid_size))))
+                original_levels = int(pmap.get("NumberOfResolutions", ["1"])[0])
+                levels = min(levels, original_levels)
+                if levels < original_levels:
+                    # Keep the fine-resolution settings of the existing preset.
+                    for key, values in tuple(pmap.items()):
+                        if len(values) == original_levels:
+                            pmap[key] = values[-levels:]
+                        elif key.endswith("Schedule") and len(values) == 2 * original_levels:
+                            pmap[key] = values[-2 * levels:]
+                    pmap["NumberOfResolutions"] = [str(levels)]
+                    if pmap.get("Transform") == ["BSplineTransform"]:
+                        # Whole-slide steps can move across a small image in one iteration.
+                        # Use Elastix's voxel-spacing default for the shortened pyramid.
+                        pmap.pop("MaximumStepLength", None)
             if idx == 0:
                 pmap["WriteResultImage"] = ["true"] if return_image else ["false"]
                 if fixed_mask is not None:

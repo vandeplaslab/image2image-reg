@@ -397,9 +397,11 @@ class ImageWrapper:
         logger.trace(f"Loaded data from cache in {timer()}")
 
     @classmethod
-    def load_initial_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:
-        """Load original size transform metadata."""
-        filename = cls.get_cache_path(modality, cache_dir)
+    def load_initial_transform(
+        cls, modality: Modality, cache_dir: PathLike, extra: str | None = None
+    ) -> list[dict] | None:
+        """Load preparation transforms from the selected registration cache."""
+        filename = cls.get_cache_path(modality, cache_dir, extra=extra)
         output_filename = filename_with_suffix(filename, "initial", ".json")
         transforms = []
         if output_filename.exists():
@@ -410,9 +412,11 @@ class ImageWrapper:
         return transforms or None
 
     @classmethod
-    def load_original_size_transform(cls, modality: Modality, cache_dir: PathLike) -> list[dict] | None:
+    def load_original_size_transform(
+        cls, modality: Modality, cache_dir: PathLike, extra: str | None = None
+    ) -> list[dict] | None:
         """Load original size transform metadata."""
-        filename = cls.get_cache_path(modality, cache_dir)
+        filename = cls.get_cache_path(modality, cache_dir, extra=extra)
         output_filename = filename_with_suffix(filename, "original_size_transform", ".json")
         transforms = []
         if output_filename.exists():
