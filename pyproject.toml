@@ -233,4 +233,5 @@ ignore = [
     "Makefile",
     "MANIFEST.in",
     "uv.lock",
+    "CLAUDE.md",
 ]
